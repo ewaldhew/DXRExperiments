@@ -430,6 +430,7 @@ PostbuildCopy.bat "$(SolutionDir)vc2015\build\bin\$(Configuration)\"
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\assets\shaders\AnalyticPrimitives.hlsli" />
     <None Include="..\assets\shaders\DenoiseCommon.hlsli">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">6.0</ShaderModel>
@@ -453,6 +454,7 @@ PostbuildCopy.bat "$(SolutionDir)vc2015\build\bin\$(Configuration)\"
       <VariableName>g_p%(Filename)</VariableName>
       <HeaderFileOutput>$(IntDir)\CompiledShaders\%(Filename).hlsl.h</HeaderFileOutput>
     </FxCompile>
+    <None Include="..\assets\shaders\ProceduralPrimitives.hlsli" />
     <FxCompile Include="..\assets\shaders\RealtimeRaytracing.hlsl">
       <ShaderType>Library</ShaderType>
       <ShaderModel>6.3</ShaderModel>
@@ -477,8 +479,13 @@ PostbuildCopy.bat "$(SolutionDir)vc2015\build\bin\$(Configuration)\"
     <None Include="..\assets\shaders\BilateralFilter.hlsli">
       <FileType>Document</FileType>
     </None>
+    <None Include="..\assets\shaders\ProceduralPrimitivesLibrary.hlsli" />
     <None Include="..\assets\shaders\RaytracingCommon.hlsli" />
+    <None Include="..\assets\shaders\RaytracingShaderHelper.hlsli" />
     <None Include="..\assets\shaders\RaytracingUtils.hlsli" />
+    <None Include="..\assets\shaders\SignedDistanceFractals.hlsli" />
+    <None Include="..\assets\shaders\SignedDistancePrimitives.hlsli" />
+    <None Include="..\assets\shaders\VolumetricPrimitives.hlsli" />
     <None Include="..\libs\MiniEngine\Math\Functions.inl" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

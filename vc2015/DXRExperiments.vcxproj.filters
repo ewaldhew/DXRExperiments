@@ -531,6 +531,27 @@
     <None Include="..\assets\shaders\DenoiseCommon.hlsli">
       <Filter>Assets\Shaders</Filter>
     </None>
+    <None Include="..\assets\shaders\VolumetricPrimitives.hlsli">
+      <Filter>Assets\Shaders</Filter>
+    </None>
+    <None Include="..\assets\shaders\AnalyticPrimitives.hlsli">
+      <Filter>Assets\Shaders</Filter>
+    </None>
+    <None Include="..\assets\shaders\ProceduralPrimitivesLibrary.hlsli">
+      <Filter>Assets\Shaders</Filter>
+    </None>
+    <None Include="..\assets\shaders\RaytracingShaderHelper.hlsli">
+      <Filter>Assets\Shaders</Filter>
+    </None>
+    <None Include="..\assets\shaders\SignedDistanceFractals.hlsli">
+      <Filter>Assets\Shaders</Filter>
+    </None>
+    <None Include="..\assets\shaders\SignedDistancePrimitives.hlsli">
+      <Filter>Assets\Shaders</Filter>
+    </None>
+    <None Include="..\assets\shaders\ProceduralPrimitives.hlsli">
+      <Filter>Assets\Shaders</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="..\assets\shaders\RealtimeRaytracing.hlsl">

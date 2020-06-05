@@ -1,4 +1,5 @@
 ﻿#include "RaytracingCommon.hlsli"
+#include "ProceduralPrimitives.hlsli"
 
 RWTexture2D<float4> gOutput : register(u0);
 
@@ -154,6 +155,13 @@ void PrimaryClosestHit(inout SimplePayload payload, Attributes attrib)
     interpolateVertexAttributes(attrib.bary, vertPosition, vertNormal);
 
     float3 color = shade(HitWorldPosition(), normalize(vertNormal), payload.depth);
+    payload.colorAndDistance = float4(color, RayTCurrent());
+}
+
+[shader("closesthit")]
+void PrimaryClosestHit_AABB(inout SimplePayload payload, in ProceduralPrimitiveAttributes attr)
+{
+    float3 color = shade(HitWorldPosition(), normalize(attr.normal), payload.depth);
     payload.colorAndDistance = float4(color, RayTCurrent());
 }
 

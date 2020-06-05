@@ -32,6 +32,11 @@ struct Attributes
     XMFLOAT2 bary;
 };
 
+struct ProceduralPrimitiveAttributes
+{
+    XMFLOAT3 normal;
+};
+
 struct Vertex
 {
     XMFLOAT3 position;
@@ -84,6 +89,20 @@ struct PerFrameConstants
     DebugOptions options;
 };
 
+// Attributes per primitive instance.
+struct PrimitiveInstanceConstantBuffer
+{
+    UINT instanceIndex;
+    UINT primitiveType; // Procedural primitive type
+};
+
+// Dynamic attributes per primitive instance.
+struct PrimitiveInstancePerFrameBuffer
+{
+    XMMATRIX localSpaceToBottomLevelAS;   // Matrix from local primitive space to bottom-level object space.
+    XMMATRIX bottomLevelASToLocalSpace;   // Matrix from bottom-level object space to local primitive space.
+};
+
 struct MaterialParams
 {
     XMFLOAT4 albedo;
@@ -94,5 +113,54 @@ struct MaterialParams
     float IoR;
     UINT type; // 0: diffuse, 1: glossy, 2: specular (glass)
 };
+
+// Number of metaballs to use within an AABB.
+#define N_METABALLS 3    // = {3, 5}
+
+// Limitting calculations only to metaballs a ray intersects can speed up raytracing
+// dramatically particularly when there is a higher number of metaballs used.
+// Use of dynamic loops can have detrimental effects to performance for low iteration counts
+// and outweighing any potential gains from avoiding redundant calculations.
+// Requires: USE_DYNAMIC_LOOPS set to 1 to take effect.
+#if N_METABALLS >= 5
+#define USE_DYNAMIC_LOOPS 1
+#define LIMIT_TO_ACTIVE_METABALLS 1
+#else
+#define USE_DYNAMIC_LOOPS 0
+#define LIMIT_TO_ACTIVE_METABALLS 0
+#endif
+
+#define N_FRACTAL_ITERATIONS 4      // = <1,...>
+
+namespace AnalyticPrimitive {
+    enum Enum
+    {
+        AABB = 0,
+        Spheres,
+        Count
+    };
+}
+
+namespace VolumetricPrimitive {
+    enum Enum
+    {
+        Metaballs = 0,
+        Count
+    };
+}
+
+namespace SignedDistancePrimitive {
+    enum Enum
+    {
+        MiniSpheres = 0,
+        IntersectedRoundCube,
+        SquareTorus,
+        TwistedTorus,
+        Cog,
+        Cylinder,
+        FractalPyramid,
+        Count
+    };
+}
 
 #endif // RAYTRACINGHLSLCOMPAT_H

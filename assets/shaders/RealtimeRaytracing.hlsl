@@ -116,6 +116,17 @@ void PrimaryClosestHit(inout RealtimePayload payload, Attributes attrib)
     payload.aov = shadingResult;
 }
 
+[shader("closesthit")]
+void PrimaryClosestHit_AABB(inout RealtimePayload payload, in ProceduralPrimitiveAttributes attr)
+{
+    ShadingAOV shadingResult;
+    float3 color = shadeAOV(HitWorldPosition(), normalize(attr.normal), payload.depth, shadingResult);
+
+    payload.color = color;
+    payload.distance = RayTCurrent();
+    payload.aov = shadingResult;
+}
+
 [shader("miss")]
 void PrimaryMiss(inout RealtimePayload payload)
 {
