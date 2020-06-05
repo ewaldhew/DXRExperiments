@@ -11,10 +11,10 @@ namespace DXRFramework
     {
     public:
         using SharedPtr = std::shared_ptr<RtState>;
-        
+
         static SharedPtr create(RtContext::SharedPtr context);
         ~RtState();
-        
+
         void setProgram(RtProgram::SharedPtr pProg) { mProgram = pProg; }
         RtProgram::SharedPtr getProgram() const { return mProgram; }
 

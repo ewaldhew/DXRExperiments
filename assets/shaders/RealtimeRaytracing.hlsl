@@ -19,13 +19,13 @@ struct RealtimePayload
     uint depth;
 };
 
-[shader("raygeneration")] 
-void RayGen() 
+[shader("raygeneration")]
+void RayGen()
 {
     uint2 launchIndex = DispatchRaysIndex().xy;
     float2 dims = float2(DispatchRaysDimensions().xy);
     float2 d = (((launchIndex.xy + 0.5f) / dims.xy) * 2.f - 1.f);
- 
+
     RealtimePayload payload;
     payload.color = float3(0, 0, 0);
     payload.distance = 0.0;
@@ -102,8 +102,8 @@ float3 shadeAOV(float3 position, float3 normal, uint currentDepth, out ShadingAO
     return materialParams.albedo.rgb * directContrib / M_PI + materialParams.reflectivity * specularComponent * fresnel;
 }
 
-[shader("closesthit")] 
-void PrimaryClosestHit(inout RealtimePayload payload, Attributes attrib) 
+[shader("closesthit")]
+void PrimaryClosestHit(inout RealtimePayload payload, Attributes attrib)
 {
     float3 vertPosition, vertNormal;
     interpolateVertexAttributes(attrib.bary, vertPosition, vertNormal);

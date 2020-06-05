@@ -13,14 +13,14 @@ using namespace DXRFramework;
 static XMFLOAT4 pointLightColor = XMFLOAT4(0.2f, 0.8f, 0.6f, 2.0f);
 static XMFLOAT4 dirLightColor = XMFLOAT4(0.9f, 0.0f, 0.0f, 1.0f);
 
-namespace GlobalRootSignatureParams 
+namespace GlobalRootSignatureParams
 {
-    enum Value 
+    enum Value
     {
         AccelerationStructureSlot = 0,
         OutputViewSlot,
         PerFrameConstantsSlot,
-        Count 
+        Count
     };
 }
 
@@ -38,11 +38,11 @@ RealtimeRaytracingPipeline::RealtimeRaytracingPipeline(RtContext::SharedPtr cont
         programDesc.addHitGroup(1, "ShadowClosestHit", "ShadowAnyHit").addMiss(1, "ShadowMiss");
         programDesc.configureGlobalRootSignature([] (RootSignatureGenerator &config) {
             // GlobalRootSignatureParams::AccelerationStructureSlot
-            config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 0 /* t0 */); 
+            config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 0 /* t0 */);
             // GlobalRootSignatureParams::OutputViewSlot
-            config.AddHeapRangesParameter({{0 /* u0-u1 */, 2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0}}); 
+            config.AddHeapRangesParameter({{0 /* u0-u1 */, 2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0}});
             // GlobalRootSignatureParams::PerFrameConstantsSlot
-            config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_CBV, 0 /* b0 */); 
+            config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_CBV, 0 /* b0 */);
 
             D3D12_STATIC_SAMPLER_DESC cubeSampler = {};
             cubeSampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
@@ -64,7 +64,7 @@ RealtimeRaytracingPipeline::RealtimeRaytracingPipeline(RtContext::SharedPtr cont
         });
     }
     mRtProgram = RtProgram::create(context, programDesc);
-    mRtState = RtState::create(context); 
+    mRtState = RtState::create(context);
     mRtState->setProgram(mRtProgram);
     mRtState->setMaxTraceRecursionDepth(4);
     mRtState->setMaxAttributeSize(8);
@@ -89,7 +89,7 @@ void RealtimeRaytracingPipeline::buildAccelerationStructures()
 }
 
 void RealtimeRaytracingPipeline::loadResources(ID3D12CommandQueue *uploadCommandQueue, UINT frameCount)
-{        
+{
     mTextureResources.resize(2);
     mTextureSrvGpuHandles.resize(2);
 

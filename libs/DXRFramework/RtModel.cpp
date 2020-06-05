@@ -70,9 +70,9 @@ namespace DXRFramework
         mHasIndexBuffer = indices.size() > 0;
 
         auto device = context->getDevice();
-        // Note: using upload heaps to transfer static data like vert buffers is not 
-        // recommended. Every time the GPU needs it, the upload heap will be marshalled 
-        // over. Please read up on Default Heap usage. An upload heap is used here for 
+        // Note: using upload heaps to transfer static data like vert buffers is not
+        // recommended. Every time the GPU needs it, the upload heap will be marshalled
+        // over. Please read up on Default Heap usage. An upload heap is used here for
         // code simplicity and because there are very few verts to actually transfer.
         AllocateUploadBuffer(device, interleavedVertexData.data(), mNumVertices * sizeof(Vertex), &mVertexBuffer);
 
@@ -94,7 +94,7 @@ namespace DXRFramework
 
         // Just one vertex buffer per blas for now
         if (mHasIndexBuffer) {
-            blasGenerator.AddVertexBuffer(mVertexBuffer.Get(), 0, mNumVertices, sizeof(Vertex), 
+            blasGenerator.AddVertexBuffer(mVertexBuffer.Get(), 0, mNumVertices, sizeof(Vertex),
                 mIndexBuffer.Get(), 0, mNumTriangles * 3, DXGI_FORMAT_R32_UINT, nullptr, 0);
         } else {
             blasGenerator.AddVertexBuffer(mVertexBuffer.Get(), 0, mNumVertices, sizeof(Vertex), nullptr, 0);

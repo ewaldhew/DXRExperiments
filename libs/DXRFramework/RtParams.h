@@ -39,7 +39,7 @@ namespace DXRFramework
         // v                    v                             v
         // 0              mInitialOffset                mRootOffset(N)
         //
-        // As per DXR spec - the argument layout is defined by packing each argument 
+        // As per DXR spec - the argument layout is defined by packing each argument
         // with padding as needed to align each to its individual (defined) size.
 
         std::vector<uint8_t> mData;

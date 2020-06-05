@@ -25,7 +25,7 @@ namespace DXRFramework
         using SharedPtr = std::shared_ptr<RtShader>;
 
         static SharedPtr create(
-            RtContext::SharedPtr context, /* library ,*/ RtShaderType shaderType, const std::string &entryPoint, 
+            RtContext::SharedPtr context, /* library ,*/ RtShaderType shaderType, const std::string &entryPoint,
             uint32_t maxPayloadSize, uint32_t maxAttributesSize, RootSignatureGenerator rootSignatureConfig);
 
         std::string getEntryPoint() const { return mEntryPoint; }
@@ -35,7 +35,7 @@ namespace DXRFramework
         friend class RtState;
 
         RtShader(
-            RtContext::SharedPtr context, /* library ,*/ RtShaderType shaderType, const std::string &entryPoint, 
+            RtContext::SharedPtr context, /* library ,*/ RtShaderType shaderType, const std::string &entryPoint,
             uint32_t maxPayloadSize, uint32_t maxAttributesSize, RootSignatureGenerator rootSignatureConfig);
 
         RtShaderType mShaderType;

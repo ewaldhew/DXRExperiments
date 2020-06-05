@@ -74,5 +74,5 @@ private:
     Math::Matrix4 mLastCameraVPMatrix;
 
     std::mt19937 mRng;
-    std::uniform_real_distribution<float> mRngDist;     
+    std::uniform_real_distribution<float> mRngDist;
 };

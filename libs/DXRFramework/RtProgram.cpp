@@ -51,7 +51,7 @@ namespace DXRFramework
     {
         return addShaderLibrary(std::shared_ptr<ShaderLibrary>(new ShaderLibrary(dxilLibrary, symbolExports)));
     }
-    
+
     RtProgram::Desc& RtProgram::Desc::addShaderLibrary(const uint8_t *bytecode, UINT bytecodeSize, const std::vector<std::wstring>& symbolExports)
     {
         return addShaderLibrary(std::shared_ptr<ShaderLibrary>(new ShaderLibrary(bytecode, bytecodeSize, symbolExports)));
@@ -66,7 +66,7 @@ namespace DXRFramework
         mRayGen.entryPoint = raygen;
         return *this;
     }
-    
+
     RtProgram::Desc& RtProgram::Desc::addMiss(uint32_t missIndex, const std::string& miss)
     {
         ThrowIfFalse(mActiveLibraryIndex != -1, L"Can't set miss shader entry-point. Please add a shader-library first");
@@ -79,7 +79,7 @@ namespace DXRFramework
         mMiss[missIndex].entryPoint = miss;
         return *this;
     }
-    
+
     RtProgram::Desc& RtProgram::Desc::addHitGroup(uint32_t hitIndex, const std::string& closestHit, const std::string& anyHit, const std::string& intersection)
     {
         ThrowIfFalse(mActiveLibraryIndex != -1, L"Can't set hit shader entry-point. Please add a shader-library first");

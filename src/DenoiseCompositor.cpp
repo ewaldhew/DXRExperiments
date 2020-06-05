@@ -63,8 +63,8 @@ void DenoiseCompositor::loadResources(ID3D12CommandQueue *uploadCommandQueue, UI
         auto uploadResourcesFinished = resourceUpload.End(uploadCommandQueue);
         uploadResourcesFinished.wait();
 
-        mTextureSrvGpuHandles[0] = mRtContext->createTextureSRVHandle(mTextureResources[0].Get()); 
-        mTextureSrvGpuHandles[1] = mRtContext->createTextureSRVHandle(mTextureResources[1].Get()); 
+        mTextureSrvGpuHandles[0] = mRtContext->createTextureSRVHandle(mTextureResources[0].Get());
+        mTextureSrvGpuHandles[1] = mRtContext->createTextureSRVHandle(mTextureResources[1].Get());
     }
 }
 

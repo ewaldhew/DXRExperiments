@@ -27,7 +27,7 @@ namespace DXRFramework
         void bindDescriptorHeap();
         D3D12_GPU_DESCRIPTOR_HANDLE getDescriptorGPUHandle(UINT heapIndex);
 
-        // Allocate a descriptor and return its index. 
+        // Allocate a descriptor and return its index.
         // If the passed descriptorIndexToUse is valid, it will be used instead of allocating a new one.
         UINT allocateDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE* cpuDescriptor, UINT descriptorIndexToUse = UINT_MAX);
 
@@ -50,7 +50,7 @@ namespace DXRFramework
 
         ComPtr<ID3D12RaytracingFallbackDevice> mFallbackDevice;
         ComPtr<ID3D12RaytracingFallbackCommandList> mFallbackCommandList;
-        
+
         // RT global descriptor heap
         ComPtr<ID3D12DescriptorHeap> mDescriptorHeap;
         UINT mDescriptorsAllocated;

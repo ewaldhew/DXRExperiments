@@ -8,8 +8,8 @@ struct SimplePayload
     UINT depth;
 };
 
-[shader("raygeneration")] 
-void RayGen() 
+[shader("raygeneration")]
+void RayGen()
 {
     if (perFrameConstants.cameraParams.accumCount >= perFrameConstants.options.maxIterations) {
         return;
@@ -18,7 +18,7 @@ void RayGen()
     uint2 launchIndex = DispatchRaysIndex().xy;
     float2 dims = float2(DispatchRaysDimensions().xy);
     float2 d = (((launchIndex.xy + 0.5f) / dims.xy) * 2.f - 1.f);
- 
+
     SimplePayload payload;
     payload.colorAndDistance = float4(0, 0, 0, 0);
     payload.depth = 0;
@@ -64,12 +64,12 @@ float3 evaluateIndirectDiffuse(float3 position, float3 normal, inout uint randSe
             float3 sampleDir = getCosHemisphereSample(randSeed, normal);
             // float NoL = saturate(dot(normal, sampleDir));
             // float pdf = NoL / M_PI;
-            // color += shootSecondaryRay(position, sampleDir, RAY_EPSILON, currentDepth) * NoL / pdf; 
+            // color += shootSecondaryRay(position, sampleDir, RAY_EPSILON, currentDepth) * NoL / pdf;
             color += shootSecondaryRay(position, sampleDir, RAY_EPSILON, currentDepth) * M_PI; // term canceled
         } else {
             float3 sampleDir = getUniformHemisphereSample(randSeed, normal);
             float NoL = saturate(dot(normal, sampleDir));
-            float pdf = 1.0 / (2.0 * M_PI); 
+            float pdf = 1.0 / (2.0 * M_PI);
             color += shootSecondaryRay(position, sampleDir, RAY_EPSILON, currentDepth) * NoL / pdf;
         }
     }
@@ -128,7 +128,7 @@ float3 shade(float3 position, float3 normal, uint currentDepth)
             fresnel = FresnelReflectanceSchlick(WorldRayDirection(), normal, materialParams.specular.rgb);
         }
     }
- 
+
     // Debug visualization
     if (currentDepth == 0) {
         if (perFrameConstants.options.showIndirectDiffuseOnly) {
@@ -147,8 +147,8 @@ float3 shade(float3 position, float3 normal, uint currentDepth)
     return materialParams.emissive.rgb * materialParams.emissive.a + materialParams.albedo.rgb * diffuseComponent + materialParams.reflectivity * specularComponent * fresnel;
 }
 
-[shader("closesthit")] 
-void PrimaryClosestHit(inout SimplePayload payload, Attributes attrib) 
+[shader("closesthit")]
+void PrimaryClosestHit(inout SimplePayload payload, Attributes attrib)
 {
     float3 vertPosition, vertNormal;
     interpolateVertexAttributes(attrib.bary, vertPosition, vertNormal);

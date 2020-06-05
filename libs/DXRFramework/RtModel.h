@@ -9,10 +9,10 @@ namespace DXRFramework
     {
     public:
         using SharedPtr = std::shared_ptr<RtModel>;
-        
+
         static SharedPtr create(RtContext::SharedPtr context, const std::string &filePath);
         ~RtModel();
-        
+
         ID3D12Resource *getVertexBuffer() const { return mVertexBuffer.Get(); }
         ID3D12Resource *getIndexBuffer() const { return mIndexBuffer.Get(); }
 

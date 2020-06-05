@@ -70,5 +70,5 @@ private:
     bool mAnimationPaused;
 
     std::mt19937 mRng;
-    std::uniform_real_distribution<float> mRngDist;     
+    std::uniform_real_distribution<float> mRngDist;
 };

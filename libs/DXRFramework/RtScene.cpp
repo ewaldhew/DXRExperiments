@@ -40,12 +40,12 @@ namespace DXRFramework
         D3D12_RESOURCE_STATES initialResourceState = fallbackDevice->GetAccelerationStructureResourceState();
         mTlasBuffer = CreateBuffer(device, resultSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, initialResourceState, kDefaultHeapProps);
 
-        ComPtr<ID3D12Resource> instanceDesc = CreateBuffer(device, instanceDescsSize, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps); 
+        ComPtr<ID3D12Resource> instanceDesc = CreateBuffer(device, instanceDescsSize, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
 
         // Set the descriptor heaps to be used during acceleration structure build for the Fallback Layer.
         context->bindDescriptorHeap();
 
-        tlasGenerator.Generate(commandList, fallbackCommandList, scratch.Get(), mTlasBuffer.Get(), instanceDesc.Get(), 
+        tlasGenerator.Generate(commandList, fallbackCommandList, scratch.Get(), mTlasBuffer.Get(), instanceDesc.Get(),
             [&](ID3D12Resource *resource) -> WRAPPED_GPU_POINTER { return context->createBufferUAVWrappedPointer(resource); });
 
         mTlasWrappedPointer = context->createBufferUAVWrappedPointer(mTlasBuffer.Get());

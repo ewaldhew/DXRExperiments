@@ -16,7 +16,7 @@ namespace DXRFramework
 
         static SharedPtr create(RtContext::SharedPtr context, RtProgram::SharedPtr program, RtScene::SharedPtr scene);
         ~RtBindings();
-        
+
         void apply(RtContext::SharedPtr context, RtState::SharedPtr state);
 
         ID3D12Resource *getShaderTable() const { return mShaderTable.Get(); }
@@ -35,7 +35,7 @@ namespace DXRFramework
         const RtProgram::SharedPtr& getProgram() { return mProgram; }
 
     private:
-        RtBindings(RtContext::SharedPtr context, RtProgram::SharedPtr program, RtScene::SharedPtr scene); 
+        RtBindings(RtContext::SharedPtr context, RtProgram::SharedPtr program, RtScene::SharedPtr scene);
         bool init(RtContext::SharedPtr context);
 
         void applyRtProgramVars(uint8_t *record, RtShader::SharedPtr shader, ID3D12RaytracingFallbackStateObject *rtso, RtParams::SharedPtr params);
@@ -55,10 +55,10 @@ namespace DXRFramework
 
         uint32_t mRecordSize;
         uint32_t mProgramIdentifierSize;
-        
+
         uint8_t *getRayGenRecordPtr();
         uint8_t *getMissRecordPtr(uint32_t missId);
-        uint8_t *getHitRecordPtr(uint32_t hitId, uint32_t meshId);        
+        uint8_t *getHitRecordPtr(uint32_t hitId, uint32_t meshId);
 
         RtParams::SharedPtr mGlobalParams;
         RtParams::SharedPtr mRayGenParams;

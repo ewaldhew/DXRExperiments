@@ -46,13 +46,13 @@ namespace DXRFramework
         ID3D12DescriptorHeap *pDescriptorHeaps[] = { mDescriptorHeap.Get() };
         mFallbackCommandList->SetDescriptorHeaps(ARRAYSIZE(pDescriptorHeaps), pDescriptorHeaps);
     }
-    
+
     D3D12_GPU_DESCRIPTOR_HANDLE RtContext::getDescriptorGPUHandle(UINT heapIndex)
     {
         return CD3DX12_GPU_DESCRIPTOR_HANDLE(
             mDescriptorHeap->GetGPUDescriptorHandleForHeapStart(), heapIndex, mDescriptorSize);
     }
-    
+
     RtContext::~RtContext() = default;
 
     static D3D12_UNORDERED_ACCESS_VIEW_DESC createUAVDesc(ID3D12Resource *resource)
@@ -97,7 +97,7 @@ namespace DXRFramework
         if (rawBuffer) {
             srvDesc.Format = DXGI_FORMAT_R32_TYPELESS;
             srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_RAW;
-            srvDesc.Buffer.NumElements = (UINT)(resource->GetDesc().Width / sizeof(UINT32)); 
+            srvDesc.Buffer.NumElements = (UINT)(resource->GetDesc().Width / sizeof(UINT32));
         } else {
             srvDesc.Format = DXGI_FORMAT_UNKNOWN;
             srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;

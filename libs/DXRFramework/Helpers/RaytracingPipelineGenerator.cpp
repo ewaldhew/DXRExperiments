@@ -58,7 +58,7 @@ RayTracingPipelineGenerator::RayTracingPipelineGenerator(ID3D12Device5* device)
 }
 
 
-RayTracingPipelineGenerator::RayTracingPipelineGenerator(ID3D12Device* device, 
+RayTracingPipelineGenerator::RayTracingPipelineGenerator(ID3D12Device* device,
                                                          ID3D12RaytracingFallbackDevice* fallbackDevice)
     : m_device(device), m_fallbackDevice(fallbackDevice)
 {
@@ -247,7 +247,7 @@ ID3D12StateObject* RayTracingPipelineGenerator::Generate(ID3D12RootSignature* gl
   pipelineDesc.Type = D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE;
   pipelineDesc.NumSubobjects = currentIndex; // static_cast<UINT>(subobjects.size());
   pipelineDesc.pSubobjects = subobjects.data();
-  
+
   ID3D12StateObject* rtStateObject = nullptr;
 
   // Create the state object
@@ -548,7 +548,7 @@ RayTracingPipelineGenerator::Library::Library(IDxcBlob* dxil,
   Construct(dxil->GetBufferPointer(), static_cast<UINT>(dxil->GetBufferSize()));
 }
 
-RayTracingPipelineGenerator::Library::Library(const void *shaderBytecode, UINT bytecodeSize, 
+RayTracingPipelineGenerator::Library::Library(const void *shaderBytecode, UINT bytecodeSize,
                                               const std::vector<std::wstring>& exportedSymbols)
     : m_dxil(nullptr), m_exportedSymbols(exportedSymbols), m_exports(exportedSymbols.size())
 {

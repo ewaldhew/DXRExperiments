@@ -44,7 +44,7 @@ float nextRand(inout uint s)
     return float(s & 0x00FFFFFF) / float(0x01000000);
 }
 
-// Utility function to get a vector perpendicular to an input vector 
+// Utility function to get a vector perpendicular to an input vector
 //    (from "Efficient Construction of Perpendicular Vectors Without Branching")
 float3 getPerpendicularVector(float3 u)
 {
@@ -114,7 +114,7 @@ float3 samplePhongLobe(inout uint randSeed, float3 mirrorDir, float exponent, in
 
     float poweredCos = pow(cosTheta, exponent);
     pdf = (exponent + 1.0) / (2.0 * pi) * poweredCos;
-    brdf = (exponent + 2.0) / (2.0 * pi) * poweredCos;  
+    brdf = (exponent + 2.0) / (2.0 * pi) * poweredCos;
 
     float x = sinTheta * cos(phi);
     float z = sinTheta * sin(phi);
@@ -170,7 +170,7 @@ uint3 Load3x16BitIndices(uint offsetBytes, ByteAddressBuffer Indices)
     uint3 indices;
 
     // ByteAdressBuffer loads must be aligned at a 4 byte boundary.
-    // Since we need to read three 16 bit indices: { 0, 1, 2 } 
+    // Since we need to read three 16 bit indices: { 0, 1, 2 }
     // aligned at a 4 byte boundary as: { 0 1 } { 2 0 } { 1 2 } { 0 1 } ...
     // we will load 8 bytes (~ 4 indices { a b | c d }) to handle two possible index triplet layouts,
     // based on first index's offsetBytes being aligned at the 4 byte boundary or not:

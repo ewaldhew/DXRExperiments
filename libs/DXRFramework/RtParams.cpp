@@ -53,7 +53,7 @@ namespace DXRFramework
         memcpy(mData.data() + mRootOffset - mInitialOffset, &discriptorHandle, size);
         mRootOffset += size;
     }
-    
+
     void RtParams::append32BitConstants(void *constants, UINT num32BitConstants)
     {
         UINT size = sizeof(uint32_t) * num32BitConstants;

@@ -19,7 +19,7 @@ namespace DXRFramework
     {
     public:
         using SharedPtr = std::shared_ptr<RtProgram>;
-        
+
         class ShaderLibrary
         {
         public:
@@ -96,8 +96,8 @@ namespace DXRFramework
         };
 
         static SharedPtr create(
-            RtContext::SharedPtr context, const Desc& desc, 
-            uint32_t maxPayloadSize = DXR_MAX_PAYLOAD_SIZE_IN_BYTES, 
+            RtContext::SharedPtr context, const Desc& desc,
+            uint32_t maxPayloadSize = DXR_MAX_PAYLOAD_SIZE_IN_BYTES,
             uint32_t maxAttributesSize = D3D12_RAYTRACING_MAX_ATTRIBUTE_SIZE_IN_BYTES);
 
         const std::vector<std::shared_ptr<ShaderLibrary>> &getShaderLibraries() const { return mDesc.mShaderLibraries; }

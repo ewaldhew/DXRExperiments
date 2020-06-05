@@ -35,7 +35,7 @@ private:
 
     DXRFramework::RtContext::SharedPtr mRtContext;
     DXRFramework::RtScene::SharedPtr mRtScene;
-    
+
     std::vector<RaytracingPipeline::SharedPtr> mRaytracingPipelines;
     RaytracingPipeline *mActiveRaytracingPipeline;
     int mActivePipelineIndex;
@@ -45,7 +45,7 @@ private:
 
     void InitRaytracing();
     void BlitToBackbuffer(
-        ID3D12Resource *textureResource, 
-        D3D12_RESOURCE_STATES fromState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS, 
+        ID3D12Resource *textureResource,
+        D3D12_RESOURCE_STATES fromState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
         D3D12_RESOURCE_STATES toState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 };

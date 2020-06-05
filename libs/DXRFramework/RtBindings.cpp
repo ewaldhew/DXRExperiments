@@ -82,7 +82,7 @@ namespace DXRFramework
 
         params->applyRootParams(shader, record);
     }
-    
+
     void RtBindings::applyRtProgramVars(uint8_t *record, const RtProgram::HitGroup &hitGroup, ID3D12RaytracingFallbackStateObject *rtso, RtParams::SharedPtr params)
     {
         std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
@@ -96,7 +96,7 @@ namespace DXRFramework
 
         params->applyRootParams(hitGroup, record);
     }
-    
+
     void RtBindings::apply(RtContext::SharedPtr context, RtState::SharedPtr state)
     {
         auto rtso = state->getFallbackRtso();
@@ -132,7 +132,7 @@ namespace DXRFramework
     //
     // +------------+---------+---------+-----+--------+---------+--------+-----+--------+--------+-----+--------+-----+--------+--------+-----+--------+
     // |            |         |         | ... |        |         |        | ... |        |        | ... |        | ... |        |        | ... |        |
-    // |   RayGen   |   Ray0  |   Ray1  | ... |  RayN  |   Ray0  |  Ray1  | ... |  RayN  |  Ray0  | ... |  RayN  | ... |  Ray0  |  Ray0  | ... |  RayN  |   
+    // |   RayGen   |   Ray0  |   Ray1  | ... |  RayN  |   Ray0  |  Ray1  | ... |  RayN  |  Ray0  | ... |  RayN  | ... |  Ray0  |  Ray0  | ... |  RayN  |
     // |   Entry    |   Miss  |   Miss  | ... |  Miss  |   Hit   |   Hit  | ... |  Hit   |  Hit   | ... |  Hit   | ... |  Hit   |  Hit   | ... |  Hit   |
     // |            |         |         | ... |        |  Mesh0  |  Mesh0 | ... |  Mesh0 |  Mesh1 | ... |  Mesh1 | ... | MeshN  |  MeshN | ... |  MeshN |
     // +------------+---------+---------+-----+--------+---------+--------+-----+--------+--------+-----+--------+-----+--------+--------+-----+--------+
@@ -140,7 +140,7 @@ namespace DXRFramework
     // The first record is the ray gen, followed by the miss records, followed by the meshes records.
     // For each mesh we have N hit records, N == number of mesh instances in the model
     // The size of each record is mRecordSize
-    // 
+    //
     // If this layout changes, we also need to change the constants kRayGenRecordIndex and kFirstMissRecordIndex
 
     uint8_t *RtBindings::getRayGenRecordPtr()
@@ -156,7 +156,7 @@ namespace DXRFramework
     }
 
     uint8_t *RtBindings::getHitRecordPtr(uint32_t hitId, uint32_t meshId)
-    {   
+    {
         assert(hitId < mHitProgCount);
         uint32_t meshIndex = mFirstHitVarEntry + mHitProgCount * meshId;    // base record of the requested mesh
         uint32_t recordIndex = meshIndex + hitId;

@@ -19,7 +19,7 @@ public:
     virtual void createOutputResource(DXGI_FORMAT format, UINT width, UINT height) = 0;
     virtual void buildAccelerationStructures() = 0;
 
-    struct Material 
+    struct Material
     {
         MaterialParams params;
         // textures

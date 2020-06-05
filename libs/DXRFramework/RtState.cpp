@@ -29,7 +29,7 @@ namespace DXRFramework
             auto &dxilLibrary = library->mLibDesc.DXILLibrary;
             mPipelineGenerator.AddLibrary(dxilLibrary.pShaderBytecode, static_cast<UINT>(dxilLibrary.BytecodeLength), library->mExportedSymbols);
         }
-        
+
         std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
 
         // Add hit groups
