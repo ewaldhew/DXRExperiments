@@ -9,8 +9,26 @@
 #include <wrl.h>
 #include <shellapi.h>
 
+// C RunTime Header Files
+#include <stdlib.h>
+#include <assert.h>
 #include <sstream>
 #include <iomanip>
+#include <list>
+#include <string>
+#include <memory>
+#include <unordered_map>
+#include <vector>
+#include <array>
+
+#include <dxgi1_6.h>
+#include "d3d12_1.h"
+#include <atlbase.h>
+#include "D3D12RaytracingFallback.h"
+#include "D3D12RaytracingHelpers.hpp"
+#include "d3dx12.h"
+
+#include <DirectXMath.h>
 
 #include "d3d12.h"
 #include "d3dx12.h"

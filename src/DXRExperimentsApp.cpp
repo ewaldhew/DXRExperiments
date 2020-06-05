@@ -9,9 +9,9 @@
 using namespace std;
 using namespace DXRFramework;
 
-namespace GameCore 
-{ 
-    extern HWND g_hWnd; 
+namespace GameCore
+{
+    extern HWND g_hWnd;
 }
 
 DXRExperimentsApp::DXRExperimentsApp(UINT width, UINT height, std::wstring name) :
@@ -28,7 +28,7 @@ void DXRExperimentsApp::OnInit()
         DXGI_FORMAT_R16G16B16A16_FLOAT,//DXGI_FORMAT_R8G8B8A8_UNORM
         DXGI_FORMAT_UNKNOWN,
         FrameCount,
-        D3D_FEATURE_LEVEL_12_0,
+        D3D_FEATURE_LEVEL_11_0,
         // Sample shows handling of use cases with tearing support, which is OS dependent and has been supported since TH2.
         // Since the Fallback Layer requires Fall Creator's update (RS3), we don't need to handle non-tearing cases.
         DX::DeviceResources::c_RequireTearingSupport,
@@ -63,7 +63,7 @@ void DXRExperimentsApp::OnInit()
     mCamera->SetZRange(1.0f, 10000.0f);
     mCamController.reset(new GameCore::CameraController(*mCamera, mCamera->GetUpVec()));
     mCamController->EnableFirstPersonMouse(false);
- 
+
     InitRaytracing();
 
     // Initialize UI renderer
@@ -72,7 +72,7 @@ void DXRExperimentsApp::OnInit()
         UINT heapOffset = mRtContext->allocateDescriptor(&cpuHandle);
         D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = mRtContext->getDescriptorGPUHandle(heapOffset);
         return std::make_pair(cpuHandle, gpuHandle);
-    }); 
+    });
 }
 
 void DXRExperimentsApp::InitRaytracing()

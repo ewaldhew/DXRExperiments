@@ -12,6 +12,7 @@
 #pragma once
 
 #include <wrl.h>
+#include <vector>
 
 // Note that while ComPtr is used to manage the lifetime of resources on the CPU,
 // it has no understanding of the lifetime of resources on the GPU. Apps must account
@@ -38,7 +39,7 @@ private:
 
 inline void ThrowIfFailed(HRESULT hr)
 {
-    if (FAILED(hr))
+    if ( FAILED(hr) )
     {
         throw HrException(hr);
     }
@@ -46,7 +47,7 @@ inline void ThrowIfFailed(HRESULT hr)
 
 inline void ThrowIfFailed(HRESULT hr, const wchar_t* msg)
 {
-    if (FAILED(hr))
+    if ( FAILED(hr) )
     {
         OutputDebugString(msg);
         throw HrException(hr);
@@ -66,20 +67,20 @@ inline void ThrowIfFalse(bool value, const wchar_t* msg)
 
 inline void GetAssetsPath(_Out_writes_(pathSize) WCHAR* path, UINT pathSize)
 {
-    if (path == nullptr)
+    if ( path == nullptr )
     {
         throw std::exception();
     }
 
     DWORD size = GetModuleFileName(nullptr, path, pathSize);
-    if (size == 0 || size == pathSize)
+    if ( size == 0 || size == pathSize )
     {
         // Method failed or path was truncated.
         throw std::exception();
     }
 
     WCHAR* lastSlash = wcsrchr(path, L'\\');
-    if (lastSlash)
+    if ( lastSlash )
     {
         *(lastSlash + 1) = L'\0';
     }
@@ -98,18 +99,18 @@ inline HRESULT ReadDataFromFile(LPCWSTR filename, byte** data, UINT* size)
     extendedParams.hTemplateFile = nullptr;
 
     Wrappers::FileHandle file(CreateFile2(filename, GENERIC_READ, FILE_SHARE_READ, OPEN_EXISTING, &extendedParams));
-    if (file.Get() == INVALID_HANDLE_VALUE)
+    if ( file.Get() == INVALID_HANDLE_VALUE )
     {
         throw std::exception();
     }
 
     FILE_STANDARD_INFO fileInfo = {};
-    if (!GetFileInformationByHandleEx(file.Get(), FileStandardInfo, &fileInfo, sizeof(fileInfo)))
+    if ( !GetFileInformationByHandleEx(file.Get(), FileStandardInfo, &fileInfo, sizeof(fileInfo)) )
     {
         throw std::exception();
     }
 
-    if (fileInfo.EndOfFile.HighPart != 0)
+    if ( fileInfo.EndOfFile.HighPart != 0 )
     {
         throw std::exception();
     }
@@ -117,7 +118,7 @@ inline HRESULT ReadDataFromFile(LPCWSTR filename, byte** data, UINT* size)
     *data = reinterpret_cast<byte*>(malloc(fileInfo.EndOfFile.LowPart));
     *size = fileInfo.EndOfFile.LowPart;
 
-    if (!ReadFile(file.Get(), *data, fileInfo.EndOfFile.LowPart, nullptr, nullptr))
+    if ( !ReadFile(file.Get(), *data, fileInfo.EndOfFile.LowPart, nullptr, nullptr) )
     {
         throw std::exception();
     }
@@ -134,7 +135,7 @@ inline void SetName(ID3D12Object* pObject, LPCWSTR name)
 inline void SetNameIndexed(ID3D12Object* pObject, LPCWSTR name, UINT index)
 {
     WCHAR fullName[50];
-    if (swprintf_s(fullName, L"%s[%u]", name, index) > 0)
+    if ( swprintf_s(fullName, L"%s[%u]", name, index) > 0 )
     {
         pObject->SetName(fullName);
     }
@@ -184,7 +185,7 @@ inline Microsoft::WRL::ComPtr<ID3DBlob> CompileShader(
     hr = D3DCompileFromFile(filename.c_str(), defines, D3D_COMPILE_STANDARD_FILE_INCLUDE,
         entrypoint.c_str(), target.c_str(), compileFlags, 0, &byteCode, &errors);
 
-    if (errors != nullptr)
+    if ( errors != nullptr )
     {
         OutputDebugStringA((char*)errors->GetBufferPointer());
     }
@@ -198,7 +199,7 @@ inline Microsoft::WRL::ComPtr<ID3DBlob> CompileShader(
 template<class T>
 void ResetComPtrArray(T* comPtrArray)
 {
-    for (auto &i : *comPtrArray)
+    for ( auto &i : *comPtrArray )
     {
         i.Reset();
     }
@@ -209,7 +210,7 @@ void ResetComPtrArray(T* comPtrArray)
 template<class T>
 void ResetUniquePtrArray(T* uniquePtrArray)
 {
-    for (auto &i : *uniquePtrArray)
+    for ( auto &i : *uniquePtrArray )
     {
         i.reset();
     }
@@ -219,6 +220,7 @@ class GpuUploadBuffer
 {
 public:
     ComPtr<ID3D12Resource> GetResource() { return m_resource; }
+    virtual void Release() { m_resource.Reset(); }
 
 protected:
     ComPtr<ID3D12Resource> m_resource;
@@ -226,7 +228,7 @@ protected:
     GpuUploadBuffer() {}
     ~GpuUploadBuffer()
     {
-        if (m_resource.Get())
+        if ( m_resource.Get() )
         {
             m_resource->Unmap(0, nullptr);
         }
@@ -268,7 +270,7 @@ struct D3DBuffer
 // Usage: ToDo
 //    ConstantBuffer<...> cb;
 //    cb.Create(...);
-//    cb.staging.var = ...; | cb->var = ... ; 
+//    cb.staging.var = ...; | cb->var = ... ;
 //    cb.CopyStagingToGPU(...);
 template <class T>
 class ConstantBuffer : public GpuUploadBuffer
@@ -309,7 +311,7 @@ public:
 // Usage: ToDo
 //    ConstantBuffer<...> cb;
 //    cb.Create(...);
-//    cb.staging.var = ...; | cb->var = ... ; 
+//    cb.staging.var = ...; | cb->var = ... ;
 //    cb.CopyStagingToGPU(...);
 template <class T>
 class StructuredBuffer : public GpuUploadBuffer
@@ -335,7 +337,7 @@ public:
 
     void CopyStagingToGpu(UINT instanceIndex = 0)
     {
-        memcpy(m_mappedBuffers + instanceIndex, &m_staging[0], InstanceSize());
+        memcpy(m_mappedBuffers + instanceIndex * NumElementsPerInstance(), &m_staging[0], InstanceSize());
     }
 
     // Accessors

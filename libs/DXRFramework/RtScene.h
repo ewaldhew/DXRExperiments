@@ -1,5 +1,6 @@
 #pragma once
 
+#include <vector>
 #include "RtPrefix.h"
 #include "RtContext.h"
 #include "RtModel.h"
@@ -10,7 +11,7 @@ namespace DXRFramework
     {
     public:
         using SharedPtr = std::shared_ptr<RtScene>;
-        
+
         static SharedPtr create();
         ~RtScene();
 
@@ -39,7 +40,7 @@ namespace DXRFramework
         RtScene();
 
         std::vector<Node::SharedPtr> mInstances;
-        
+
         ComPtr<ID3D12Resource> mTlasBuffer;
         WRAPPED_GPU_POINTER mTlasWrappedPointer;
     };
