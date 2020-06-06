@@ -69,37 +69,37 @@ namespace DXRFramework
         return true;
     }
 
-    void RtBindings::applyRtProgramVars(uint8_t *record, RtShader::SharedPtr shader, ID3D12RaytracingFallbackStateObject *rtso, RtParams::SharedPtr params)
+    void RtBindings::applyShaderId(uint8_t* & record, std::string shaderId, ID3D12RaytracingFallbackStateObject *rtso)
     {
         std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-        std::wstring entryPoint = converter.from_bytes(shader->getEntryPoint());
+        std::wstring entryPoint = converter.from_bytes(shaderId);
         void *id = rtso->GetShaderIdentifier(entryPoint.c_str());
-        if (!id) {
-            throw std::logic_error("Unknown shader identifier used in the SBT: " + shader->getEntryPoint());
+        if ( !id ) {
+            throw std::logic_error("Unknown shader identifier used in the SBT: " + shaderId);
         }
+        size_t index = std::distance(mShaderTableData.data(), record) / mRecordSize;
+        d_shaderRecords[index] = entryPoint.c_str();
         memcpy(record, id, mProgramIdentifierSize);
         record += mProgramIdentifierSize;
+    }
 
+    void RtBindings::applyRtProgramVars(uint8_t *record, RtShader::SharedPtr shader, ID3D12RaytracingFallbackStateObject *rtso, RtParams::SharedPtr params)
+    {
+        applyShaderId(record, shader->getEntryPoint(), rtso);
         params->applyRootParams(shader, record);
     }
 
     void RtBindings::applyRtProgramVars(uint8_t *record, const RtProgram::HitGroup &hitGroup, ID3D12RaytracingFallbackStateObject *rtso, RtParams::SharedPtr params)
     {
-        std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-        std::wstring entryPoint = converter.from_bytes(hitGroup.mExportName);
-        void *id = rtso->GetShaderIdentifier(entryPoint.c_str());
-        if (!id) {
-            throw std::logic_error("Unknown shader identifier used in the SBT: " + hitGroup.mExportName);
-        }
-        memcpy(record, id, mProgramIdentifierSize);
-        record += mProgramIdentifierSize;
-
+        applyShaderId(record, hitGroup.mExportName, rtso);
         params->applyRootParams(hitGroup, record);
     }
 
     void RtBindings::apply(RtContext::SharedPtr context, RtState::SharedPtr state)
     {
         auto rtso = state->getFallbackRtso();
+
+        d_shaderRecords.resize(1 + mMissProgCount + mScene->getNumInstances() * mHitProgCount);
 
         uint8_t *rayGenRecord = getRayGenRecordPtr();
         applyRtProgramVars(rayGenRecord, mProgram->getRayGenProgram(), rtso, mRayGenParams);
@@ -117,6 +117,10 @@ namespace DXRFramework
             uint8_t *pMissRecord = getMissRecordPtr(m);
             applyRtProgramVars(pMissRecord, mProgram->getMissProgram(m), rtso, mMissParams[m]);
         }
+
+#if _DEBUG
+        DebugPrint();
+#endif
 
         // Update shader table
         uint8_t *mappedBuffer;
@@ -161,5 +165,24 @@ namespace DXRFramework
         uint32_t meshIndex = mFirstHitVarEntry + mHitProgCount * meshId;    // base record of the requested mesh
         uint32_t recordIndex = meshIndex + hitId;
         return mShaderTableData.data() + (recordIndex * mRecordSize);
+    }
+
+    // Pretty-print the shader records.
+    void RtBindings::DebugPrint()
+    {
+        std::wstringstream wstr;
+        wstr << L"|--------------------------------------------------------------------\n";
+        wstr << L"|Shader table - " << L": "
+            << mRecordSize << L" | " << mShaderTableData.size() << L" bytes\n";
+
+        for ( UINT i = 0; i < d_shaderRecords.size(); i++ )
+        {
+            wstr << L"| [" << i << L"]: ";
+            wstr << d_shaderRecords[i] << L", ";
+            wstr << mProgramIdentifierSize << L" + " << mRecordSize - mProgramIdentifierSize << L" bytes \n";
+        }
+        wstr << L"|--------------------------------------------------------------------\n";
+        wstr << L"\n";
+        OutputDebugStringW(wstr.str().c_str());
     }
 }

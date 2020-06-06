@@ -38,6 +38,7 @@ namespace DXRFramework
         RtBindings(RtContext::SharedPtr context, RtProgram::SharedPtr program, RtScene::SharedPtr scene);
         bool init(RtContext::SharedPtr context);
 
+        void applyShaderId(uint8_t* & record, std::string shaderId, ID3D12RaytracingFallbackStateObject *rtso);
         void applyRtProgramVars(uint8_t *record, RtShader::SharedPtr shader, ID3D12RaytracingFallbackStateObject *rtso, RtParams::SharedPtr params);
         void applyRtProgramVars(uint8_t *record, const RtProgram::HitGroup &hitGroup, ID3D12RaytracingFallbackStateObject *rtso, RtParams::SharedPtr params);
 
@@ -46,6 +47,9 @@ namespace DXRFramework
 
         ComPtr<ID3D12Resource> mShaderTable;
         std::vector<uint8_t> mShaderTableData;
+
+        // For shader table debug print out.
+        std::vector<std::wstring> d_shaderRecords;
 
         static const uint32_t kRayGenRecordIndex = 0;
         static const uint32_t kFirstMissRecordIndex = 1;
@@ -64,5 +68,8 @@ namespace DXRFramework
         RtParams::SharedPtr mRayGenParams;
         std::vector<std::vector<RtParams::SharedPtr>> mHitParams;
         std::vector<RtParams::SharedPtr> mMissParams;
+
+        // Pretty-print the shader records.
+        void DebugPrint();
     };
 }

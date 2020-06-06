@@ -39,7 +39,9 @@ compiling in debug mode.
 
 */
 
+#include "pch.h"
 #include "RaytracingPipelineGenerator.h"
+#include "utils/DirectXRaytracingHelper.h"
 
 #include <unordered_set>
 
@@ -359,6 +361,10 @@ ID3D12RaytracingFallbackStateObject* RayTracingPipelineGenerator::FallbackGenera
   pipelineDesc.Type = D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE;
   pipelineDesc.NumSubobjects = currentIndex; // static_cast<UINT>(subobjects.size());
   pipelineDesc.pSubobjects = subobjects.data();
+
+#if _DEBUG
+  PrintStateObjectDesc(&pipelineDesc);
+#endif
 
   ID3D12RaytracingFallbackStateObject* fallbackStateObject = nullptr;
 
