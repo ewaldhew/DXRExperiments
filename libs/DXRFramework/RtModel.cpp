@@ -16,18 +16,19 @@ namespace DXRFramework
         XMFLOAT3 normal;
     };
 
-    RtModel::SharedPtr RtModel::create(RtContext::SharedPtr context, const std::string &filePath)
+    RtMesh::SharedPtr RtMesh::create(RtContext::SharedPtr context, const std::string &filePath)
     {
-        return SharedPtr(new RtModel(context, filePath));
+        return SharedPtr(new RtMesh(context, filePath));
     }
 
-    RtModel::RtModel(RtContext::SharedPtr context, const std::string &filePath)
+    RtMesh::RtMesh(RtContext::SharedPtr context, const std::string &filePath)
     {
         auto flags = aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs | aiProcess_JoinIdenticalVertices | aiProcess_PreTransformVertices;
         const aiScene *scene = aiImportFile(filePath.c_str(), flags);
 
         std::vector<Vertex> interleavedVertexData;
         std::vector<uint32_t> indices;
+        mType = GeometryType::Triangles;
         mNumVertices = 0;
         mNumTriangles = 0;
 
@@ -58,9 +59,9 @@ namespace DXRFramework
         } else {
             interleavedVertexData =
             {
-                { { 0.0f, 0.25f, 0.0f }, { 0.0f, 0.0f, 1.0f } },
-                { { 0.25f, -0.25f, 0.0f }, { 0.0f, 0.0f, 1.0f } },
-                { { -0.25f, -0.25f, 0.0f }, { 0.0f, 0.0f, 1.0f } }
+                { { 0.0f, 1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f } },
+                { { 1.0f, -1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f } },
+                { { -1.0f, -1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f } }
             };
             indices = { 0, 2, 1 };
             mNumTriangles = 1;
@@ -81,9 +82,9 @@ namespace DXRFramework
         }
     }
 
-    RtModel::~RtModel() = default;
+    RtMesh::~RtMesh() = default;
 
-    void RtModel::build(RtContext::SharedPtr context)
+    void RtMesh::build(RtContext::SharedPtr context)
     {
         auto device = context->getDevice();
         auto commandList = context->getCommandList();
@@ -115,5 +116,76 @@ namespace DXRFramework
         if (mIndexBuffer) {
             mIndexBufferSrvHandle = context->createBufferSRVHandle(mIndexBuffer.Get(), false, sizeof(uint32_t));
         }
+    }
+}
+
+namespace DXRFramework
+{
+    RtProcedural::SharedPtr RtProcedural::create(RtContext::SharedPtr context, PrimitiveType::Enum primitiveType, XMFLOAT3 anchorPos, XMFLOAT3 size)
+    {
+        return SharedPtr(new RtProcedural(context, primitiveType, anchorPos, size));
+    }
+
+    RtProcedural::RtProcedural(RtContext::SharedPtr context, PrimitiveType::Enum primitiveType, XMFLOAT3 anchorPos, XMFLOAT3 size)
+        : mPrimitiveType(primitiveType)
+    {
+        // Set up AABB on a grid.
+        switch ( primitiveType ) {
+        case PrimitiveType::AnalyticPrimitive_AABB:
+        case PrimitiveType::AnalyticPrimitive_Spheres:
+            mType = GeometryType::AABB_Analytic;
+            break;
+        case PrimitiveType::VolumetricPrimitive_Metaballs:
+            mType = GeometryType::AABB_Volumetric;
+            break;
+        case PrimitiveType::SignedDistancePrimitive_MiniSpheres:
+        case PrimitiveType::SignedDistancePrimitive_IntersectedRoundCube:
+        case PrimitiveType::SignedDistancePrimitive_SquareTorus:
+        case PrimitiveType::SignedDistancePrimitive_TwistedTorus:
+        case PrimitiveType::SignedDistancePrimitive_Cog:
+        case PrimitiveType::SignedDistancePrimitive_Cylinder:
+        case PrimitiveType::SignedDistancePrimitive_FractalPyramid:
+            mType = GeometryType::AABB_SignedDistance;
+            break;
+        }
+
+        mAabb = D3D12_RAYTRACING_AABB{
+            anchorPos.x,
+            anchorPos.y,
+            anchorPos.z,
+            anchorPos.x + size.x,
+            anchorPos.y + size.y,
+            anchorPos.z + size.z,
+        };
+
+        auto device = context->getDevice();
+        AllocateUploadBuffer(device, &mAabb, sizeof(mAabb), &mAabbBuffer);
+    }
+
+    RtProcedural::~RtProcedural() = default;
+
+    void RtProcedural::build(RtContext::SharedPtr context)
+    {
+        auto device = context->getDevice();
+        auto commandList = context->getCommandList();
+        auto fallbackDevice = context->getFallbackDevice();
+        auto fallbackCommandList = context->getFallbackCommandList();
+
+        nv_helpers_dx12::BottomLevelASGenerator blasGenerator;
+
+        blasGenerator.AddAabbBuffer(mAabbBuffer.Get());
+
+        UINT64 scratchSizeInBytes = 0;
+        UINT64 resultSizeInBytes = 0;
+        blasGenerator.ComputeASBufferSizes(fallbackDevice, false, &scratchSizeInBytes, &resultSizeInBytes);
+
+        ComPtr<ID3D12Resource> scratch = CreateBuffer(device, scratchSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, kDefaultHeapProps);
+
+        D3D12_RESOURCE_STATES initialResourceState = fallbackDevice->GetAccelerationStructureResourceState();
+        mBlasBuffer = CreateBuffer(device, resultSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, initialResourceState, kDefaultHeapProps);
+
+        blasGenerator.Generate(commandList, fallbackCommandList, scratch.Get(), mBlasBuffer.Get());
+
+        mAabbBufferSrvHandle = context->createBufferSRVHandle(mAabbBuffer.Get(), false, sizeof(D3D12_RAYTRACING_AABB));
     }
 }

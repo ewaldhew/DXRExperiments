@@ -81,7 +81,7 @@ void BottomLevelASGenerator::AddVertexBuffer(
                                      // describing the triangles
     UINT64 indexOffsetInBytes,       // Offset of the first index in the index buffer
     uint32_t indexCount,             // Number of indices to consider in the buffer
-    DXGI_FORMAT indexFormat,         // Format of indices 
+    DXGI_FORMAT indexFormat,         // Format of indices
     ID3D12Resource* transformBuffer, // Buffer containing a 4x4 transform matrix
                                      // in GPU memory, to be applied to the
                                      // vertices. This buffer cannot be nullptr
@@ -110,6 +110,25 @@ void BottomLevelASGenerator::AddVertexBuffer(
       isOpaque ? D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE : D3D12_RAYTRACING_GEOMETRY_FLAG_NONE;
 
   m_vertexBuffers.push_back(descriptor);
+}
+
+//--------------------------------------------------------------------------------------------------
+// Add a AABB buffer in GPU memory into the acceleration structure.
+void BottomLevelASGenerator::AddAabbBuffer(
+    ID3D12Resource* aabbBuffer,     // Buffer containing the AABB description
+    bool isOpaque /* = true */ // If true, the geometry is considered opaque, optimizing the search
+                               // for a closest hit
+)
+{
+    D3D12_RAYTRACING_GEOMETRY_DESC descriptor = {};
+    descriptor.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_PROCEDURAL_PRIMITIVE_AABBS;
+    descriptor.AABBs.AABBCount = 1;
+    descriptor.AABBs.AABBs.StartAddress = aabbBuffer->GetGPUVirtualAddress();
+    descriptor.AABBs.AABBs.StrideInBytes = sizeof(D3D12_RAYTRACING_AABB);
+    descriptor.Flags =
+        isOpaque ? D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE : D3D12_RAYTRACING_GEOMETRY_FLAG_NONE;
+
+    m_vertexBuffers.push_back(descriptor);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -251,7 +270,7 @@ void BottomLevelASGenerator::Generate(
   D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS buildInputs = {};
   buildInputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
   buildInputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
-  buildInputs.NumDescs = static_cast<UINT>(m_vertexBuffers.size()); 
+  buildInputs.NumDescs = static_cast<UINT>(m_vertexBuffers.size());
   buildInputs.pGeometryDescs = static_cast<const D3D12_RAYTRACING_GEOMETRY_DESC*>(m_vertexBuffers.data());
   buildInputs.Flags = flags;
 
@@ -318,7 +337,7 @@ void BottomLevelASGenerator::Generate(
   D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS buildInputs = {};
   buildInputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
   buildInputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
-  buildInputs.NumDescs = static_cast<UINT>(m_vertexBuffers.size()); 
+  buildInputs.NumDescs = static_cast<UINT>(m_vertexBuffers.size());
   buildInputs.pGeometryDescs = m_vertexBuffers.data();
   buildInputs.Flags = flags;
 

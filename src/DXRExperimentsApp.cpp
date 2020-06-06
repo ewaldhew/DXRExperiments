@@ -88,7 +88,7 @@ void DXRExperimentsApp::InitRaytracing()
         auto identity = DirectX::XMMatrixIdentity();
 
         // working directory is "vc2015"
-        mRtScene->addModel(RtModel::create(mRtContext, "..\\assets\\models\\pica\\Machines.fbx"), identity);
+        mRtScene->addModel(RtMesh::create(mRtContext, "..\\assets\\models\\pica\\Machines.fbx"), identity);
     }
 
     // Create materials

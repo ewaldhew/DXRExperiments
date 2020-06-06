@@ -220,9 +220,12 @@ void ProgressiveRaytracingPipeline::render(ID3D12GraphicsCommandList *commandLis
     for (UINT rayType = 0; rayType < program->getHitProgramCount(); ++rayType) {
         for (UINT instance = 0; instance < mRtScene->getNumInstances(); ++instance) {
             auto &hitVars = mRtBindings->getHitVars(rayType, instance);
-            hitVars->appendHeapRanges(mRtScene->getModel(instance)->getVertexBufferSrvHandle().ptr);
-            hitVars->appendHeapRanges(mRtScene->getModel(instance)->getIndexBufferSrvHandle().ptr);
-            hitVars->append32BitConstants((void*)&mMaterials[instance].params, SizeOfInUint32(MaterialParams));
+            if ( mRtScene->getModel(instance)->getGeometryType() == RtModel::GeometryType::Triangles ) {
+                auto model = toRtMesh(mRtScene->getModel(instance));
+                hitVars->appendHeapRanges(model->getVertexBufferSrvHandle().ptr);
+                hitVars->appendHeapRanges(model->getIndexBufferSrvHandle().ptr);
+                hitVars->append32BitConstants((void*)&mMaterials[instance].params, SizeOfInUint32(MaterialParams));
+            }
         }
     }
 

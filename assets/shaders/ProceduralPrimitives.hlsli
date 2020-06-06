@@ -41,7 +41,7 @@ Ray GetRayInAABBPrimitiveLocalSpace()
 void Intersection_AnalyticPrimitive()
 {
     Ray localRay = GetRayInAABBPrimitiveLocalSpace();
-    AnalyticPrimitive::Enum primitiveType = (AnalyticPrimitive::Enum) aabbCB.primitiveType;
+    PrimitiveType::Enum primitiveType = (PrimitiveType::Enum) aabbCB.primitiveType;
 
     float thit;
     ProceduralPrimitiveAttributes attr;
@@ -59,7 +59,7 @@ void Intersection_AnalyticPrimitive()
 void Intersection_VolumetricPrimitive()
 {
     Ray localRay = GetRayInAABBPrimitiveLocalSpace();
-    VolumetricPrimitive::Enum primitiveType = (VolumetricPrimitive::Enum) aabbCB.primitiveType;
+    PrimitiveType::Enum primitiveType = (PrimitiveType::Enum) aabbCB.primitiveType;
 
     float thit;
     ProceduralPrimitiveAttributes attr;
@@ -77,7 +77,7 @@ void Intersection_VolumetricPrimitive()
 void Intersection_SignedDistancePrimitive()
 {
     Ray localRay = GetRayInAABBPrimitiveLocalSpace();
-    SignedDistancePrimitive::Enum primitiveType = (SignedDistancePrimitive::Enum) aabbCB.primitiveType;
+    PrimitiveType::Enum primitiveType = (PrimitiveType::Enum) aabbCB.primitiveType;
 
     float thit;
     ProceduralPrimitiveAttributes attr;

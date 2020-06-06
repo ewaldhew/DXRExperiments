@@ -92,7 +92,7 @@ struct PerFrameConstants
 // Attributes per primitive instance.
 struct PrimitiveInstanceConstantBuffer
 {
-    UINT instanceIndex;
+    //UINT instanceIndex;  // Used to index into per frame attributes
     UINT primitiveType; // Procedural primitive type
 };
 
@@ -132,34 +132,19 @@ struct MaterialParams
 
 #define N_FRACTAL_ITERATIONS 4      // = <1,...>
 
-namespace AnalyticPrimitive {
+namespace PrimitiveType {
     enum Enum
     {
-        AABB = 0,
-        Spheres,
-        Count
-    };
-}
-
-namespace VolumetricPrimitive {
-    enum Enum
-    {
-        Metaballs = 0,
-        Count
-    };
-}
-
-namespace SignedDistancePrimitive {
-    enum Enum
-    {
-        MiniSpheres = 0,
-        IntersectedRoundCube,
-        SquareTorus,
-        TwistedTorus,
-        Cog,
-        Cylinder,
-        FractalPyramid,
-        Count
+        AnalyticPrimitive_AABB = 0,
+        AnalyticPrimitive_Spheres,
+        VolumetricPrimitive_Metaballs,
+        SignedDistancePrimitive_MiniSpheres,
+        SignedDistancePrimitive_IntersectedRoundCube,
+        SignedDistancePrimitive_SquareTorus,
+        SignedDistancePrimitive_TwistedTorus,
+        SignedDistancePrimitive_Cog,
+        SignedDistancePrimitive_Cylinder,
+        SignedDistancePrimitive_FractalPyramid,
     };
 }
 

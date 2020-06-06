@@ -117,7 +117,7 @@ public:
                        UINT64 indexOffsetInBytes,    /// Offset of the first index in
                                                      /// the index buffer
                        uint32_t indexCount,          /// Number of indices to consider in the buffer
-                       DXGI_FORMAT indexFormat,      /// Format of indices 
+                       DXGI_FORMAT indexFormat,      /// Format of indices
                        ID3D12Resource* transformBuffer, /// Buffer containing a 4x4 transform
                                                         /// matrix in GPU memory, to be applied
                                                         /// to the vertices. This buffer cannot
@@ -126,6 +126,13 @@ public:
                                                         /// transform buffer
                        bool isOpaque = true /// If true, the geometry is considered opaque,
                                             /// optimizing the search for a closest hit
+  );
+
+  /// Add a AABB buffer in GPU memory into the acceleration structure.
+  void BottomLevelASGenerator::AddAabbBuffer(
+    ID3D12Resource* aabbBuffer,     /// Buffer containing the AABB description
+    bool isOpaque = true       /// If true, the geometry is considered opaque, optimizing the search
+                               /// for a closest hit
   );
 
   /// Compute the size of the scratch space required to build the acceleration structure, as well as

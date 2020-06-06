@@ -47,7 +47,7 @@
 #include "RaytracingShaderHelper.hlsli"
 
 //------------------------------------------------------------------
-float GetDistanceFromSignedDistancePrimitive(in float3 position, in SignedDistancePrimitive::Enum sdPrimitive);
+float GetDistanceFromSignedDistancePrimitive(in float3 position, in PrimitiveType::Enum sdPrimitive);
 
 //------------------------------------------------------------------
 
@@ -272,7 +272,7 @@ float sdCylinder6(float3 p, float2 h)
     return max(length_toPowNegative6(p.xz) - h.x, abs(p.y) - h.y);
 }
 
-float3 sdCalculateNormal(in float3 pos, in SignedDistancePrimitive::Enum sdPrimitive)
+float3 sdCalculateNormal(in float3 pos, in PrimitiveType::Enum sdPrimitive)
 {
     float2 e = float2(1.0, -1.0) * 0.5773 * 0.0001;
     return normalize(
@@ -284,7 +284,7 @@ float3 sdCalculateNormal(in float3 pos, in SignedDistancePrimitive::Enum sdPrimi
 
 // Test ray against a signed distance primitive.
 // Ref: https://www.scratchapixel.com/lessons/advanced-rendering/rendering-distance-fields/basic-sphere-tracer
-bool RaySignedDistancePrimitiveTest(in Ray ray, in SignedDistancePrimitive::Enum sdPrimitive, out float thit, out ProceduralPrimitiveAttributes attr, in float stepScale = 1.0f)
+bool RaySignedDistancePrimitiveTest(in Ray ray, in PrimitiveType::Enum sdPrimitive, out float thit, out ProceduralPrimitiveAttributes attr, in float stepScale = 1.0f)
 {
     const float threshold = 0.0001;
     float t = RayTMin();
