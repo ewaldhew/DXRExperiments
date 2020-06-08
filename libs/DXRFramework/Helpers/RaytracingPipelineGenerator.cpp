@@ -613,6 +613,7 @@ RayTracingPipelineGenerator::HitGroup::HitGroup(std::wstring hitGroupName,
   m_desc.AnyHitShaderImport = m_anyHitSymbol.empty() ? nullptr : m_anyHitSymbol.c_str();
   m_desc.IntersectionShaderImport =
       m_intersectionSymbol.empty() ? nullptr : m_intersectionSymbol.c_str();
+  m_desc.Type = m_intersectionSymbol.empty() ? D3D12_HIT_GROUP_TYPE_TRIANGLES : D3D12_HIT_GROUP_TYPE_PROCEDURAL_PRIMITIVE;
 }
 
 //--------------------------------------------------------------------------------------------------

@@ -104,12 +104,16 @@ namespace DXRFramework
         uint8_t *rayGenRecord = getRayGenRecordPtr();
         applyRtProgramVars(rayGenRecord, mProgram->getRayGenProgram(), rtso, mRayGenParams);
 
-        UINT hitCount = mProgram->getHitProgramCount();
+        UINT hitCount = mProgram->getHitProgramCount(); // = MultiplierForGeometryContributionToHitGroupIndex
         for (UINT h = 0; h < hitCount; h++) {
             UINT geometryCount = mScene->getNumInstances();
             for (UINT i = 0; i < geometryCount; i++) {
                 uint8_t *pHitRecord = getHitRecordPtr(h, i);
-                applyRtProgramVars(pHitRecord, mProgram->getHitProgram(h), rtso, mHitParams[h][i]);
+                uint32_t type = mScene->getModel(i)->getGeometryType();
+                if (type >= mProgram->getGeometryTypeCount(h)) {
+                    throw std::invalid_argument("Model " + std::to_string(i) + " has geometry with no corresponding hit group");
+                }
+                applyRtProgramVars(pHitRecord, mProgram->getHitProgram(h, type), rtso, mHitParams[h][i]);
             }
         }
 

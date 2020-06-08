@@ -80,18 +80,22 @@ namespace DXRFramework
         return *this;
     }
 
-    RtProgram::Desc& RtProgram::Desc::addHitGroup(uint32_t hitIndex, const std::string& closestHit, const std::string& anyHit, const std::string& intersection)
+    RtProgram::Desc& RtProgram::Desc::addHitGroup(uint32_t hitIndex, uint32_t geomIndex, const std::string& closestHit, const std::string& anyHit, const std::string& intersection)
     {
         ThrowIfFalse(mActiveLibraryIndex != -1, L"Can't set hit shader entry-point. Please add a shader-library first");
         if (mHit.size() <= hitIndex) {
             mHit.resize(hitIndex + 1);
-        } else {
-            ThrowIfFalse(mHit[hitIndex].libraryIndex == -1, L"RtProgram::Desc::addHitGroup() - a hit-group already exists. Replacing the old group");
         }
-        mHit[hitIndex].anyHit = anyHit;
-        mHit[hitIndex].closestHit = closestHit;
-        mHit[hitIndex].intersection = intersection;
-        mHit[hitIndex].libraryIndex = mActiveLibraryIndex;
+        if (mHit[hitIndex].size() <= geomIndex) {
+            mHit[hitIndex].resize(geomIndex + 1);
+        }
+        auto& hitGroupRec = mHit[hitIndex][geomIndex];
+        ThrowIfFalse(hitGroupRec.libraryIndex == -1, L"RtProgram::Desc::addHitGroup() - a hit-group already exists. Replacing the old group");
+
+        hitGroupRec.anyHit = anyHit;
+        hitGroupRec.closestHit = closestHit;
+        hitGroupRec.intersection = intersection;
+        hitGroupRec.libraryIndex = mActiveLibraryIndex;
         return *this;
     }
 
@@ -107,11 +111,11 @@ namespace DXRFramework
         return *this;
     }
 
-    RtProgram::Desc& RtProgram::Desc::configureHitGroupRootSignature(RootSignatureConfigurator configure)
+    RtProgram::Desc& RtProgram::Desc::configureHitGroupRootSignature(RootSignatureConfigurator configure, uint32_t geomIndex)
     {
         configure(mHitGroupRootSignatureConfig);
         for (size_t i = 0 ; i < mHit.size() ; i++) {
-            mHit[i].localRootSignatureConfig = mHitGroupRootSignatureConfig;
+            mHit[i][geomIndex].localRootSignatureConfig = mHitGroupRootSignatureConfig;
         }
         return *this;
     }
@@ -152,18 +156,21 @@ namespace DXRFramework
 
         mHitPrograms.resize(desc.mHit.size());
         for (size_t i = 0 ; i < desc.mHit.size() ; i++) {
-            const auto& m = desc.mHit[i];
-            if (m.libraryIndex != -1) {
-                // const std::string hitFile = desc.mShaderLibraries[h.libraryIndex]->getFilename();
-                HitGroup &hitGroup = mHitPrograms[i];
-                hitGroup.mClosestHit = RtShader::create(context, RtShaderType::ClosestHit, m.closestHit, maxPayloadSize, maxAttributesSize, m.localRootSignatureConfig);
-                if (!m.anyHit.empty()) {
-                    hitGroup.mAnyHit = RtShader::create(context, RtShaderType::AnyHit, m.anyHit, maxPayloadSize, maxAttributesSize, m.localRootSignatureConfig);
+            mHitPrograms[i].resize(desc.mHit[i].size());
+            for (size_t j = 0; j < desc.mHit[i].size(); j++) {
+                const auto& m = desc.mHit[i][j];
+                if (m.libraryIndex != -1) {
+                    // const std::string hitFile = desc.mShaderLibraries[h.libraryIndex]->getFilename();
+                    HitGroup &hitGroup = mHitPrograms[i][j];
+                    hitGroup.mClosestHit = RtShader::create(context, RtShaderType::ClosestHit, m.closestHit, maxPayloadSize, maxAttributesSize, m.localRootSignatureConfig);
+                    if (!m.anyHit.empty()) {
+                        hitGroup.mAnyHit = RtShader::create(context, RtShaderType::AnyHit, m.anyHit, maxPayloadSize, maxAttributesSize, m.localRootSignatureConfig);
+                    }
+                    if (!m.intersection.empty()) {
+                        hitGroup.mIntersection = RtShader::create(context, RtShaderType::Intersection, m.intersection, maxPayloadSize, maxAttributesSize, m.localRootSignatureConfig);
+                    }
+                    hitGroup.mExportName = "HitGroup" + std::to_string(i) + "_" + std::to_string(j);
                 }
-                if (!m.intersection.empty()) {
-                    hitGroup.mIntersection = RtShader::create(context, RtShaderType::Intersection, m.intersection, maxPayloadSize, maxAttributesSize, m.localRootSignatureConfig);
-                }
-                hitGroup.mExportName = "HitGroup" + std::to_string(i);
             }
         }
     }

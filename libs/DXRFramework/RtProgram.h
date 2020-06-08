@@ -48,12 +48,12 @@ namespace DXRFramework
 
             Desc& setRayGen(const std::string& raygen);
             Desc& addMiss(uint32_t missIndex, const std::string& miss);
-            Desc& addHitGroup(uint32_t hitIndex, const std::string& closestHit, const std::string& anyHit, const std::string& intersection = "");
+            Desc& addHitGroup(uint32_t hitIndex, uint32_t geomIndex, const std::string& closestHit, const std::string& anyHit, const std::string& intersection = "");
 
             using RootSignatureConfigurator = std::function<void(RootSignatureGenerator &config)>;
             Desc& configureGlobalRootSignature(RootSignatureConfigurator configure);
             Desc& configureRayGenRootSignature(RootSignatureConfigurator configure);
-            Desc& configureHitGroupRootSignature(RootSignatureConfigurator configure);
+            Desc& configureHitGroupRootSignature(RootSignatureConfigurator configure, uint32_t geomIndex);
             Desc& configureMissRootSignature(RootSignatureConfigurator configure);
         private:
             friend class RtProgram;
@@ -76,7 +76,7 @@ namespace DXRFramework
 
             ShaderEntry mRayGen;
             std::vector<ShaderEntry> mMiss;
-            std::vector<HitProgramEntry> mHit;
+            std::vector<std::vector<HitProgramEntry>> mHit;
 
             std::vector<std::shared_ptr<ShaderLibrary>> mShaderLibraries;
             uint32_t mActiveLibraryIndex = -1;
@@ -105,7 +105,8 @@ namespace DXRFramework
         RtShader::SharedPtr getRayGenProgram() const { return mRayGenProgram; }
 
         uint32_t getHitProgramCount() const { return (uint32_t)mHitPrograms.size(); }
-        HitGroup getHitProgram(uint32_t rayIndex) const { return mHitPrograms[rayIndex]; }
+        size_t getGeometryTypeCount(uint32_t rayIndex) const { return mHitPrograms[rayIndex].size(); }
+        HitGroup getHitProgram(uint32_t rayIndex, uint32_t geomIndex) const { return mHitPrograms[rayIndex][geomIndex]; }
 
         uint32_t getMissProgramCount() const { return (uint32_t)mMissPrograms.size(); }
         RtShader::SharedPtr getMissProgram(uint32_t rayIndex) const { return mMissPrograms[rayIndex]; }
@@ -120,7 +121,7 @@ namespace DXRFramework
         ComPtr<ID3D12RootSignature> mGlobalRootSignature;
 
         RtShader::SharedPtr mRayGenProgram;
-        std::vector<HitGroup> mHitPrograms;
+        std::vector<std::vector<HitGroup>> mHitPrograms;
         std::vector<RtShader::SharedPtr> mMissPrograms;
 
         ID3D12RaytracingFallbackDevice *mFallbackDevice;

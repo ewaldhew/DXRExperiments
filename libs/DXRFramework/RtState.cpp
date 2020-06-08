@@ -34,13 +34,15 @@ namespace DXRFramework
 
         // Add hit groups
         for (UINT i = 0; i < mProgram->getHitProgramCount(); ++i) {
-            auto &hitGroup = mProgram->getHitProgram(i);
-            std::wstring closestHitSymbol = converter.from_bytes(hitGroup.mClosestHit->mEntryPoint);
-            std::wstring anyHitSymbol = hitGroup.mAnyHit ? converter.from_bytes(hitGroup.mAnyHit->mEntryPoint) : L"";
-            std::wstring intersectionSymbol = hitGroup.mIntersection ? converter.from_bytes(hitGroup.mIntersection->mEntryPoint) : L"";
-            std::wstring hitGroupName = converter.from_bytes(hitGroup.mExportName);
-            mPipelineGenerator.AddHitGroup(hitGroupName, closestHitSymbol, anyHitSymbol, intersectionSymbol);
-            mPipelineGenerator.AddRootSignatureAssociation(hitGroup.mClosestHit->mLocalRootSignature.Get(), {hitGroupName});
+            for (UINT j = 0; j < mProgram->getGeometryTypeCount(i); ++j) {
+                auto &hitGroup = mProgram->getHitProgram(i, j);
+                std::wstring closestHitSymbol = converter.from_bytes(hitGroup.mClosestHit->mEntryPoint);
+                std::wstring anyHitSymbol = hitGroup.mAnyHit ? converter.from_bytes(hitGroup.mAnyHit->mEntryPoint) : L"";
+                std::wstring intersectionSymbol = hitGroup.mIntersection ? converter.from_bytes(hitGroup.mIntersection->mEntryPoint) : L"";
+                std::wstring hitGroupName = converter.from_bytes(hitGroup.mExportName);
+                mPipelineGenerator.AddHitGroup(hitGroupName, closestHitSymbol, anyHitSymbol, intersectionSymbol);
+                mPipelineGenerator.AddRootSignatureAssociation(hitGroup.mClosestHit->mLocalRootSignature.Get(), { hitGroupName });
+            }
         }
 
         // Add miss shader local root signature association

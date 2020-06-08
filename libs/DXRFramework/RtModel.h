@@ -9,7 +9,7 @@ namespace DXRFramework
     class RtModel
     {
     public:
-        enum GeometryType
+        enum GeometryType : UINT
         {
             Triangles = 0,
             AABB_Analytic,
