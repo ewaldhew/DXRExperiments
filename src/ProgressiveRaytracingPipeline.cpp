@@ -228,7 +228,7 @@ void ProgressiveRaytracingPipeline::render(ID3D12GraphicsCommandList *commandLis
                 auto model = toRtMesh(mRtScene->getModel(instance));
                 hitVars->appendHeapRanges(model->getVertexBufferSrvHandle().ptr);
                 hitVars->appendHeapRanges(model->getIndexBufferSrvHandle().ptr);
-                hitVars->append32BitConstants((void*)&mMaterials[instance].params, SizeOfInUint32(MaterialParams));
+                hitVars->append32BitConstants((void*)&mMaterials[model->mMaterialIndex].params, SizeOfInUint32(MaterialParams));
             }
         }
     }

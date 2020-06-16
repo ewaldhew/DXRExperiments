@@ -88,19 +88,36 @@ void DXRExperimentsApp::InitRaytracing()
         auto identity = DirectX::XMMatrixIdentity();
 
         // working directory is "vc2015"
-        mRtScene->addModel(RtMesh::create(mRtContext, "..\\assets\\models\\pica\\Machines.fbx"), identity);
+        mRtScene->addModel(RtMesh::create(mRtContext, "..\\assets\\models\\pica\\Machines.fbx", 2), identity);
     }
 
     // Create materials
     std::vector<RaytracingPipeline::Material> materials;
-    materials.resize(1);
+    materials.resize(4);
     {
-        RaytracingPipeline::Material &material1 = materials[0];
-        material1.params.albedo = XMFLOAT4(0.95f, 0.05f, 0.0f, 1.0f);
-        material1.params.specular = XMFLOAT4(0.58f, 0.58f, 0.58f, 1.0f);
-        material1.params.roughness = 0.5f;
-        material1.params.reflectivity = 0.7f;
-        material1.params.type = 1;
+        RaytracingPipeline::Material &white = materials[0];
+        white.params.albedo = XMFLOAT4(0.72f, 0.75f, 0.65f, 1.0f);
+        white.params.roughness = 1.0f;
+        white.params.type = 0;
+    }
+    {
+        RaytracingPipeline::Material &green = materials[1];
+        green.params.albedo = XMFLOAT4(0.15f, 0.45f, 0.10f, 1.0f);
+        green.params.roughness = 1.0f;
+        green.params.type = 0;
+    }
+    {
+        RaytracingPipeline::Material &red = materials[2];
+        red.params.albedo = XMFLOAT4(0.60f, 0.07f, 0.05f, 1.0f);
+        red.params.roughness = 1.0f;
+        red.params.type = 0;
+    }
+    {
+        RaytracingPipeline::Material &light = materials[3];
+        light.params.albedo = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+        light.params.emissive = XMFLOAT4(1.58f, 1.58f, 1.58f, 1.0f);
+        light.params.reflectivity = 0.7f;
+        light.params.type = 0;
     }
 
     // Create raytracing pipelines

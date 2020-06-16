@@ -16,18 +16,19 @@ namespace DXRFramework
         XMFLOAT3 normal;
     };
 
-    RtMesh::SharedPtr RtMesh::create(RtContext::SharedPtr context, const std::string &filePath)
+    RtMesh::SharedPtr RtMesh::create(RtContext::SharedPtr context, const std::string &filePath, UINT materialIndex)
     {
-        return SharedPtr(new RtMesh(context, filePath));
+        return SharedPtr(new RtMesh(context, filePath, materialIndex));
     }
 
-    RtMesh::RtMesh(RtContext::SharedPtr context, const std::string &filePath)
+    RtMesh::RtMesh(RtContext::SharedPtr context, const std::string &filePath, UINT materialIndex)
     {
         auto flags = aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs | aiProcess_JoinIdenticalVertices | aiProcess_PreTransformVertices;
         const aiScene *scene = aiImportFile(filePath.c_str(), flags);
 
         std::vector<Vertex> interleavedVertexData;
         std::vector<uint32_t> indices;
+        mMaterialIndex = materialIndex;
         mType = GeometryType::Triangles;
         mNumVertices = 0;
         mNumTriangles = 0;
@@ -121,14 +122,16 @@ namespace DXRFramework
 
 namespace DXRFramework
 {
-    RtProcedural::SharedPtr RtProcedural::create(RtContext::SharedPtr context, PrimitiveType::Enum primitiveType, XMFLOAT3 anchorPos, XMFLOAT3 size)
+    RtProcedural::SharedPtr RtProcedural::create(RtContext::SharedPtr context, PrimitiveType::Enum primitiveType, XMFLOAT3 anchorPos, XMFLOAT3 size, UINT materialIndex)
     {
-        return SharedPtr(new RtProcedural(context, primitiveType, anchorPos, size));
+        return SharedPtr(new RtProcedural(context, primitiveType, anchorPos, size, materialIndex));
     }
 
-    RtProcedural::RtProcedural(RtContext::SharedPtr context, PrimitiveType::Enum primitiveType, XMFLOAT3 anchorPos, XMFLOAT3 size)
+    RtProcedural::RtProcedural(RtContext::SharedPtr context, PrimitiveType::Enum primitiveType, XMFLOAT3 anchorPos, XMFLOAT3 size, UINT materialIndex)
         : mPrimitiveType(primitiveType)
     {
+        mMaterialIndex = materialIndex;
+
         // Set up AABB on a grid.
         switch ( primitiveType ) {
         case PrimitiveType::AnalyticPrimitive_AABB:

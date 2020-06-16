@@ -21,6 +21,7 @@ namespace DXRFramework
         using SharedPtr = std::shared_ptr<RtModel>;
 
         GeometryType getGeometryType() const { return mType; }
+        UINT mMaterialIndex;
 
         ComPtr<ID3D12Resource> mBlasBuffer;
 
@@ -37,7 +38,7 @@ namespace DXRFramework
     public:
         using SharedPtr = std::shared_ptr<RtMesh>;
 
-        static SharedPtr create(RtContext::SharedPtr context, const std::string &filePath);
+        static SharedPtr create(RtContext::SharedPtr context, const std::string &filePath, UINT materialIndex = 0);
         ~RtMesh();
 
         ID3D12Resource *getVertexBuffer() const { return mVertexBuffer.Get(); }
@@ -48,7 +49,7 @@ namespace DXRFramework
 
     private:
         friend class RtScene;
-        RtMesh(RtContext::SharedPtr context, const std::string &filePath);
+        RtMesh(RtContext::SharedPtr context, const std::string &filePath, UINT materialIndex = 0);
 
         void build(RtContext::SharedPtr context);
 
@@ -68,7 +69,7 @@ namespace DXRFramework
     public:
         using SharedPtr = std::shared_ptr<RtProcedural>;
 
-        static SharedPtr create(RtContext::SharedPtr context, PrimitiveType::Enum primitiveType, XMFLOAT3 anchorPos, XMFLOAT3 size);
+        static SharedPtr create(RtContext::SharedPtr context, PrimitiveType::Enum primitiveType, XMFLOAT3 anchorPos, XMFLOAT3 size, UINT materialIndex = 0);
         ~RtProcedural();
 
         PrimitiveInstanceConstantBuffer getPrimitiveConstants() const { return { static_cast<UINT>(mPrimitiveType) }; }
@@ -77,7 +78,7 @@ namespace DXRFramework
 
     private:
         friend class RtScene;
-        RtProcedural(RtContext::SharedPtr context, PrimitiveType::Enum primitiveType, XMFLOAT3 anchorPos, XMFLOAT3 size);
+        RtProcedural(RtContext::SharedPtr context, PrimitiveType::Enum primitiveType, XMFLOAT3 anchorPos, XMFLOAT3 size, UINT materialIndex = 0);
 
         void build(RtContext::SharedPtr context);
 
