@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include "RtPrefix.h"
 #include "RtContext.h"
 #include "RaytracingHlslCompat.h"
@@ -38,7 +39,11 @@ namespace DXRFramework
     public:
         using SharedPtr = std::shared_ptr<RtMesh>;
 
-        static SharedPtr create(RtContext::SharedPtr context, const std::string &filePath, UINT materialIndex = 0);
+        using AddMeshCallback = std::function<void(SharedPtr pMesh)>;
+        static void importMeshesFromFile(AddMeshCallback addMesh, RtContext::SharedPtr context, const std::string &filePath,
+                                         const std::vector<UINT> materialMap, long overrideMaterialIndex = -1);
+
+        static SharedPtr create(RtContext::SharedPtr context, std::vector<Vertex> interleavedVertexData, std::vector<uint32_t> indices, UINT materialIndex = 0);
         ~RtMesh();
 
         ID3D12Resource *getVertexBuffer() const { return mVertexBuffer.Get(); }
@@ -49,7 +54,7 @@ namespace DXRFramework
 
     private:
         friend class RtScene;
-        RtMesh(RtContext::SharedPtr context, const std::string &filePath, UINT materialIndex = 0);
+        RtMesh(RtContext::SharedPtr context, std::vector<Vertex> interleavedVertexData, std::vector<uint32_t> indices, UINT materialIndex = 0);
 
         void build(RtContext::SharedPtr context);
 

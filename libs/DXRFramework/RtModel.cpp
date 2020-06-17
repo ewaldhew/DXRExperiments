@@ -10,32 +10,17 @@ using namespace DirectX;
 
 namespace DXRFramework
 {
-    struct Vertex
-    {
-        XMFLOAT3 position;
-        XMFLOAT3 normal;
-    };
-
-    RtMesh::SharedPtr RtMesh::create(RtContext::SharedPtr context, const std::string &filePath, UINT materialIndex)
-    {
-        return SharedPtr(new RtMesh(context, filePath, materialIndex));
-    }
-
-    RtMesh::RtMesh(RtContext::SharedPtr context, const std::string &filePath, UINT materialIndex)
+    void RtMesh::importMeshesFromFile(RtMesh::AddMeshCallback addMesh, RtContext::SharedPtr context, const std::string &filePath,
+                                      const std::vector<UINT> materialMap, long overrideMaterialIndex)
     {
         auto flags = aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs | aiProcess_JoinIdenticalVertices | aiProcess_PreTransformVertices;
         const aiScene *scene = aiImportFile(filePath.c_str(), flags);
 
-        std::vector<Vertex> interleavedVertexData;
-        std::vector<uint32_t> indices;
-        mMaterialIndex = materialIndex;
-        mType = GeometryType::Triangles;
-        mNumVertices = 0;
-        mNumTriangles = 0;
-
         if (scene) {
             for (UINT meshId = 0; meshId < scene->mNumMeshes; ++meshId) {
                 const auto &mesh = scene->mMeshes[meshId];
+                std::vector<Vertex> interleavedVertexData;
+                std::vector<uint32_t> indices;
 
                 for (UINT i = 0; i < mesh->mNumVertices; ++i) {
                     aiVector3D &position = mesh->mVertices[i];
@@ -49,15 +34,21 @@ namespace DXRFramework
                 for (UINT i = 0; i < mesh->mNumFaces; ++i) {
                     const aiFace &face = mesh->mFaces[i];
                     assert(face.mNumIndices == 3);
-                    indices.push_back(mNumVertices + face.mIndices[0]);
-                    indices.push_back(mNumVertices + face.mIndices[1]);
-                    indices.push_back(mNumVertices + face.mIndices[2]);
+                    indices.push_back(face.mIndices[0]);
+                    indices.push_back(face.mIndices[1]);
+                    indices.push_back(face.mIndices[2]);
                 }
 
-                mNumTriangles += mesh->mNumFaces;
-                mNumVertices += mesh->mNumVertices;
+                const UINT materialIndex = overrideMaterialIndex < 0
+                    ? materialMap[mesh->mMaterialIndex - 1] // aiMesh materials are 1-indexed
+                    : static_cast<UINT>(overrideMaterialIndex);
+
+                addMesh(RtMesh::create(context, interleavedVertexData, indices, materialIndex));
             }
         } else {
+            std::vector<Vertex> interleavedVertexData;
+            std::vector<uint32_t> indices;
+
             interleavedVertexData =
             {
                 { { 0.0f, 1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f } },
@@ -65,9 +56,28 @@ namespace DXRFramework
                 { { -1.0f, -1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f } }
             };
             indices = { 0, 2, 1 };
-            mNumTriangles = 1;
-            mNumVertices = static_cast<UINT>(interleavedVertexData.size());
+
+            if (overrideMaterialIndex < 0) {
+                addMesh(RtMesh::create(context, interleavedVertexData, indices));
+            } else {
+                addMesh(RtMesh::create(context, interleavedVertexData, indices, static_cast<UINT>(overrideMaterialIndex)));
+            }
         }
+
+    }
+
+    RtMesh::SharedPtr RtMesh::create(RtContext::SharedPtr context, std::vector<Vertex> interleavedVertexData, std::vector<uint32_t> indices, UINT materialIndex)
+    {
+        return SharedPtr(new RtMesh(context, interleavedVertexData, indices, materialIndex));
+    }
+
+    RtMesh::RtMesh(RtContext::SharedPtr context, std::vector<Vertex> interleavedVertexData, std::vector<uint32_t> indices, UINT materialIndex)
+    {
+        mMaterialIndex = materialIndex;
+        mType = GeometryType::Triangles;
+        mNumVertices = static_cast<UINT>(interleavedVertexData.size());
+        mNumTriangles = static_cast<UINT>(indices.size() / 3);
+
 
         mHasIndexBuffer = indices.size() > 0;
 

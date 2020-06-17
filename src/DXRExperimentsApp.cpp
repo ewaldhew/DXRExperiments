@@ -59,7 +59,7 @@ void DXRExperimentsApp::OnInit()
     // Setup camera states
     mCamera.reset(new Math::Camera());
     mCamera->SetAspectRatio(m_aspectRatio);
-    mCamera->SetEyeAtUp(Math::Vector3(8.0, 10.0, 30.0), Math::Vector3(0.0, 1.5, 0.0), Math::Vector3(Math::kYUnitVector));
+    mCamera->SetEyeAtUp(Math::Vector3(0.0, 0.0, 35.5), Math::Vector3(0.0, 0.0, 1.0), Math::Vector3(Math::kYUnitVector));
     mCamera->SetZRange(1.0f, 10000.0f);
     mCamController.reset(new GameCore::CameraController(*mCamera, mCamera->GetUpVec()));
     mCamController->EnableFirstPersonMouse(false);
@@ -88,7 +88,22 @@ void DXRExperimentsApp::InitRaytracing()
         auto identity = DirectX::XMMatrixIdentity();
 
         // working directory is "vc2015"
-        mRtScene->addModel(RtMesh::create(mRtContext, "..\\assets\\models\\pica\\Machines.fbx", 2), identity);
+        RtMesh::importMeshesFromFile([&](RtMesh::SharedPtr mesh) {
+            mRtScene->addModel(mesh, DirectX::XMMatrixScaling(10, 10, 10));
+        }, mRtContext, "..\\assets\\models\\cornell.obj", { 2, 0, 0, 1, 0, 0, 0 });
+
+        auto lightMeshTransform =
+            DirectX::XMMatrixRotationX(XM_PIDIV2) *
+            DirectX::XMMatrixScaling(2, 2, 2) *
+            DirectX::XMMatrixTranslation(0, 9.999, 0);
+        std::vector<Vertex> squareVerts =
+        {
+            { { -1.0f, 1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f } },
+            { { -1.0f, -1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f } },
+            { { 1.0f, -1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f } },
+            { { 1.0f, 1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f } },
+        };
+        mRtScene->addModel(RtMesh::create(mRtContext, squareVerts, { 0, 1, 3, 1, 2, 3 }, 3), lightMeshTransform);
     }
 
     // Create materials
@@ -114,8 +129,8 @@ void DXRExperimentsApp::InitRaytracing()
     }
     {
         RaytracingPipeline::Material &light = materials[3];
-        light.params.albedo = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
-        light.params.emissive = XMFLOAT4(1.58f, 1.58f, 1.58f, 1.0f);
+        light.params.albedo = XMFLOAT4(0.78f, 0.78f, 0.78f, 1.0f);
+        light.params.emissive = XMFLOAT4(16.8f, 14.5f, 8.0f, 1.0f);
         light.params.reflectivity = 0.7f;
         light.params.type = 0;
     }
