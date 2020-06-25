@@ -77,9 +77,8 @@ namespace DXRFramework
         static SharedPtr create(RtContext::SharedPtr context, PrimitiveType::Enum primitiveType, XMFLOAT3 anchorPos, XMFLOAT3 size, UINT materialIndex = 0);
         ~RtProcedural();
 
-        PrimitiveInstanceConstantBuffer getPrimitiveConstants() const { return { static_cast<UINT>(mPrimitiveType) }; }
-
         D3D12_GPU_DESCRIPTOR_HANDLE getAabbBufferSrvHandle() const { return mAabbBufferSrvHandle; }
+        D3D12_GPU_DESCRIPTOR_HANDLE getPrimitiveConstantsCbvHandle() const { return mPrimitiveConstantsCbvHandle; }
 
     private:
         friend class RtScene;
@@ -91,8 +90,10 @@ namespace DXRFramework
         D3D12_RAYTRACING_AABB mAabb;
 
         ComPtr<ID3D12Resource> mAabbBuffer;
+        ConstantBuffer<PrimitiveInstanceConstants> mPrimitiveConstantsBuffer;
 
         D3D12_GPU_DESCRIPTOR_HANDLE mAabbBufferSrvHandle;
+        D3D12_GPU_DESCRIPTOR_HANDLE mPrimitiveConstantsCbvHandle;
     };
 
     inline RtMesh::SharedPtr toRtMesh(RtModel::SharedPtr ptr) { return std::static_pointer_cast<RtMesh>(ptr); }

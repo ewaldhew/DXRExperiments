@@ -89,6 +89,38 @@ namespace DXRFramework
         return getDescriptorGPUHandle(descriptorHeapIndex);
     }
 
+    static D3D12_CONSTANT_BUFFER_VIEW_DESC createCBVDesc(ID3D12Resource *resource, UINT sizeInBytes)
+    {
+        D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
+        cbvDesc.BufferLocation = resource->GetGPUVirtualAddress();
+        cbvDesc.SizeInBytes = Align(sizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+
+        return cbvDesc;
+    }
+
+    WRAPPED_GPU_POINTER RtContext::createBufferCBVWrappedPointer(ID3D12Resource* resource, UINT sizeInBytes)
+    {
+        D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = createCBVDesc(resource, sizeInBytes);
+
+        UINT descriptorHeapIndex = 0;
+        if (!mFallbackDevice->UsingRaytracingDriver()) {
+            D3D12_CPU_DESCRIPTOR_HANDLE bottomLevelDescriptor;
+            descriptorHeapIndex = allocateDescriptor(&bottomLevelDescriptor);
+            mDevice->CreateConstantBufferView(&cbvDesc, bottomLevelDescriptor);
+        }
+        return mFallbackDevice->GetWrappedPointerSimple(descriptorHeapIndex, resource->GetGPUVirtualAddress());
+    }
+
+    D3D12_GPU_DESCRIPTOR_HANDLE RtContext::createBufferCBVHandle(ID3D12Resource* resource, UINT sizeInBytes)
+    {
+        D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = createCBVDesc(resource, sizeInBytes);
+
+        D3D12_CPU_DESCRIPTOR_HANDLE cpuDescriptorHandle;
+        UINT descriptorHeapIndex = allocateDescriptor(&cpuDescriptorHandle);
+        mDevice->CreateConstantBufferView(&cbvDesc, cpuDescriptorHandle);
+        return getDescriptorGPUHandle(descriptorHeapIndex);
+    }
+
     static D3D12_SHADER_RESOURCE_VIEW_DESC createBufferSRVDesc(ID3D12Resource *resource, bool rawBuffer, UINT structureStride)
     {
         D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};

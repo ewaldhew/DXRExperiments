@@ -90,15 +90,13 @@ struct PerFrameConstants
 };
 
 // Attributes per primitive instance.
-struct PrimitiveInstanceConstantBuffer
+struct PrimitiveInstanceConstants
 {
     //UINT instanceIndex;  // Used to index into per frame attributes
     UINT primitiveType; // Procedural primitive type
-};
-
-// Dynamic attributes per primitive instance.
-struct PrimitiveInstancePerFrameBuffer
-{
+    UINT pad1;
+    UINT pad2;
+    UINT pad3;
     XMMATRIX localSpaceToBottomLevelAS;   // Matrix from local primitive space to bottom-level object space.
     XMMATRIX bottomLevelASToLocalSpace;   // Matrix from bottom-level object space to local primitive space.
 };

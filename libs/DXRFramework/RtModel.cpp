@@ -172,7 +172,19 @@ namespace DXRFramework
         };
 
         auto device = context->getDevice();
+
         AllocateUploadBuffer(device, &mAabb, sizeof(mAabb), &mAabbBuffer);
+
+        mPrimitiveConstantsBuffer.Create(device, 1, L"AABB primitive attributes");
+        XMVECTOR vTranslation =
+            0.5f * (XMLoadFloat3(reinterpret_cast<XMFLOAT3*>(&mAabb.MinX))
+                   + XMLoadFloat3(reinterpret_cast<XMFLOAT3*>(&mAabb.MaxX)));
+        XMMATRIX mTranslation = XMMatrixTranslationFromVector(vTranslation);
+        XMMATRIX mTransform = XMMatrixTranspose(mTranslation);
+        mPrimitiveConstantsBuffer->primitiveType = primitiveType;
+        mPrimitiveConstantsBuffer->localSpaceToBottomLevelAS = mTransform;
+        mPrimitiveConstantsBuffer->bottomLevelASToLocalSpace = XMMatrixInverse(nullptr, mTransform);
+        mPrimitiveConstantsBuffer.CopyStagingToGpu(0);
     }
 
     RtProcedural::~RtProcedural() = default;
@@ -200,5 +212,6 @@ namespace DXRFramework
         blasGenerator.Generate(commandList, fallbackCommandList, scratch.Get(), mBlasBuffer.Get());
 
         mAabbBufferSrvHandle = context->createBufferSRVHandle(mAabbBuffer.Get(), false, sizeof(D3D12_RAYTRACING_AABB));
+        mPrimitiveConstantsCbvHandle = context->createBufferCBVHandle(mPrimitiveConstantsBuffer.GetResource().Get(), sizeof(PrimitiveInstanceConstants));
     }
 }

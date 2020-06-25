@@ -17,8 +17,7 @@
 #include "ProceduralPrimitivesLibrary.hlsli"
 #include "RaytracingUtils.hlsli"
 
-StructuredBuffer<PrimitiveInstancePerFrameBuffer> AABBPrimitiveAttributes : register(t2, space1);
-ConstantBuffer<PrimitiveInstanceConstantBuffer> aabbCB: register(b1, space1);
+ConstantBuffer<PrimitiveInstanceConstants> aabbCB : register(b1, space1);
 
 //***************************************************************************
 //*****************------ Intersection shaders-------************************
@@ -27,13 +26,9 @@ ConstantBuffer<PrimitiveInstanceConstantBuffer> aabbCB: register(b1, space1);
 // Get ray in AABB's local space.
 Ray GetRayInAABBPrimitiveLocalSpace()
 {
-    PrimitiveInstancePerFrameBuffer attr = AABBPrimitiveAttributes[aabbCB.instanceIndex];
-
-    // Retrieve a ray origin position and direction in bottom level AS space
-    // and transform them into the AABB primitive's local space.
     Ray ray;
-    ray.origin = mul(float4(ObjectRayOrigin(), 1), attr.bottomLevelASToLocalSpace).xyz;
-    ray.direction = mul(ObjectRayDirection(), (float3x3) attr.bottomLevelASToLocalSpace);
+    ray.origin = mul(float4(ObjectRayOrigin(), 1), (float4x4) aabbCB.bottomLevelASToLocalSpace).xyz;
+    ray.direction = mul(ObjectRayDirection(), (float3x3) aabbCB.bottomLevelASToLocalSpace);
     return ray;
 }
 
@@ -47,8 +42,7 @@ void Intersection_AnalyticPrimitive()
     ProceduralPrimitiveAttributes attr;
     if (RayAnalyticGeometryIntersectionTest(localRay, primitiveType, thit, attr))
     {
-        PrimitiveInstancePerFrameBuffer aabbAttribute = AABBPrimitiveAttributes[aabbCB.instanceIndex];
-        attr.normal = mul(attr.normal, (float3x3) aabbAttribute.localSpaceToBottomLevelAS);
+        attr.normal = mul(attr.normal, (float3x3) aabbCB.localSpaceToBottomLevelAS);
         attr.normal = normalize(mul((float3x3) ObjectToWorld3x4(), attr.normal));
 
         ReportHit(thit, /*hitKind*/ 0, attr);
@@ -65,8 +59,7 @@ void Intersection_VolumetricPrimitive()
     ProceduralPrimitiveAttributes attr;
     if (RayVolumetricGeometryIntersectionTest(localRay, primitiveType, thit, attr, 0))
     {
-        PrimitiveInstancePerFrameBuffer aabbAttribute = AABBPrimitiveAttributes[aabbCB.instanceIndex];
-        attr.normal = mul(attr.normal, (float3x3) aabbAttribute.localSpaceToBottomLevelAS);
+        attr.normal = mul(attr.normal, (float3x3) aabbCB.localSpaceToBottomLevelAS);
         attr.normal = normalize(mul((float3x3) ObjectToWorld3x4(), attr.normal));
 
         ReportHit(thit, /*hitKind*/ 0, attr);
@@ -83,8 +76,7 @@ void Intersection_SignedDistancePrimitive()
     ProceduralPrimitiveAttributes attr;
     if (RaySignedDistancePrimitiveTest(localRay, primitiveType, thit, attr))
     {
-        PrimitiveInstancePerFrameBuffer aabbAttribute = AABBPrimitiveAttributes[aabbCB.instanceIndex];
-        attr.normal = mul(attr.normal, (float3x3) aabbAttribute.localSpaceToBottomLevelAS);
+        attr.normal = mul(attr.normal, (float3x3) aabbCB.localSpaceToBottomLevelAS);
         attr.normal = normalize(mul((float3x3) ObjectToWorld3x4(), attr.normal));
 
         ReportHit(thit, /*hitKind*/ 0, attr);

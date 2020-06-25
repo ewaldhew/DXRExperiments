@@ -32,15 +32,27 @@ ProgressiveRaytracingPipeline::ProgressiveRaytracingPipeline(RtContext::SharedPt
 {
     RtProgram::Desc programDesc;
     {
-        std::vector<std::wstring> libraryExports = { L"RayGen", L"PrimaryClosestHit", L"PrimaryMiss", L"ShadowClosestHit", L"ShadowAnyHit", L"ShadowMiss" };
+        std::vector<std::wstring> libraryExports = {
+            L"RayGen",
+            L"PrimaryClosestHit", L"PrimaryClosestHit_AABB", L"PrimaryMiss",
+            L"ShadowClosestHit", L"ShadowAnyHit", L"ShadowMiss",
+            L"Intersection_AnalyticPrimitive", L"Intersection_VolumetricPrimitive", L"Intersection_SignedDistancePrimitive"
+        };
         programDesc.addShaderLibrary(g_pProgressiveRaytracing, ARRAYSIZE(g_pProgressiveRaytracing), libraryExports);
         programDesc.setRayGen("RayGen");
         programDesc
-            .addHitGroup(0, 0, "PrimaryClosestHit", "")
+            .addHitGroup(0, RtModel::GeometryType::Triangles, "PrimaryClosestHit", "")
+            .addHitGroup(0, RtModel::GeometryType::AABB_Analytic, "PrimaryClosestHit_AABB", "", "Intersection_AnalyticPrimitive")
+            .addHitGroup(0, RtModel::GeometryType::AABB_Volumetric, "PrimaryClosestHit_AABB", "", "Intersection_VolumetricPrimitive")
+            .addHitGroup(0, RtModel::GeometryType::AABB_SignedDistance, "PrimaryClosestHit_AABB", "", "Intersection_SignedDistancePrimitive")
             .addMiss(0, "PrimaryMiss");
         programDesc
-            .addHitGroup(1, 0, "ShadowClosestHit", "ShadowAnyHit")
+            .addHitGroup(1, RtModel::GeometryType::Triangles, "ShadowClosestHit", "ShadowAnyHit")
+            .addHitGroup(1, RtModel::GeometryType::AABB_Analytic, "", "", "Intersection_AnalyticPrimitive")
+            .addHitGroup(1, RtModel::GeometryType::AABB_Volumetric, "", "", "Intersection_VolumetricPrimitive")
+            .addHitGroup(1, RtModel::GeometryType::AABB_SignedDistance, "", "", "Intersection_SignedDistancePrimitive")
             .addMiss(1, "ShadowMiss");
+
         programDesc.configureGlobalRootSignature([] (RootSignatureGenerator &config) {
             // GlobalRootSignatureParams::AccelerationStructureSlot
             config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 0 /* t0 */);
@@ -59,10 +71,19 @@ ProgressiveRaytracingPipeline::ProgressiveRaytracingPipeline(RtContext::SharedPt
             config.AddStaticSampler(cubeSampler);
         });
         programDesc.configureHitGroupRootSignature([] (RootSignatureGenerator &config) {
+            config = {};
             config.AddHeapRangesParameter({{0 /* t0 */, 1, 1 /* space1 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // vertices
             config.AddHeapRangesParameter({{1 /* t1 */, 1, 1 /* space1 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // indices
             config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS, 0, 1, SizeOfInUint32(MaterialParams)); // space1 b0
-        }, 0);
+        }, RtModel::GeometryType::Triangles);
+        const auto aabbHitGroupConfigurator = [] (RootSignatureGenerator &config) {
+            config = {};
+            config.AddHeapRangesParameter({{1 /* b1 */, 1, 1 /* space1 */, D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 0}}); // attrs
+            config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS, 0, 1, SizeOfInUint32(MaterialParams)); // space1 b0
+        };
+        programDesc.configureHitGroupRootSignature(aabbHitGroupConfigurator, RtModel::GeometryType::AABB_Analytic);
+        programDesc.configureHitGroupRootSignature(aabbHitGroupConfigurator, RtModel::GeometryType::AABB_Volumetric);
+        programDesc.configureHitGroupRootSignature(aabbHitGroupConfigurator, RtModel::GeometryType::AABB_SignedDistance);
         programDesc.configureMissRootSignature([] (RootSignatureGenerator &config) {
             config.AddHeapRangesParameter({{0 /* t0 */, 1, 2 /* space2 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}});
             config.AddHeapRangesParameter({{1 /* t1 */, 1, 2 /* space2 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}});
@@ -72,7 +93,7 @@ ProgressiveRaytracingPipeline::ProgressiveRaytracingPipeline(RtContext::SharedPt
     mRtState = RtState::create(context);
     mRtState->setProgram(mRtProgram);
     mRtState->setMaxTraceRecursionDepth(4);
-    mRtState->setMaxAttributeSize(8);
+    mRtState->setMaxAttributeSize(sizeof(ProceduralPrimitiveAttributes));
     mRtState->setMaxPayloadSize(20);
 
     mShaderDebugOptions.maxIterations = 1024;
@@ -224,11 +245,21 @@ void ProgressiveRaytracingPipeline::render(ID3D12GraphicsCommandList *commandLis
     for (UINT rayType = 0; rayType < program->getHitProgramCount(); ++rayType) {
         for (UINT instance = 0; instance < mRtScene->getNumInstances(); ++instance) {
             auto &hitVars = mRtBindings->getHitVars(rayType, instance);
-            if ( mRtScene->getModel(instance)->getGeometryType() == RtModel::GeometryType::Triangles ) {
+            switch (mRtScene->getModel(instance)->getGeometryType())
+            {
+            case RtModel::GeometryType::Triangles: {
                 auto model = toRtMesh(mRtScene->getModel(instance));
                 hitVars->appendHeapRanges(model->getVertexBufferSrvHandle().ptr);
                 hitVars->appendHeapRanges(model->getIndexBufferSrvHandle().ptr);
                 hitVars->append32BitConstants((void*)&mMaterials[model->mMaterialIndex].params, SizeOfInUint32(MaterialParams));
+                break;
+            }
+            default: {
+                auto model = toRtProcedural(mRtScene->getModel(instance));
+                hitVars->appendHeapRanges(model->getPrimitiveConstantsCbvHandle().ptr);
+                hitVars->append32BitConstants((void*)&mMaterials[model->mMaterialIndex].params, SizeOfInUint32(MaterialParams));
+                break;
+            }
             }
         }
     }
