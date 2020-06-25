@@ -54,8 +54,8 @@ namespace DXRFramework
         }
 
         // Allocate shader table
-        UINT hitEntries = recordCountPerHit * mHitProgCount;
-        UINT numEntries = mMissProgCount + hitEntries + 1 /* ray-gen */;
+        mNumHitRecords = recordCountPerHit * mHitProgCount;
+        UINT numEntries = mMissProgCount + mNumHitRecords + 1 /* ray-gen */;
 
         mRecordSize = mProgramIdentifierSize + maxRootSigSize;
         mRecordSize = ROUND_UP(mRecordSize, D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT);
@@ -99,7 +99,7 @@ namespace DXRFramework
     {
         auto rtso = state->getFallbackRtso();
 
-        d_shaderRecords.resize(1 + mMissProgCount + mScene->getNumInstances() * mHitProgCount);
+        d_shaderRecords.resize(1 + mMissProgCount + mNumHitRecords);
 
         uint8_t *rayGenRecord = getRayGenRecordPtr();
         applyRtProgramVars(rayGenRecord, mProgram->getRayGenProgram(), rtso, mRayGenParams);

@@ -245,7 +245,7 @@ namespace DXRFramework
 
         raytraceDesc.HitGroupTable.StartAddress = startAddress + bindings->getFirstHitRecordIndex() * recordSize;
         raytraceDesc.HitGroupTable.StrideInBytes = recordSize;
-        raytraceDesc.HitGroupTable.SizeInBytes = recordSize * bindings->getHitProgramsCount();
+        raytraceDesc.HitGroupTable.SizeInBytes = recordSize * bindings->getNumHitRecords();
 
         mFallbackCommandList->SetPipelineState1(state->getFallbackRtso());
 

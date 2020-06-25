@@ -25,6 +25,7 @@ namespace DXRFramework
         uint32_t getFirstMissRecordIndex() const { return kFirstMissRecordIndex; }
         uint32_t getFirstHitRecordIndex() const { return mFirstHitVarEntry; }
         uint32_t getHitProgramsCount() const { return mHitProgCount; }
+        uint32_t getNumHitRecords() const { return mNumHitRecords; }
         uint32_t getMissProgramsCount() const { return mMissProgCount; }
 
         const RtParams::SharedPtr& getHitVars(uint32_t rayID, uint32_t meshID) { return mHitParams[rayID][meshID]; }
@@ -56,6 +57,7 @@ namespace DXRFramework
         uint32_t mMissProgCount = 0;
         uint32_t mHitProgCount = 0;
         uint32_t mFirstHitVarEntry = 0;
+        uint32_t mNumHitRecords = 0;
 
         uint32_t mRecordSize;
         uint32_t mProgramIdentifierSize;
