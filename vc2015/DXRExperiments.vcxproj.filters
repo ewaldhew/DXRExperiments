@@ -413,6 +413,9 @@
     <ClInclude Include="..\include\utils\DirectXRaytracingHelper.h">
       <Filter>Header Files\Utils</Filter>
     </ClInclude>
+    <ClInclude Include="..\include\HybridPipeline.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\Main.cpp">
@@ -517,6 +520,9 @@
     <ClCompile Include="..\src\pch.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\HybridPipeline.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\assets\shaders\RaytracingUtils.hlsli">
@@ -555,6 +561,12 @@
     <None Include="..\assets\shaders\ProceduralPrimitives.hlsli">
       <Filter>Assets\Shaders</Filter>
     </None>
+    <None Include="..\assets\shaders\PhotonSplatting.vs.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </None>
+    <None Include="..\assets\shaders\PhotonSplatting.ps.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="..\assets\shaders\RealtimeRaytracing.hlsl">
@@ -570,6 +582,9 @@
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
     <FxCompile Include="..\assets\shaders\ProgressivePathtracing.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="..\assets\shaders\PhotonTracing.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
   </ItemGroup>

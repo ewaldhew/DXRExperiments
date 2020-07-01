@@ -49,9 +49,13 @@ struct CameraParams
     XMFLOAT4 U;
     XMFLOAT4 V;
     XMFLOAT4 W;
+    XMFLOAT2 frustumNH;
+    XMFLOAT2 frustumNV;
+    XMFLOAT2 frustumNearFar;
     XMFLOAT2 jitters;
     UINT frameCount;
     UINT accumCount;
+    XMFLOAT2 padding;
 };
 
 struct DirectionalLightParams
@@ -112,6 +116,11 @@ struct MaterialParams
     UINT type; // 0: diffuse, 1: glossy, 2: specular (glass)
 };
 
+struct PhotonMappingConstants
+{
+    XMUINT2 numTiles;
+};
+
 // Number of metaballs to use within an AABB.
 #define N_METABALLS 3    // = {3, 5}
 
@@ -145,5 +154,19 @@ namespace PrimitiveType {
         SignedDistancePrimitive_FractalPyramid,
     };
 }
+
+#define MAX_PHOTON_SEED_SAMPLES 100000
+#define MAX_PHOTONS 1000000
+
+struct Photon
+{
+    XMFLOAT3 position;
+    XMFLOAT3 power;
+    XMFLOAT3 direction;
+    XMFLOAT3 normal;
+    float distTravelled;
+    UINT randSeed;
+    XMUINT2 padding;
+};
 
 #endif // RAYTRACINGHLSLCOMPAT_H

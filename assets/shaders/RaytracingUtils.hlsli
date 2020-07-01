@@ -174,6 +174,11 @@ bool refract(inout float3 r, float3 i, float3 n, float ior)
     }
 }
 
+float scalarProjection(float3 a, float3 b)
+{
+    return dot(a, b) / dot(b, b);
+}
+
 // Load three 16 bit indices from a byte addressed buffer.
 uint3 Load3x16BitIndices(uint offsetBytes, ByteAddressBuffer Indices)
 {
@@ -227,6 +232,85 @@ float2 wsVectorToLatLong(float3 dir)
     float u = (1.f + atan2(p.x, -p.z) * M_1_PI) * 0.5f;
     float v = acos(p.y) * M_1_PI;
     return float2(u, v);
+}
+
+/////////////////////////////////////////
+// DATA PACKING AND UNPACKING ROUTINES //
+/////////////////////////////////////////
+
+// https://www.khronos.org/registry/OpenGL/extensions/EXT/EXT_texture_shared_exponent.txt
+#define RGB9E5_EXPONENT_BITS          5
+#define RGB9E5_MANTISSA_BITS          9
+#define RGB9E5_EXP_BIAS               15
+#define RGB9E5_MAX_VALID_BIASED_EXP   31
+
+#define MAX_RGB9E5_EXP               (RGB9E5_MAX_VALID_BIASED_EXP - RGB9E5_EXP_BIAS)
+#define RGB9E5_MANTISSA_VALUES       (1<<RGB9E5_MANTISSA_BITS)
+#define MAX_RGB9E5_MANTISSA          (RGB9E5_MANTISSA_VALUES-1)
+#define MAX_RGB9E5                   (((float)MAX_RGB9E5_MANTISSA)/RGB9E5_MANTISSA_VALUES * (1<<MAX_RGB9E5_EXP))
+#define EPSILON_RGB9E5               ((1.0/RGB9E5_MANTISSA_VALUES) / (1<<RGB9E5_EXP_BIAS))
+
+/* Ok, FloorLog2 is not correct for the denorm and zero values, but we
+   are going to do a max of this value with the minimum rgb9e5 exponent
+   that will hide these problem cases. */
+int FloorLog2(float x)
+{
+  float biasedexponent;
+  frexp(x, biasedexponent);
+  return (biasedexponent - 127);
+}
+
+uint float3_to_rgb9e5(float3 rgb)
+{
+    uint retval;
+    float maxrgb;
+    int rm, gm, bm;
+    float rc, gc, bc;
+    int exp_shared;
+    double denom;
+
+    rc = clamp(rgb.r, 0.0, MAX_RGB9E5);
+    gc = clamp(rgb.g, 0.0, MAX_RGB9E5);
+    bc = clamp(rgb.b, 0.0, MAX_RGB9E5);
+
+    maxrgb = max(max(rc, gc), bc);
+    exp_shared = max(-RGB9E5_EXP_BIAS-1, FloorLog2(maxrgb)) + 1 + RGB9E5_EXP_BIAS;
+    /* This pow function could be replaced by a table. */
+    denom = pow(2, exp_shared - RGB9E5_EXP_BIAS - RGB9E5_MANTISSA_BITS);
+
+    int maxm = (int) floor(maxrgb / (float)denom + 0.5f);
+    if (maxm == MAX_RGB9E5_MANTISSA + 1) {
+        denom *= 2;
+        exp_shared += 1;
+    }
+
+    rm = (int) floor(rc / (float)denom + 0.5f);
+    gm = (int) floor(gc / (float)denom + 0.5f);
+    bm = (int) floor(bc / (float)denom + 0.5f);
+    return (rm << 23) | (gm << 14) | (bm << 5) | exp_shared;
+}
+
+float3 rgb9e5_to_float3(uint v)
+{
+    float3 result;
+    int exponent = (v & 0x0000001f) - RGB9E5_EXP_BIAS - RGB9E5_MANTISSA_BITS;
+    float scale = (float) pow(2, exponent);
+
+    result.r = ((v & 0xff800000) >> 23) * scale;
+    result.g = ((v & 0x007fc000) >> 14) * scale;
+    result.b = ((v & 0x00003fe0) >> 5) * scale;
+
+    return result;
+}
+
+float3 unitvec_to_spherical(float3 v)
+{
+    return v;
+}
+
+float3 spherical_to_unitvec(float3 v)
+{
+    return v;
 }
 
 #endif // RAYTRACING_UTILS_HLSLI

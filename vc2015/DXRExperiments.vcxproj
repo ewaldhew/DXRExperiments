@@ -138,6 +138,7 @@ PostbuildCopy.bat "$(SolutionDir)vc2015\build\bin\$(Configuration)\"
     <ClInclude Include="..\assets\shaders\RaytracingHlslCompat.h" />
     <ClInclude Include="..\include\DenoiseCompositor.h" />
     <ClInclude Include="..\include\DXRExperimentsApp.h" />
+    <ClInclude Include="..\include\HybridPipeline.h" />
     <ClInclude Include="..\include\ProgressiveRaytracingPipeline.h" />
     <ClInclude Include="..\include\RaytracingPipeline.h" />
     <ClInclude Include="..\include\RealtimeRaytracingPipeline.h" />
@@ -391,6 +392,11 @@ PostbuildCopy.bat "$(SolutionDir)vc2015\build\bin\$(Configuration)\"
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <PrecompiledHeaderOutputFile>$(IntDir)$(TargetName).pch</PrecompiledHeaderOutputFile>
     </ClCompile>
+    <ClCompile Include="..\src\HybridPipeline.cpp">
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <PrecompiledHeaderOutputFile>$(IntDir)$(TargetName).pch</PrecompiledHeaderOutputFile>
+    </ClCompile>
     <ClCompile Include="..\src\Main.cpp">
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
@@ -434,7 +440,6 @@ PostbuildCopy.bat "$(SolutionDir)vc2015\build\bin\$(Configuration)\"
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="..\assets\shaders\AnalyticPrimitives.hlsli" />
     <None Include="..\assets\shaders\DenoiseCommon.hlsli">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">6.0</ShaderModel>
@@ -458,7 +463,15 @@ PostbuildCopy.bat "$(SolutionDir)vc2015\build\bin\$(Configuration)\"
       <VariableName>g_p%(Filename)</VariableName>
       <HeaderFileOutput>$(IntDir)\CompiledShaders\%(Filename).hlsl.h</HeaderFileOutput>
     </FxCompile>
-    <None Include="..\assets\shaders\ProceduralPrimitives.hlsli" />
+    <None Include="..\assets\shaders\PhotonSplatting.ps.hlsl" />
+    <None Include="..\assets\shaders\PhotonSplatting.vs.hlsl" />
+    <FxCompile Include="..\assets\shaders\PhotonTracing.hlsl">
+      <ShaderType>Library</ShaderType>
+      <ShaderModel>6.3</ShaderModel>
+      <VariableName>g_p%(Filename)</VariableName>
+      <HeaderFileOutput>$(IntDir)\CompiledShaders\%(Filename).hlsl.h</HeaderFileOutput>
+      <EntryPointName />
+    </FxCompile>
     <FxCompile Include="..\assets\shaders\ProgressivePathtracing.hlsl">
       <ShaderType>Library</ShaderType>
       <ShaderModel>6.3</ShaderModel>
@@ -487,9 +500,9 @@ PostbuildCopy.bat "$(SolutionDir)vc2015\build\bin\$(Configuration)\"
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="..\assets\shaders\BilateralFilter.hlsli">
-      <FileType>Document</FileType>
-    </None>
+    <None Include="..\assets\shaders\BilateralFilter.hlsli" />
+    <None Include="..\assets\shaders\AnalyticPrimitives.hlsli" />
+    <None Include="..\assets\shaders\ProceduralPrimitives.hlsli" />
     <None Include="..\assets\shaders\ProceduralPrimitivesLibrary.hlsli" />
     <None Include="..\assets\shaders\RaytracingCommon.hlsli" />
     <None Include="..\assets\shaders\RaytracingShaderHelper.hlsli" />

@@ -2,6 +2,7 @@
 #include "DXRExperimentsApp.h"
 #include "ProgressiveRaytracingPipeline.h"
 #include "RealtimeRaytracingPipeline.h"
+#include "HybridPipeline.h"
 #include "Helpers/DirectXRaytracingHelper.h"
 #include "ImGuiRendererDX.h"
 #include "GameInput.h"
@@ -138,6 +139,7 @@ void DXRExperimentsApp::InitRaytracing()
     // Create raytracing pipelines
     mRaytracingPipelines.emplace_back(ProgressiveRaytracingPipeline::create(mRtContext));
     mRaytracingPipelines.emplace_back(RealtimeRaytracingPipeline::create(mRtContext));
+    mRaytracingPipelines.emplace_back(HybridPipeline::create(mRtContext));
 
     // Populate raytracing pipelines
     for (auto pipeline : mRaytracingPipelines) {

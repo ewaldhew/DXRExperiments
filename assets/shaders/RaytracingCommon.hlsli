@@ -162,4 +162,43 @@ float3 sampleEnvironment()
     return envSample.rgb * perFrameConstants.options.environmentStrength;
 }
 
+bool isInCameraFrustum(float3 position)
+{
+    // for each plane of the frustum, check that dot(position, planeNormal) + planeDist is nonnegative
+    float2 nearFar = perFrameConstants.cameraParams.frustumNearFar;
+    float2 NH = perFrameConstants.cameraParams.frustumNH;
+    float2 NV = perFrameConstants.cameraParams.frustumNV;
+
+    if (-position.z + nearFar.x < 0.0) { // near
+        return false;
+    } else if (position.z + nearFar.y < 0.0) { // far
+        return false;
+    } else if (NH.x * position.x + NH.y * position.z < 0.0) { // left
+        return false;
+    } else if (-NH.x * position.x + NH.y * position.z < 0.0) { // right
+        return false;
+    } else if (-NV.x * position.y + NV.y * position.z < 0.0) { // top
+        return false;
+    } else if (NV.x * position.y + NV.y * position.z < 0.0) { // bottom
+        return false;
+    } else {
+        return true;
+    }
+}
+
+bool isInViewDirection(float3 v)
+{
+    return dot(v, perFrameConstants.cameraParams.W.xyz) < 0.0;
+}
+
+// Convert world coordinates to normalized screen coordinates (NDC)
+float2 unproject(float3 pWorld)
+{
+    float3 pEye = pWorld - perFrameConstants.cameraParams.worldEyePos.xyz;
+    float u = scalarProjection(pEye, perFrameConstants.cameraParams.U.xyz);
+    float v = -scalarProjection(pEye, perFrameConstants.cameraParams.V.xyz);
+    float w = scalarProjection(pEye, perFrameConstants.cameraParams.W.xyz);
+    return float2(u, v) / w;
+}
+
 #endif // RAYTRACING_COMMON_HLSLI

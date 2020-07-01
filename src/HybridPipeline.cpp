@@ -1,0 +1,438 @@
+#include "pch.h"
+#include "HybridPipeline.h"
+#include "CompiledShaders/PhotonTracing.hlsl.h"
+#include "WICTextureLoader.h"
+#include "DDSTextureLoader.h"
+#include "ResourceUploadBatch.h"
+#include "Helpers/DirectXRaytracingHelper.h"
+#include "ImGuiRendererDX.h"
+#include <chrono>
+
+using namespace DXRFramework;
+
+static XMFLOAT4 pointLightColor = XMFLOAT4(0.2f, 0.8f, 0.6f, 2.0f);
+static XMFLOAT4 dirLightColor = XMFLOAT4(0.9f, 0.9f, 0.9f, 1.0f);
+
+namespace GlobalRootSignatureParams
+{
+    enum Value
+    {
+        AccelerationStructureSlot = 0,
+        OutputViewSlot,
+        PerFrameConstantsSlot,
+        Count
+    };
+}
+
+HybridPipeline::HybridPipeline(RtContext::SharedPtr context) :
+    mRtContext(context),
+    mFrameAccumulationEnabled(true),
+    mAnimationPaused(true),
+    mActive(true)
+{
+    RtProgram::Desc programDesc;
+    {
+        std::vector<std::wstring> libraryExports = {
+            L"RayGen",
+            L"ClosestHit", L"ClosestHit_AABB",
+            L"Miss",
+            L"Intersection_AnalyticPrimitive", L"Intersection_VolumetricPrimitive", L"Intersection_SignedDistancePrimitive"
+        };
+        programDesc.addShaderLibrary(g_pPhotonTracing, ARRAYSIZE(g_pPhotonTracing), libraryExports);
+        programDesc.setRayGen("RayGen");
+        programDesc
+            .addHitGroup(0, RtModel::GeometryType::Triangles, "ClosestHit", "")
+            .addHitGroup(0, RtModel::GeometryType::AABB_Analytic, "ClosestHit_AABB", "", "Intersection_AnalyticPrimitive")
+            .addHitGroup(0, RtModel::GeometryType::AABB_Volumetric, "ClosestHit_AABB", "", "Intersection_VolumetricPrimitive")
+            .addHitGroup(0, RtModel::GeometryType::AABB_SignedDistance, "ClosestHit_AABB", "", "Intersection_SignedDistancePrimitive")
+            .addMiss(0, "Miss");
+
+        programDesc.configureGlobalRootSignature([](RootSignatureGenerator &config) {
+            // GlobalRootSignatureParams::AccelerationStructureSlot
+            config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 0 /* t0 */);
+            // GlobalRootSignatureParams::OutputViewSlot
+            config.AddHeapRangesParameter({{0 /* u0 */, 1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0}});
+            // GlobalRootSignatureParams::PerFrameConstantsSlot
+            config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_CBV, 0 /* b0 */);
+
+            D3D12_STATIC_SAMPLER_DESC cubeSampler = {};
+            cubeSampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+            cubeSampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+            cubeSampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+            cubeSampler.Filter = D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
+            cubeSampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+            cubeSampler.ShaderRegister = 0;
+            config.AddStaticSampler(cubeSampler);
+
+            config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 1 /* t1 */);
+            config.AddHeapRangesParameter({{1 /* u1 */, 1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0}});
+            config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS, 1 /* b1 */, 0, SizeOfInUint32(PhotonMappingConstants));
+        });
+        programDesc.configureHitGroupRootSignature([] (RootSignatureGenerator &config) {
+            config = {};
+            config.AddHeapRangesParameter({{0 /* t0 */, 1, 1 /* space1 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // vertices
+            config.AddHeapRangesParameter({{1 /* t1 */, 1, 1 /* space1 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // indices
+            config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS, 0, 1, SizeOfInUint32(MaterialParams)); // space1 b0
+        }, RtModel::GeometryType::Triangles);
+        const auto aabbHitGroupConfigurator = [] (RootSignatureGenerator &config) {
+            config = {};
+            config.AddHeapRangesParameter({{1 /* b1 */, 1, 1 /* space1 */, D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 0}}); // attrs
+            config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS, 0, 1, SizeOfInUint32(MaterialParams)); // space1 b0
+        };
+        programDesc.configureHitGroupRootSignature(aabbHitGroupConfigurator, RtModel::GeometryType::AABB_Analytic);
+        programDesc.configureHitGroupRootSignature(aabbHitGroupConfigurator, RtModel::GeometryType::AABB_Volumetric);
+        programDesc.configureHitGroupRootSignature(aabbHitGroupConfigurator, RtModel::GeometryType::AABB_SignedDistance);
+    }
+    mRtProgram = RtProgram::create(context, programDesc);
+    mRtState = RtState::create(context);
+    mRtState->setProgram(mRtProgram);
+    mRtState->setMaxTraceRecursionDepth(4);
+    mRtState->setMaxAttributeSize(sizeof(ProceduralPrimitiveAttributes));
+    mRtState->setMaxPayloadSize(20);
+
+    mShaderDebugOptions.maxIterations = 1024;
+    mShaderDebugOptions.cosineHemisphereSampling = true;
+    mShaderDebugOptions.showIndirectDiffuseOnly = false;
+    mShaderDebugOptions.showIndirectSpecularOnly = false;
+    mShaderDebugOptions.showAmbientOcclusionOnly = false;
+    mShaderDebugOptions.showGBufferAlbedoOnly = false;
+    mShaderDebugOptions.showDirectLightingOnly = false;
+    mShaderDebugOptions.showFresnelTerm = false;
+    mShaderDebugOptions.noIndirectDiffuse = false;
+    mShaderDebugOptions.environmentStrength = 1.0f;
+    mShaderDebugOptions.debug = 0;
+
+    auto now = std::chrono::high_resolution_clock::now();
+    auto msTime = std::chrono::time_point_cast<std::chrono::milliseconds>(now);
+    mRng = std::mt19937(uint32_t(msTime.time_since_epoch().count()));
+}
+
+HybridPipeline::~HybridPipeline() = default;
+
+void HybridPipeline::setScene(RtScene::SharedPtr scene)
+{
+    mRtScene = scene;
+    mRtBindings = RtBindings::create(mRtContext, mRtProgram, scene);
+}
+
+void HybridPipeline::buildAccelerationStructures()
+{
+    mRtScene->build(mRtContext, mRtProgram->getHitProgramCount());
+}
+
+void HybridPipeline::loadResources(ID3D12CommandQueue *uploadCommandQueue, UINT frameCount)
+{
+    mTextureResources.resize(2);
+    mTextureSrvGpuHandles.resize(2);
+
+    // Create and upload global textures
+    auto device = mRtContext->getDevice();
+    ResourceUploadBatch resourceUpload(device);
+    resourceUpload.Begin();
+    {
+        ThrowIfFailed(CreateWICTextureFromFile(device, resourceUpload, L"..\\assets\\textures\\HdrStudioProductNightStyx001_JPG_8K.jpg", &mTextureResources[0], true));
+        ThrowIfFailed(CreateDDSTextureFromFile(device, resourceUpload, L"..\\assets\\textures\\CathedralRadiance.dds", &mTextureResources[1]));
+    }
+    auto uploadResourcesFinished = resourceUpload.End(uploadCommandQueue);
+    uploadResourcesFinished.wait();
+
+    mTextureSrvGpuHandles[0] = mRtContext->createTextureSRVHandle(mTextureResources[0].Get());
+    mTextureSrvGpuHandles[1] = mRtContext->createTextureSRVHandle(mTextureResources[1].Get(), true);
+
+    // Create per-frame constant buffer
+    mConstantBuffer.Create(device, frameCount, L"PerFrameConstantBuffer");
+}
+
+void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT height)
+{
+    auto device = mRtContext->getDevice();
+
+    // Final output resource
+
+    AllocateUAVTexture(device, format, width, height, mOutputResource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+    {
+        D3D12_CPU_DESCRIPTOR_HANDLE uavCpuHandle;
+        mOutputUavHeapIndex = mRtContext->allocateDescriptor(&uavCpuHandle, mOutputUavHeapIndex);
+
+        D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+        uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+        device->CreateUnorderedAccessView(mOutputResource.Get(), nullptr, &uavDesc, uavCpuHandle);
+
+        mOutputUavGpuHandle = mRtContext->getDescriptorGPUHandle(mOutputUavHeapIndex);
+    }
+
+    {
+        D3D12_CPU_DESCRIPTOR_HANDLE srvCpuHandle;
+        mOutputSrvHeapIndex = mRtContext->allocateDescriptor(&srvCpuHandle, mOutputSrvHeapIndex);
+        mOutputSrvGpuHandle = mRtContext->createTextureSRVHandle(mOutputResource.Get(), false, mOutputSrvHeapIndex);
+    }
+
+    // Intermediate output resources
+
+    AllocateUAVBuffer(device, MAX_PHOTON_SEED_SAMPLES * sizeof(Photon), mPhotonSeedResource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+    {
+        D3D12_CPU_DESCRIPTOR_HANDLE uavCpuHandle;
+        mPhotonSeedUavHeapIndex = mRtContext->allocateDescriptor(&uavCpuHandle, mPhotonSeedUavHeapIndex);
+
+        D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+        uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+        uavDesc.Format = DXGI_FORMAT_UNKNOWN;
+        uavDesc.Buffer.StructureByteStride = sizeof(Photon);
+        uavDesc.Buffer.NumElements = MAX_PHOTON_SEED_SAMPLES;
+        device->CreateUnorderedAccessView(mPhotonSeedResource.Get(), nullptr, &uavDesc, uavCpuHandle);
+
+        mPhotonSeedUavGpuHandle = mRtContext->getDescriptorGPUHandle(mPhotonSeedUavHeapIndex);
+    }
+
+    {
+        D3D12_CPU_DESCRIPTOR_HANDLE srvCpuHandle;
+        mPhotonSeedSrvHeapIndex = mRtContext->allocateDescriptor(&srvCpuHandle, mPhotonSeedSrvHeapIndex);
+        mPhotonSeedSrvGpuHandle = mRtContext->createBufferSRVHandle(mPhotonSeedResource.Get(), false, sizeof(Photon));
+    }
+
+    // TODO: merge resources and use counterOffset
+    AllocateUAVBuffer(device, MAX_PHOTONS * sizeof(Photon), mPhotonMapResource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    AllocateUAVBuffer(device, 4, mPhotonMapCounter.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+    {
+        D3D12_CPU_DESCRIPTOR_HANDLE uavCpuHandle;
+        mPhotonMapUavHeapIndex = mRtContext->allocateDescriptor(&uavCpuHandle, mPhotonMapUavHeapIndex);
+
+        D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+        uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+        uavDesc.Format = DXGI_FORMAT_UNKNOWN;
+        uavDesc.Buffer.StructureByteStride = sizeof(Photon);
+        uavDesc.Buffer.NumElements = MAX_PHOTONS;
+        //uavDesc.Buffer.CounterOffsetInBytes = MAX_PHOTONS * sizeof(Photon);
+        device->CreateUnorderedAccessView(mPhotonMapResource.Get(), mPhotonMapCounter.Get(), &uavDesc, uavCpuHandle);
+
+        mPhotonMapUavGpuHandle = mRtContext->getDescriptorGPUHandle(mPhotonMapUavHeapIndex);
+    }
+
+    const double preferredTileSizeInPixels = 16.0;
+    UINT numTilesX = static_cast<UINT>(ceil(width / preferredTileSizeInPixels));
+    UINT numTilesY = static_cast<UINT>(ceil(height / preferredTileSizeInPixels));
+    AllocateUAVTexture(device, DXGI_FORMAT_R32_UINT, numTilesX, numTilesY, mPhotonDensityResource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+    {
+        D3D12_CPU_DESCRIPTOR_HANDLE uavCpuHandle;
+        mPhotonDensityUavHeapIndex = mRtContext->allocateDescriptor(&uavCpuHandle, mPhotonDensityUavHeapIndex);
+
+        D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+        uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+        device->CreateUnorderedAccessView(mPhotonDensityResource.Get(), nullptr, &uavDesc, uavCpuHandle);
+
+        mPhotonDensityUavGpuHandle = mRtContext->getDescriptorGPUHandle(mPhotonDensityUavHeapIndex);
+    }
+}
+
+inline void calculateCameraVariables(Math::Camera &camera, float aspectRatio, XMFLOAT4 *U, XMFLOAT4 *V, XMFLOAT4 *W)
+{
+    float ulen, vlen, wlen;
+    XMVECTOR w = camera.GetForwardVec(); // Do not normalize W -- it implies focal length
+
+    wlen = XMVectorGetX(XMVector3Length(w));
+    XMVECTOR u = XMVector3Normalize(XMVector3Cross(w, camera.GetUpVec()));
+    XMVECTOR v = XMVector3Normalize(XMVector3Cross(u, w));
+
+    vlen = wlen * tanf(0.5f * camera.GetFOV());
+    ulen = vlen * aspectRatio;
+    u = XMVectorScale(u, ulen);
+    v = XMVectorScale(v, vlen);
+
+    XMStoreFloat4(U, u);
+    XMStoreFloat4(V, v);
+    XMStoreFloat4(W, w);
+}
+
+inline void calculateCameraFrustum(Math::Camera &camera, XMFLOAT2 *NH, XMFLOAT2 *NV, XMFLOAT2 *clipZ)
+{
+    auto wsFrustum = camera.GetWorldSpaceFrustum();
+    auto nh = wsFrustum.GetFrustumPlane(wsFrustum.kLeftPlane).GetNormal();
+    auto nv = wsFrustum.GetFrustumPlane(wsFrustum.kBottomPlane).GetNormal();
+    *NH = XMFLOAT2(nh.GetX(), nh.GetZ());
+    *NV = XMFLOAT2(nv.GetY(), nv.GetZ());
+    float nearZ = wsFrustum.GetFrustumCorner(wsFrustum.kNearLowerLeft).GetZ();
+    float farZ = wsFrustum.GetFrustumCorner(wsFrustum.kFarLowerLeft).GetZ();
+    *clipZ = XMFLOAT2(nearZ, farZ);
+}
+
+inline bool hasCameraMoved(Math::Camera &camera, Math::Matrix4 &lastVPMatrix)
+{
+    const Math::Matrix4 &currentMatrix = camera.GetViewProjMatrix();
+    return !(XMVector4Equal(lastVPMatrix.GetX(), currentMatrix.GetX()) && XMVector4Equal(lastVPMatrix.GetY(), currentMatrix.GetY()) &&
+             XMVector4Equal(lastVPMatrix.GetZ(), currentMatrix.GetZ()) && XMVector4Equal(lastVPMatrix.GetW(), currentMatrix.GetW()));
+}
+
+void HybridPipeline::update(float elapsedTime, UINT elapsedFrames, UINT prevFrameIndex, UINT frameIndex, UINT width, UINT height)
+{
+    if (mAnimationPaused) {
+        elapsedTime = 142.0f;
+    }
+
+    if (hasCameraMoved(*mCamera, mLastCameraVPMatrix) || !mFrameAccumulationEnabled) {
+        mAccumCount = 0;
+        mLastCameraVPMatrix = mCamera->GetViewProjMatrix();
+    }
+
+    CameraParams &cameraParams = mConstantBuffer->cameraParams;
+    XMStoreFloat4(&cameraParams.worldEyePos, mCamera->GetPosition());
+    calculateCameraVariables(*mCamera, mCamera->GetAspectRatio(), &cameraParams.U, &cameraParams.V, &cameraParams.W);
+    calculateCameraFrustum(*mCamera, &cameraParams.frustumNH, &cameraParams.frustumNV, &cameraParams.frustumNearFar);
+    float xJitter = (mRngDist(mRng) - 0.5f) / float(width);
+    float yJitter = (mRngDist(mRng) - 0.5f) / float(height);
+    cameraParams.jitters = XMFLOAT2(xJitter, yJitter);
+    cameraParams.frameCount = elapsedFrames;
+    cameraParams.accumCount = mAccumCount++;
+
+    XMVECTOR dirLightVector = XMVectorSet(0.3f, -0.2f, -1.0f, 0.0f);
+    XMMATRIX rotation = XMMatrixRotationY(sin(elapsedTime * 0.2f) * 3.14f * 0.5f);
+    dirLightVector = XMVector4Transform(dirLightVector, rotation);
+    XMStoreFloat4(&mConstantBuffer->directionalLight.forwardDir, dirLightVector);
+    mConstantBuffer->directionalLight.color = dirLightColor;
+
+    // XMVECTOR pointLightPos = XMVectorSet(sin(elapsedTime * 0.97f), sin(elapsedTime * 0.45f), sin(elapsedTime * 0.32f), 1.0f);
+    // pointLightPos = XMVectorAdd(pointLightPos, XMVectorSet(0.0f, 0.5f, 1.0f, 0.0f));
+    // pointLightPos = XMVectorMultiply(pointLightPos, XMVectorSet(0.221f, 0.049f, 0.221f, 1.0f));
+    XMVECTOR pointLightPos = XMVectorSet(0.0f, 0.0f, 0.0f, 1.0f);
+    XMStoreFloat4(&mConstantBuffer->pointLight.worldPos, pointLightPos);
+    mConstantBuffer->pointLight.color = pointLightColor;
+
+    mConstantBuffer->options = mShaderDebugOptions;
+
+    mConstantBuffer.CopyStagingToGpu(frameIndex);
+}
+
+void HybridPipeline::createPipelineStateObjects()
+{
+
+}
+
+void HybridPipeline::buildPhotonMap(UINT frameIndex, UINT width, UINT height)
+{
+    auto commandList = mRtContext->getCommandList();
+
+    // generate photon seed
+    {
+
+    }
+
+    // generate photon map
+    {
+        // Update shader table root arguments
+        auto program = mRtBindings->getProgram();
+
+        for (UINT rayType = 0; rayType < program->getHitProgramCount(); ++rayType) {
+            for (UINT instance = 0; instance < mRtScene->getNumInstances(); ++instance) {
+                auto &hitVars = mRtBindings->getHitVars(rayType, instance);
+                switch (mRtScene->getModel(instance)->getGeometryType())
+                {
+                case RtModel::GeometryType::Triangles: {
+                    auto model = toRtMesh(mRtScene->getModel(instance));
+                    hitVars->appendHeapRanges(model->getVertexBufferSrvHandle().ptr);
+                    hitVars->appendHeapRanges(model->getIndexBufferSrvHandle().ptr);
+                    hitVars->append32BitConstants((void*)&mMaterials[model->mMaterialIndex].params, SizeOfInUint32(MaterialParams));
+                    break;
+                }
+                default: {
+                    auto model = toRtProcedural(mRtScene->getModel(instance));
+                    hitVars->appendHeapRanges(model->getPrimitiveConstantsCbvHandle().ptr);
+                    hitVars->append32BitConstants((void*)&mMaterials[model->mMaterialIndex].params, SizeOfInUint32(MaterialParams));
+                    break;
+                }
+                }
+            }
+        }
+
+        mRtBindings->apply(mRtContext, mRtState);
+
+        // Set global root arguments
+        mRtContext->bindDescriptorHeap();
+        commandList->SetComputeRootSignature(program->getGlobalRootSignature());
+        commandList->SetComputeRootConstantBufferView(GlobalRootSignatureParams::PerFrameConstantsSlot, mConstantBuffer.GpuVirtualAddress(frameIndex));
+        commandList->SetComputeRootDescriptorTable(GlobalRootSignatureParams::OutputViewSlot, mOutputUavGpuHandle);
+        mRtContext->getFallbackCommandList()->SetTopLevelAccelerationStructure(GlobalRootSignatureParams::AccelerationStructureSlot, mRtScene->getTlasWrappedPtr());
+
+        mRtContext->raytrace(mRtBindings, mRtState, width, height, 3);
+
+        mRtContext->insertUAVBarrier(mOutputResource.Get());
+    }
+}
+
+void HybridPipeline::render(ID3D12GraphicsCommandList *, UINT frameIndex, UINT width, UINT height)
+{
+    auto commandList = mRtContext->getCommandList();
+
+    // rendering pass
+    {
+        buildPhotonMap(frameIndex, width, height);
+
+    }
+}
+
+void HybridPipeline::userInterface()
+{
+    bool frameDirty = false;
+
+    ui::Begin("Lighting");
+    {
+        frameDirty |= ui::ColorPicker4("Point Light", (float*)&pointLightColor);
+        frameDirty |= ui::ColorPicker4("Directional Light", (float*)&dirLightColor);
+    }
+    ui::End();
+
+    ui::Begin("Material");
+    {
+        frameDirty |= ui::SliderFloat3("Albedo", &mMaterials[0].params.albedo.x, 0.0f, 1.0f);
+        frameDirty |= ui::SliderFloat3("Specular", &mMaterials[0].params.specular.x, 0.0f, 1.0f);
+        frameDirty |= ui::SliderFloat("Reflectivity", &mMaterials[0].params.reflectivity, 0.0f, 1.0f);
+        frameDirty |= ui::SliderFloat("Roughness", &mMaterials[0].params.roughness, 0.0f, 1.0f);
+    }
+    ui::End();
+
+    ui::Begin("Hybrid Raytracing");
+    {
+        frameDirty |= ui::Checkbox("Pause Animation", &mAnimationPaused);
+
+        ui::Separator();
+
+        if (ui::Checkbox("Frame Accumulation", &mFrameAccumulationEnabled)) {
+            mAnimationPaused = true;
+            frameDirty = true;
+        }
+
+        if (mFrameAccumulationEnabled) {
+            UINT currentIterations = min(mAccumCount, mShaderDebugOptions.maxIterations);
+            UINT oldMaxIterations = mShaderDebugOptions.maxIterations;
+            if (ui::SliderInt("Max Iterations", (int*)&mShaderDebugOptions.maxIterations, 1, 2048)) {
+                frameDirty |= (mShaderDebugOptions.maxIterations < mAccumCount);
+                mAccumCount = min(mAccumCount, oldMaxIterations);
+            }
+            ui::ProgressBar(float(currentIterations) / float(mShaderDebugOptions.maxIterations), ImVec2(), std::to_string(currentIterations).c_str());
+        }
+
+        ui::Separator();
+
+        frameDirty |= ui::Checkbox("Cosine Hemisphere Sampling", (bool*)&mShaderDebugOptions.cosineHemisphereSampling);
+        frameDirty |= ui::Checkbox("Indirect Diffuse Only", (bool*)&mShaderDebugOptions.showIndirectDiffuseOnly);
+        frameDirty |= ui::Checkbox("Indirect Specular Only", (bool*)&mShaderDebugOptions.showIndirectSpecularOnly);
+        frameDirty |= ui::Checkbox("Ambient Occlusion Only", (bool*)&mShaderDebugOptions.showAmbientOcclusionOnly);
+        frameDirty |= ui::Checkbox("GBuffer Albedo Only", (bool*)&mShaderDebugOptions.showGBufferAlbedoOnly);
+        frameDirty |= ui::Checkbox("Direct Lighting Only", (bool*)&mShaderDebugOptions.showDirectLightingOnly);
+        frameDirty |= ui::Checkbox("Fresnel Term Only", (bool*)&mShaderDebugOptions.showFresnelTerm);
+        frameDirty |= ui::Checkbox("No Indirect Diffuse", (bool*)&mShaderDebugOptions.noIndirectDiffuse);
+        frameDirty |= ui::SliderFloat("Environment Strength", &mShaderDebugOptions.environmentStrength, 0.0f, 10.0f);
+        frameDirty |= ui::SliderInt("Debug", (int*)&mShaderDebugOptions.debug, 0, 2);
+
+        ui::Separator();
+
+        ui::Text("Press space to toggle first person camera");
+    }
+    ui::End();
+
+    if (frameDirty) {
+        mLastCameraVPMatrix = Math::Matrix4();
+    }
+}
