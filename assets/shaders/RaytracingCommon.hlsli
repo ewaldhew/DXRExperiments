@@ -79,6 +79,9 @@ void interpolateVertexAttributes(float2 bary, out float3 vertPosition, out float
         vertexBuffer[indices[1] * strideInFloat3s + normalOffsetInFloat3s] * barycentrics.y +
         vertexBuffer[indices[2] * strideInFloat3s + normalOffsetInFloat3s] * barycentrics.z;
 #endif
+
+	vertNormal = normalize(mul((float3x3) ObjectToWorld3x4(), vertNormal));
+	vertPosition = mul(ObjectToWorld3x4(), float4(vertPosition, 1)).xyz;
 }
 
 float shootShadowRay(float3 orig, float3 dir, float minT, float maxT, uint currentDepth)
