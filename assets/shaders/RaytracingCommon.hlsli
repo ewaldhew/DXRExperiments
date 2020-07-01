@@ -8,7 +8,7 @@
 #define RAY_MAX_T 1.0e+38f
 #define RAY_EPSILON 0.0001
 
-#define MAX_RADIANCE_RAY_DEPTH 1
+#define MAX_RADIANCE_RAY_DEPTH 3
 #define MAX_SHADOW_RAY_DEPTH 2
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -25,6 +25,7 @@ SamplerState defaultSampler : register(s0);
 ////////////////////////////////////////////////////////////////////////////////
 
 // StructuredBuffer indexing is not supported in compute path of Fallback Layer,
+// when the buffer is passed as a local root argument,
 // must use typed buffer or raw buffer in compute path.
 #define USE_STRUCTURED_VERTEX_BUFFER 0
 #if USE_STRUCTURED_VERTEX_BUFFER

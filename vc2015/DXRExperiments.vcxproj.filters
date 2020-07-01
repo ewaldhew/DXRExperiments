@@ -569,5 +569,8 @@
     <FxCompile Include="..\assets\shaders\DenoiseCompositorV.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
+    <FxCompile Include="..\assets\shaders\ProgressivePathtracing.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
   </ItemGroup>
 </Project>

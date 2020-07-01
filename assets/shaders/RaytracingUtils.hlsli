@@ -55,6 +55,16 @@ float3 getPerpendicularVector(float3 u)
     return cross(u, float3(xm, ym, zm));
 }
 
+float3 getCosHemisphereSample1(inout uint randSeed, float3 hitNorm)
+{
+    float3 randInUnitSphere;
+    do {
+        randInUnitSphere = 2.0 * float3(nextRand(randSeed), nextRand(randSeed), nextRand(randSeed)) - 1.0;
+    } while (dot(randInUnitSphere, randInUnitSphere) >= 1.0);
+
+    return hitNorm + randInUnitSphere;
+}
+
 // Get a cosine-weighted random vector centered around a specified normal direction.
 float3 getCosHemisphereSample(inout uint randSeed, float3 hitNorm)
 {

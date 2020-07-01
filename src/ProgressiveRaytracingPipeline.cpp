@@ -1,6 +1,6 @@
 #include "pch.h"
 #include "ProgressiveRaytracingPipeline.h"
-#include "CompiledShaders/ProgressiveRaytracing.hlsl.h"
+#include "CompiledShaders/ProgressivePathtracing.hlsl.h"
 #include "WICTextureLoader.h"
 #include "DDSTextureLoader.h"
 #include "ResourceUploadBatch.h"
@@ -38,7 +38,7 @@ ProgressiveRaytracingPipeline::ProgressiveRaytracingPipeline(RtContext::SharedPt
             L"ShadowClosestHit", L"ShadowAnyHit", L"ShadowMiss",
             L"Intersection_AnalyticPrimitive", L"Intersection_VolumetricPrimitive", L"Intersection_SignedDistancePrimitive"
         };
-        programDesc.addShaderLibrary(g_pProgressiveRaytracing, ARRAYSIZE(g_pProgressiveRaytracing), libraryExports);
+        programDesc.addShaderLibrary(g_pProgressivePathtracing, ARRAYSIZE(g_pProgressivePathtracing), libraryExports);
         programDesc.setRayGen("RayGen");
         programDesc
             .addHitGroup(0, RtModel::GeometryType::Triangles, "PrimaryClosestHit", "")
