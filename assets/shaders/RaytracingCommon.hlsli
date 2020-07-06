@@ -18,6 +18,9 @@
 RaytracingAccelerationStructure SceneBVH : register(t0);
 ConstantBuffer<PerFrameConstants> perFrameConstants : register(b0);
 
+StructuredBuffer<DirectionalLightParams> directionalLights : register(t1);
+StructuredBuffer<PointLightParams> pointLights : register(t2);
+
 SamplerState defaultSampler : register(s0);
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -127,19 +130,19 @@ float evaluateAO(float3 position, float3 normal)
     return visibility / float(aoRayCount);
 }
 
-float3 evaluateDirectionalLight(float3 position, float3 normal, uint currentDepth)
+float3 evaluateDirectionalLight(uint lightIndex, float3 position, float3 normal, uint currentDepth)
 {
-    float3 L = normalize(-perFrameConstants.directionalLight.forwardDir.xyz);
+    float3 L = normalize(-directionalLights[lightIndex].forwardDir.xyz);
     float NoL = saturate(dot(normal, L));
 
     float visible = shootShadowRay(position, L, RAY_EPSILON, RAY_MAX_T, currentDepth);
 
-    return perFrameConstants.directionalLight.color.rgb * perFrameConstants.directionalLight.color.a * NoL * visible;
+    return directionalLights[lightIndex].color.rgb * directionalLights[lightIndex].color.a * NoL * visible;
 }
 
-float3 evaluatePointLight(float3 position, float3 normal, uint currentDepth)
+float3 evaluatePointLight(uint lightIndex, float3 position, float3 normal, uint currentDepth)
 {
-    float3 lightPath = perFrameConstants.pointLight.worldPos.xyz - position;
+    float3 lightPath = pointLights[lightIndex].worldPos.xyz - position;
     float lightDistance = length(lightPath);
     float3 L = normalize(lightPath);
     float NoL = saturate(dot(normal, L));
@@ -147,7 +150,7 @@ float3 evaluatePointLight(float3 position, float3 normal, uint currentDepth)
     float visible = shootShadowRay(position, L, RAY_EPSILON, lightDistance - RAY_EPSILON, currentDepth);
 
     float falloff = 1.0 / (2 * M_PI * lightDistance * lightDistance);
-    return perFrameConstants.pointLight.color.rgb * perFrameConstants.pointLight.color.a * NoL * visible * falloff;
+    return pointLights[lightIndex].color.rgb * pointLights[lightIndex].color.a * NoL * visible * falloff;
 }
 
 float3 sampleEnvironment()

@@ -20,6 +20,8 @@ namespace GlobalRootSignatureParams
         AccelerationStructureSlot = 0,
         OutputViewSlot,
         PerFrameConstantsSlot,
+        DirectionalLightBufferSlot,
+        PointLightBufferSlot,
         Count
     };
 }
@@ -60,6 +62,10 @@ ProgressiveRaytracingPipeline::ProgressiveRaytracingPipeline(RtContext::SharedPt
             config.AddHeapRangesParameter({{0 /* u0 */, 1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0}});
             // GlobalRootSignatureParams::PerFrameConstantsSlot
             config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_CBV, 0 /* b0 */);
+            // GlobalRootSignatureParams::DirectionalLightBufferSlot
+            config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 1 /* t1 */);
+            // GlobalRootSignatureParams::PointLightBufferSlot
+            config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 2 /* t2 */);
 
             D3D12_STATIC_SAMPLER_DESC cubeSampler = {};
             cubeSampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
@@ -147,6 +153,9 @@ void ProgressiveRaytracingPipeline::loadResources(ID3D12CommandQueue *uploadComm
 
     // Create per-frame constant buffer
     mConstantBuffer.Create(device, frameCount, L"PerFrameConstantBuffer");
+
+    mDirLights.Create(device, 1, frameCount, L"DirectionalLightBuffer");
+    mPointLights.Create(device, 1, frameCount, L"PointLightBuffer");
 }
 
 void ProgressiveRaytracingPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT height)
@@ -219,22 +228,23 @@ void ProgressiveRaytracingPipeline::update(float elapsedTime, UINT elapsedFrames
     cameraParams.frameCount = elapsedFrames;
     cameraParams.accumCount = mAccumCount++;
 
+    mConstantBuffer->options = mShaderDebugOptions;
+    mConstantBuffer.CopyStagingToGpu(frameIndex);
+
     XMVECTOR dirLightVector = XMVectorSet(0.3f, -0.2f, -1.0f, 0.0f);
     XMMATRIX rotation =  XMMatrixRotationY(sin(elapsedTime * 0.2f) * 3.14f * 0.5f);
     dirLightVector = XMVector4Transform(dirLightVector, rotation);
-    XMStoreFloat4(&mConstantBuffer->directionalLight.forwardDir, dirLightVector);
-    mConstantBuffer->directionalLight.color = dirLightColor;
+    XMStoreFloat4(&mDirLights[0].forwardDir, dirLightVector);
+    mDirLights[0].color = dirLightColor;
+    mDirLights.CopyStagingToGpu(frameIndex);
 
     // XMVECTOR pointLightPos = XMVectorSet(sin(elapsedTime * 0.97f), sin(elapsedTime * 0.45f), sin(elapsedTime * 0.32f), 1.0f);
     // pointLightPos = XMVectorAdd(pointLightPos, XMVectorSet(0.0f, 0.5f, 1.0f, 0.0f));
     // pointLightPos = XMVectorMultiply(pointLightPos, XMVectorSet(0.221f, 0.049f, 0.221f, 1.0f));
     XMVECTOR pointLightPos = XMVectorSet(0.0f, 0.0f, 0.0f, 1.0f);
-    XMStoreFloat4(&mConstantBuffer->pointLight.worldPos, pointLightPos);
-    mConstantBuffer->pointLight.color = pointLightColor;
-
-    mConstantBuffer->options = mShaderDebugOptions;
-
-    mConstantBuffer.CopyStagingToGpu(frameIndex);
+    XMStoreFloat4(&mPointLights[0].worldPos, pointLightPos);
+    mPointLights[0].color = pointLightColor;
+    mPointLights.CopyStagingToGpu(frameIndex);
 }
 
 void ProgressiveRaytracingPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIndex, UINT width, UINT height)
@@ -276,6 +286,8 @@ void ProgressiveRaytracingPipeline::render(ID3D12GraphicsCommandList *commandLis
     mRtContext->bindDescriptorHeap();
     commandList->SetComputeRootSignature(program->getGlobalRootSignature());
     commandList->SetComputeRootConstantBufferView(GlobalRootSignatureParams::PerFrameConstantsSlot, mConstantBuffer.GpuVirtualAddress(frameIndex));
+    commandList->SetComputeRootShaderResourceView(GlobalRootSignatureParams::DirectionalLightBufferSlot, mDirLights.GpuVirtualAddress(frameIndex));
+    commandList->SetComputeRootShaderResourceView(GlobalRootSignatureParams::PointLightBufferSlot, mPointLights.GpuVirtualAddress(frameIndex));
     commandList->SetComputeRootDescriptorTable(GlobalRootSignatureParams::OutputViewSlot, mOutputUavGpuHandle);
     mRtContext->getFallbackCommandList()->SetTopLevelAccelerationStructure(GlobalRootSignatureParams::AccelerationStructureSlot, mRtScene->getTlasWrappedPtr());
 

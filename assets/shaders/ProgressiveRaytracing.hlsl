@@ -95,13 +95,13 @@ float3 shade(float3 position, float3 normal, uint currentDepth)
         const int numLights = 2;
         // Select light to evaluate in this iteration
         if (nextRand(randSeed) < 0.5) {
-            directContrib += evaluateDirectionalLight(position, normal, currentDepth) * numLights;
+            directContrib += evaluateDirectionalLight(1, position, normal, currentDepth) * numLights;
         } else {
-            directContrib += evaluatePointLight(position, normal, currentDepth) * numLights;
+            directContrib += evaluatePointLight(1, position, normal, currentDepth) * numLights;
         }
     } else {
-        directContrib += evaluateDirectionalLight(position, normal, currentDepth);
-        directContrib += evaluatePointLight(position, normal, currentDepth);
+        directContrib += evaluateDirectionalLight(1, position, normal, currentDepth);
+        directContrib += evaluatePointLight(1, position, normal, currentDepth);
     }
 
     // Calculate indirect diffuse

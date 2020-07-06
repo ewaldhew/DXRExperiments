@@ -88,8 +88,6 @@ struct DebugOptions
 struct PerFrameConstants
 {
     CameraParams cameraParams;
-    DirectionalLightParams directionalLight;
-    PointLightParams pointLight;
     DebugOptions options;
 };
 
