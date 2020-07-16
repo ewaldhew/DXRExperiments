@@ -338,6 +338,7 @@ PostbuildCopy.bat "$(SolutionDir)vc2015\build\bin\$(Configuration)\"
     <ClCompile Include="..\libs\MiniEngine\GameInput.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
+    <ClInclude Include="..\libs\MiniEngine\Math\BoundingBox.h" />
     <ClCompile Include="..\libs\MiniEngine\Math\Frustum.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>

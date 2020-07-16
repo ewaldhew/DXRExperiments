@@ -416,6 +416,9 @@
     <ClInclude Include="..\include\HybridPipeline.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\libs\MiniEngine\Math\BoundingBox.h">
+      <Filter>Libs\MiniEngine\Math</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\Main.cpp">

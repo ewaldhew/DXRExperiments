@@ -398,7 +398,7 @@ void HybridPipeline::collectEmitters(UINT& numLights, UINT& maxSamples)
         result += radiance.z * radiance.w;
         return result;
     };
-    std::vector<RtModel::SharedPtr> complexLights;
+    std::vector<UINT> complexLights;
 
     for (UINT i = 0; i < NUM_DIR_LIGHTS; i++) {
         totalRadiance += getLightMagnitude(mDirLights[i].color);
@@ -411,7 +411,7 @@ void HybridPipeline::collectEmitters(UINT& numLights, UINT& maxSamples)
         XMFLOAT4 emission = mMaterials[model->mMaterialIndex].params.emissive;
         if (emission.w > 0.0f && (emission.x > 0.0f || emission.y > 0.0f || emission.z > 0.0f)) {
             totalRadiance += getLightMagnitude(emission);
-            complexLights.push_back(model);
+            complexLights.push_back(i);
         }
     }
 
@@ -455,7 +455,12 @@ void HybridPipeline::collectEmitters(UINT& numLights, UINT& maxSamples)
         }
     }
     for (UINT i = 0; i < complexLights.size(); i++) {
-        auto light = complexLights[i];
+        auto lightIndex = complexLights[i];
+        auto model = mRtScene->getModel(lightIndex);
+
+        if (model->getGeometryType() != RtModel::GeometryType::Triangles) continue;
+        auto light = toRtMesh(model);
+        auto transform = mRtScene->getTransform(lightIndex);
 
         XMVECTOR lightRadiance;
         float proportion;
@@ -464,11 +469,11 @@ void HybridPipeline::collectEmitters(UINT& numLights, UINT& maxSamples)
         UINT numSamples = static_cast<UINT>(proportion * MAX_PHOTON_SEED_SAMPLES);
         mPhotonEmitters[i].samplesToTake = numSamples;
         mPhotonEmitters[i].sampleStartIndex = mSamplesGpu;
-        //TODO: Calculate bounding volume and make raycast scheme
-        //XMStoreFloat3(&mPhotonEmitters[i].center, light->getBoundingSphere().GetCenter());
-        //mPhotonEmitters[i].radius = light->getBoundingSphere().GetRadius();
-        mPhotonEmitters[i].center = XMFLOAT3(0, 9.999, 0);
-        mPhotonEmitters[i].radius = 2;
+
+        auto bbox = Math::Matrix4(transform) * light->getBoundingBox();
+        auto bSphere = bbox.toBoundingSphere();
+        XMStoreFloat3(&mPhotonEmitters[i].center, bSphere.GetCenter());
+        mPhotonEmitters[i].radius = bSphere.GetRadius();
 
         mSamplesGpu += numSamples;
         maxSamples = max(maxSamples, numSamples);

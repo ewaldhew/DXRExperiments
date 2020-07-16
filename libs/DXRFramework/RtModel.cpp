@@ -5,6 +5,7 @@
 #include "assimp/scene.h"
 #include "assimp/postprocess.h"
 #include <DirectXMath.h>
+#include <numeric>
 
 using namespace DirectX;
 
@@ -80,6 +81,22 @@ namespace DXRFramework
 
 
         mHasIndexBuffer = indices.size() > 0;
+
+        auto const inf = std::numeric_limits<float>::infinity();
+        auto boxMinMax = std::accumulate(
+            interleavedVertexData.begin(), interleavedVertexData.end(),
+            std::pair<XMFLOAT3, XMFLOAT3>(XMFLOAT3(inf, inf, inf), XMFLOAT3(-inf, -inf, -inf)),
+            [](std::pair<XMFLOAT3, XMFLOAT3> const& minmax, Vertex const& vertex) {
+                return std::pair<XMFLOAT3, XMFLOAT3>(
+                    XMFLOAT3(min(minmax.first.x, vertex.position.x),
+                             min(minmax.first.y, vertex.position.y),
+                             min(minmax.first.z, vertex.position.z)),
+                    XMFLOAT3(max(minmax.second.x, vertex.position.x),
+                             max(minmax.second.y, vertex.position.y),
+                             max(minmax.second.z, vertex.position.z))
+                    );
+            });
+        mBoundingBox = Math::BoundingBox(boxMinMax.first, boxMinMax.second);
 
         auto device = context->getDevice();
         // Note: using upload heaps to transfer static data like vert buffers is not
@@ -170,6 +187,10 @@ namespace DXRFramework
             anchorPos.y + size.y,
             anchorPos.z + size.z,
         };
+
+        Math::Vector3 boxMin = anchorPos;
+        Math::Vector3 boxMax = boxMin + size;
+        mBoundingBox = Math::BoundingBox(boxMin, boxMax);
 
         auto device = context->getDevice();
 

@@ -4,7 +4,7 @@
 #include "RtPrefix.h"
 #include "RtContext.h"
 #include "RaytracingHlslCompat.h"
-#include "Math/BoundingSphere.h"
+#include "Math/BoundingBox.h"
 
 namespace DXRFramework
 {
@@ -22,12 +22,13 @@ namespace DXRFramework
 
         using SharedPtr = std::shared_ptr<RtModel>;
 
-        virtual Math::BoundingSphere getBoundingSphere() const = 0;
+        Math::BoundingBox getBoundingBox() const { return mBoundingBox;  }
 
         GeometryType getGeometryType() const { return mType; }
         UINT mMaterialIndex;
 
         ComPtr<ID3D12Resource> mBlasBuffer;
+        Math::BoundingBox mBoundingBox;
 
     protected:
         friend class RtScene;
@@ -48,8 +49,6 @@ namespace DXRFramework
 
         static SharedPtr create(RtContext::SharedPtr context, std::vector<Vertex> interleavedVertexData, std::vector<uint32_t> indices, UINT materialIndex = 0);
         ~RtMesh();
-
-        virtual Math::BoundingSphere getBoundingSphere() const override { return Math::BoundingSphere(); };
 
         ID3D12Resource *getVertexBuffer() const { return mVertexBuffer.Get(); }
         ID3D12Resource *getIndexBuffer() const { return mIndexBuffer.Get(); }
@@ -81,8 +80,6 @@ namespace DXRFramework
 
         static SharedPtr create(RtContext::SharedPtr context, PrimitiveType::Enum primitiveType, XMFLOAT3 anchorPos, XMFLOAT3 size, UINT materialIndex = 0);
         ~RtProcedural();
-
-        virtual Math::BoundingSphere getBoundingSphere() const override { return Math::BoundingSphere(); };
 
         D3D12_GPU_DESCRIPTOR_HANDLE getAabbBufferSrvHandle() const { return mAabbBufferSrvHandle; }
         D3D12_GPU_DESCRIPTOR_HANDLE getPrimitiveConstantsCbvHandle() const { return mPrimitiveConstantsCbvHandle; }

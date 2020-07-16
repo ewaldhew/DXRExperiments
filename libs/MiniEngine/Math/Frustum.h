@@ -51,7 +51,7 @@ namespace Math
         friend Frustum  operator* ( const AffineTransform& xform, const Frustum& frustum );		// Slow
         friend Frustum  operator* ( const Matrix4& xform, const Frustum& frustum );				// Slowest (and most general)
 
-    private:
+    protected:
 
         // Perspective frustum constructor (for pyramid-shaped frusta)
         void ConstructPerspectiveFrustum( float HTan, float VTan, float NearClip, float FarClip );
