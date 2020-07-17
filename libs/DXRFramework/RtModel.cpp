@@ -96,7 +96,14 @@ namespace DXRFramework
                              max(minmax.second.z, vertex.position.z))
                     );
             });
-        mBoundingBox = Math::BoundingBox(boxMinMax.first, boxMinMax.second);
+        auto averageNormal = std::accumulate(
+            interleavedVertexData.begin(), interleavedVertexData.end(),
+            Math::Vector3(0,0,0),
+            [](Math::Vector3 sum, Vertex const& vertex) {
+                return sum + vertex.normal;
+            }) / static_cast<float>(interleavedVertexData.size());
+
+        mBoundingBox = Math::BoundingBox(boxMinMax.first, boxMinMax.second, averageNormal);
 
         // calculate triangle areas and cdf
         mTriangleAreas.resize(mNumTriangles);
@@ -208,7 +215,7 @@ namespace DXRFramework
 
         Math::Vector3 boxMin = anchorPos;
         Math::Vector3 boxMax = boxMin + size;
-        mBoundingBox = Math::BoundingBox(boxMin, boxMax);
+        mBoundingBox = Math::BoundingBox(boxMin, boxMax, { 0, 0, 1 });
 
         auto device = context->getDevice();
 

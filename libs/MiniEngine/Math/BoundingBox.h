@@ -1,5 +1,6 @@
 #pragma once
 
+#include <numeric>
 #include "Frustum.h"
 
 namespace Math
@@ -9,7 +10,8 @@ namespace Math
     public:
         BoundingBox() = default;
 
-        BoundingBox(Vector3 boxMin, Vector3 boxMax)
+        BoundingBox(Vector3 boxMin, Vector3 boxMax, Vector3 primaryVec)
+            : m_PrimaryVector(primaryVec)
         {
             float Left   = boxMin.GetX();
             float Right  = boxMax.GetX();
@@ -20,23 +22,27 @@ namespace Math
             ConstructOrthographicFrustum(Left, Right, Top, Bottom, Front, Back);
         }
 
+        Vector3 GetPrimaryVector() const { return m_PrimaryVector; }
+
         BoundingSphere toBoundingSphere() const;
 
         friend BoundingBox  operator* (const OrthogonalTransform& xform, const BoundingBox& frustum);	// Fast
         friend BoundingBox  operator* (const AffineTransform& xform, const BoundingBox& frustum);		// Slow
         friend BoundingBox  operator* (const Matrix4& xform, const BoundingBox& frustum);				// Slowest (and most general)
+
+    private:
+        Vector3 m_PrimaryVector;
     };
 
     inline BoundingSphere BoundingBox::toBoundingSphere() const
     {
-        auto boxMin = GetFrustumCorner(Math::Frustum::kNearLowerLeft);
-        auto boxMax = GetFrustumCorner(Math::Frustum::kFarUpperRight);
-        auto anchor = boxMin;
-        auto size = boxMax - boxMin;
+        Vector3 centroid = std::accumulate(std::begin(m_FrustumCorners), std::end(m_FrustumCorners), Vector3(0, 0, 0)) / 8;
+        float radius = std::accumulate(std::begin(m_FrustumCorners), std::end(m_FrustumCorners), 0.0f, [&](float maxRadius, Vector3 corner) {
+            float length = XMVectorGetX(XMVector3Length(corner - centroid));
+            return max(maxRadius, length);
+        });
 
-        auto center = anchor + 0.5 * size;
-        auto radius = Math::Length(size) * 0.5f;
-        return Math::BoundingSphere((center), Math::Scalar(radius));
+        return Math::BoundingSphere(centroid, radius);
     }
 
     inline BoundingBox operator* (const OrthogonalTransform& xform, const BoundingBox& frustum)
@@ -45,6 +51,8 @@ namespace Math
 
         for (int i = 0; i < 8; ++i)
             result.m_FrustumCorners[i] = xform * frustum.m_FrustumCorners[i];
+
+        result.m_PrimaryVector = xform * frustum.m_PrimaryVector;
 
         for (int i = 0; i < 6; ++i)
             result.m_FrustumPlanes[i] = xform * frustum.m_FrustumPlanes[i];
@@ -58,6 +66,8 @@ namespace Math
 
         for (int i = 0; i < 8; ++i)
             result.m_FrustumCorners[i] = xform * frustum.m_FrustumCorners[i];
+
+        result.m_PrimaryVector = xform * frustum.m_PrimaryVector;
 
         Matrix4 XForm = Transpose(Invert(Matrix4(xform)));
 
@@ -73,6 +83,8 @@ namespace Math
 
         for (int i = 0; i < 8; ++i)
             result.m_FrustumCorners[i] = Vector3(mtx * frustum.m_FrustumCorners[i]);
+
+        result.m_PrimaryVector = Vector3(mtx * frustum.m_PrimaryVector);
 
         Matrix4 XForm = Transpose(Invert(mtx));
 

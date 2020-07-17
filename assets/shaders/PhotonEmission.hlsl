@@ -24,8 +24,7 @@ void RayGen()
         Payload payload;
 
         do {
-            // pick random point on bounding sphere
-            float3 sphereDirection = float3(0, 0, 1);
+            float3 sphereDirection = emitters[lightIndex].direction;
 
             RayDesc ray;
             ray.Origin = emitters[lightIndex].center.xyz + emitters[lightIndex].radius * sphereDirection;

@@ -169,10 +169,11 @@ namespace PrimitiveType {
 struct PhotonEmitter
 {
     XMFLOAT3 center;
+    XMFLOAT3 direction;
     float radius;
     UINT samplesToTake;
     UINT sampleStartIndex;
-    XMUINT2 pad2;
+    XMFLOAT3 pad;
 };
 
 struct Photon

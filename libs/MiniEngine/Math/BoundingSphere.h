@@ -49,7 +49,7 @@ namespace Math
 
     inline Vector3 BoundingSphere::GetCenter( void ) const
     {
-        return Vector3(m_repr);
+        return Vector3(m_repr.GetX(), m_repr.GetY(), m_repr.GetZ());
     }
 
     inline Scalar BoundingSphere::GetRadius( void ) const

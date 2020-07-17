@@ -473,6 +473,7 @@ void HybridPipeline::collectEmitters(UINT& numLights, UINT& maxSamples)
 
         auto bbox = Math::Matrix4(transform) * light->getBoundingBox();
         auto bSphere = bbox.toBoundingSphere();
+        XMStoreFloat3(&mPhotonEmitters[i].direction, XMVector3Normalize(bbox.GetPrimaryVector()));
         XMStoreFloat3(&mPhotonEmitters[i].center, bSphere.GetCenter());
         mPhotonEmitters[i].radius = bSphere.GetRadius();
 
