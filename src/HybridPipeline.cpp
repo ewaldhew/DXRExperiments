@@ -150,7 +150,7 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context) :
     mRtPhotonMappingPass.mRtState->setProgram(mRtPhotonMappingPass.mRtProgram);
     mRtPhotonMappingPass.mRtState->setMaxTraceRecursionDepth(4);
     mRtPhotonMappingPass.mRtState->setMaxAttributeSize(sizeof(ProceduralPrimitiveAttributes));
-    mRtPhotonMappingPass.mRtState->setMaxPayloadSize(28);
+    mRtPhotonMappingPass.mRtState->setMaxPayloadSize(64);
 
     mShaderDebugOptions.maxIterations = 1024;
     mShaderDebugOptions.cosineHemisphereSampling = true;
@@ -584,6 +584,7 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
         mRtContext->bindDescriptorHeap();
         commandList->SetComputeRootSignature(program->getGlobalRootSignature());
         commandList->SetComputeRootConstantBufferView(GlobalRootSignatureParams::PerFrameConstantsSlot, mConstantBuffer.GpuVirtualAddress(frameIndex));
+        //commandList->SetComputeRootDescriptorTable(GlobalRootSignatureParams::OutputViewSlot, mPhotonMapUavGpuHandle);
         commandList->SetComputeRootDescriptorTable(GlobalRootSignatureParams::OutputViewSlot, mOutputUavGpuHandle);
         commandList->SetComputeRootDescriptorTable(GlobalRootSignatureParams::PhotonSourcesSRVSlot, mPhotonSeedSrvGpuHandle);
         commandList->SetComputeRootDescriptorTable(GlobalRootSignatureParams::PhotonDensityOutputViewSlot, mPhotonDensityUavGpuHandle);
@@ -593,13 +594,14 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
         mRtContext->raytrace(mRtBindings, mRtState, mSamplesCpu + mSamplesGpu, 1, 1);
 
         mRtContext->insertUAVBarrier(mOutputResource.Get());
+        //mRtContext->insertUAVBarrier(mPhotonMapResource.Get());
         mRtContext->transitionResource(mPhotonSeedResource.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
         mRtContext->transitionResource(mPhotonMapCounter.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_DEST);
         commandList->CopyResource(mPhotonMapCounter.Get(), zeroResource.Get());
         mRtContext->transitionResource(mPhotonMapCounter.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-        //mNeedPhotonMap = false;
+        mNeedPhotonMap = false;
         pass = Pass::PhotonSplatting;
         return;
     }
