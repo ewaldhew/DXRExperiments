@@ -32,7 +32,7 @@ void RayGen()
     ray.TMin = 0;
     ray.TMax = RAY_MAX_T;
 
-    TraceRay(SceneBVH, RAY_FLAG_FORCE_OPAQUE, 0xFF, 0, 0, 0, ray, payload);
+    TraceRay(SceneBVH, RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_CULL_BACK_FACING_TRIANGLES, 0xFF, 0, 0, 0, ray, payload);
 
     float4 prevColor = gOutput[launchIndex];
     float4 curColor = float4(max(payload.colorAndDistance.rgb, 0.0), 1.0f);
