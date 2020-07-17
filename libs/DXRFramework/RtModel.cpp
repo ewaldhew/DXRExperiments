@@ -98,6 +98,22 @@ namespace DXRFramework
             });
         mBoundingBox = Math::BoundingBox(boxMinMax.first, boxMinMax.second);
 
+        // calculate triangle areas and cdf
+        mTriangleAreas.resize(mNumTriangles);
+        for (UINT t = 0; t < mNumTriangles; t++) {
+            XMVECTOR p0 = XMLoadFloat3(&interleavedVertexData[indices[t*3 + 0]].position);
+            XMVECTOR p1 = XMLoadFloat3(&interleavedVertexData[indices[t*3 + 1]].position);
+            XMVECTOR p2 = XMLoadFloat3(&interleavedVertexData[indices[t*3 + 2]].position);
+            mTriangleAreas[t] = 0.5f * XMVectorGetX(XMVector3Length(XMVector3Cross(p1 - p0, p2 - p0)));
+        }
+        float sum = std::accumulate(mTriangleAreas.begin(), mTriangleAreas.end(), 0.0f);
+        float scale = 1.0f / sum;
+        std::accumulate(mTriangleAreas.begin(), mTriangleAreas.end(), 0.0f, [&](float prefixSum, float area) {
+            float cdfEnd = min(prefixSum + area * scale, 1.0f);
+            mTriangleCdf.push_back(cdfEnd);
+            return cdfEnd;
+        });
+
         auto device = context->getDevice();
         // Note: using upload heaps to transfer static data like vert buffers is not
         // recommended. Every time the GPU needs it, the upload heap will be marshalled
@@ -107,6 +123,7 @@ namespace DXRFramework
 
         if (mHasIndexBuffer) {
             AllocateUploadBuffer(device, indices.data(), indices.size() * sizeof(uint32_t), &mIndexBuffer);
+            AllocateUploadBuffer(device, mTriangleCdf.data(), mTriangleCdf.size() * sizeof(float), &mTriangleCdfResource);
         }
     }
 
@@ -143,6 +160,7 @@ namespace DXRFramework
         mVertexBufferSrvHandle = context->createBufferSRVHandle(mVertexBuffer.Get(), false, sizeof(Vertex));
         if (mIndexBuffer) {
             mIndexBufferSrvHandle = context->createBufferSRVHandle(mIndexBuffer.Get(), false, sizeof(uint32_t));
+            mTriangleCdfSrvHandle = context->createBufferSRVHandle(mTriangleCdfResource.Get(), false, sizeof(float));
         }
     }
 }

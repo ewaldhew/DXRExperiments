@@ -55,6 +55,7 @@ namespace DXRFramework
 
         D3D12_GPU_DESCRIPTOR_HANDLE getVertexBufferSrvHandle() const { return mVertexBufferSrvHandle; }
         D3D12_GPU_DESCRIPTOR_HANDLE getIndexBufferSrvHandle() const { return mIndexBufferSrvHandle; }
+        D3D12_GPU_DESCRIPTOR_HANDLE getTriangleCdfSrvHandle() const { return mTriangleCdfSrvHandle; }
 
     private:
         friend class RtScene;
@@ -65,12 +66,16 @@ namespace DXRFramework
         bool mHasIndexBuffer;
         UINT mNumVertices;
         UINT mNumTriangles;
+        std::vector<float> mTriangleAreas;
+        std::vector<float> mTriangleCdf;
 
         ComPtr<ID3D12Resource> mVertexBuffer;
         ComPtr<ID3D12Resource> mIndexBuffer;
+        ComPtr<ID3D12Resource> mTriangleCdfResource;
 
         D3D12_GPU_DESCRIPTOR_HANDLE mVertexBufferSrvHandle;
         D3D12_GPU_DESCRIPTOR_HANDLE mIndexBufferSrvHandle;
+        D3D12_GPU_DESCRIPTOR_HANDLE mTriangleCdfSrvHandle;
     };
 
     class RtProcedural : public RtModel

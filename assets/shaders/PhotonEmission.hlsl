@@ -11,6 +11,9 @@ struct Payload
 StructuredBuffer<PhotonEmitter> emitters : register(t3);
 RWStructuredBuffer<Photon> gOutput : register(u0);
 
+// Local root signature
+Buffer<float> triangleCdf : register(t2, space1);
+
 [shader("raygeneration")]
 void RayGen()
 {
@@ -22,21 +25,15 @@ void RayGen()
 
         do {
             // pick random point on bounding sphere
-            uint2 pixIdx = DispatchRaysIndex().xy;
-            uint2 numPix = DispatchRaysDimensions().xy;
-            uint randSeed = initRand(pixIdx.x + pixIdx.y * numPix.x, perFrameConstants.cameraParams.frameCount);
-            float3 s1 = getUniformSphereSample(randSeed);
-            float3 s2 = getUniformSphereSample(randSeed);
-            float3 point1 = emitters[lightIndex].center.xyz + emitters[lightIndex].radius * s1;
-            float3 point2 = emitters[lightIndex].center.xyz + emitters[lightIndex].radius * s2;
+            float3 sphereDirection = float3(0, 0, 1);
 
             RayDesc ray;
-            ray.Origin = point1;
-            ray.Direction = normalize(point2 - point1);
+            ray.Origin = emitters[lightIndex].center.xyz + emitters[lightIndex].radius * sphereDirection;
+            ray.Direction = -sphereDirection;
             ray.TMin = 0;
             ray.TMax = emitters[lightIndex].radius * 2.0;
 
-            TraceRay(SceneBVH, RAY_FLAG_CULL_BACK_FACING_TRIANGLES, MaterialSceneFlags::Emissive, 0, 0, 0, ray, payload);
+            TraceRay(SceneBVH, 0, MaterialSceneFlags::Emissive, 0, 0, 0, ray, payload);
         } while (!any(payload.power));
 
         {
@@ -64,17 +61,26 @@ void storePhoton(float3 position, float3 normal, inout Payload payload)
 [shader("closesthit")]
 void ClosestHit(inout Payload payload, in Attributes attrib)
 {
-    // Load surface attributes for the hit.
+    uint2 pixIdx = DispatchRaysIndex().xy;
+    uint2 numPix = DispatchRaysDimensions().xy;
+    uint randSeed = initRand(pixIdx.x + pixIdx.y * numPix.x, perFrameConstants.cameraParams.frameCount);
+
+    // pick a random triangle from the mesh
+    float rand = nextRand(randSeed);
+    uint triangleIndex = 0;
+    while (rand > triangleCdf[triangleIndex]) {
+        triangleIndex++;
+    }
+
+    // https://chrischoy.github.io/research/barycentric-coordinate-for-mesh-sampling/
+    float2 r = float2(nextRand(randSeed), nextRand(randSeed));
+    float sqrtr1 = sqrt(r.x);
+    float2 randBary = float2(sqrtr1 * (1 - r.y), sqrtr1 * r.y);
+
     float3 vertPosition, vertNormal;
-    interpolateVertexAttributes(attrib.bary, vertPosition, vertNormal);
+    interpolateVertexAttributes1(triangleIndex, randBary, vertPosition, vertNormal);
 
-    storePhoton(HitWorldPosition(), normalize(vertNormal), payload);
-}
-
-[shader("closesthit")]
-void ClosestHit_AABB(inout Payload payload, in ProceduralPrimitiveAttributes attrib)
-{
-    storePhoton(HitWorldPosition(), normalize(attrib.normal), payload);
+    storePhoton(vertPosition, normalize(vertNormal), payload);
 }
 
 [shader("miss")]

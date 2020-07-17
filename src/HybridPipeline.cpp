@@ -77,6 +77,7 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context) :
             config = {};
             config.AddHeapRangesParameter({{0 /* t0 */, 1, 1 /* space1 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // vertices
             config.AddHeapRangesParameter({{1 /* t1 */, 1, 1 /* space1 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // indices
+            config.AddHeapRangesParameter({{2 /* t2 */, 1, 1 /* space1 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // trianglecdf
             config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS, 0, 1, SizeOfInUint32(MaterialParams)); // space1 b0
         }, RtModel::GeometryType::Triangles);
     }
@@ -510,6 +511,7 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
                     auto model = toRtMesh(mRtScene->getModel(instance));
                     hitVars->appendHeapRanges(model->getVertexBufferSrvHandle().ptr);
                     hitVars->appendHeapRanges(model->getIndexBufferSrvHandle().ptr);
+                    hitVars->appendHeapRanges(model->getTriangleCdfSrvHandle().ptr);
                     hitVars->append32BitConstants((void*)&mMaterials[model->mMaterialIndex].params, SizeOfInUint32(MaterialParams));
                     break;
                 }

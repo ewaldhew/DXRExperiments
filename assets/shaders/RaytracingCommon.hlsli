@@ -54,11 +54,11 @@ TextureCube envCubemap : register(t1, space2);
 // Common routines
 ////////////////////////////////////////////////////////////////////////////////
 
-void interpolateVertexAttributes(float2 bary, out float3 vertPosition, out float3 vertNormal)
+void interpolateVertexAttributes1(uint triangleIndex, float2 bary, out float3 vertPosition, out float3 vertNormal)
 {
     float3 barycentrics = float3(1.f - bary.x - bary.y, bary.x, bary.y);
 
-    uint baseIndex = PrimitiveIndex() * 3;
+    uint baseIndex = triangleIndex * 3;
     int address = baseIndex * 4;
     const uint3 indices = Load3x32BitIndices(address, indexBuffer);
 
@@ -86,6 +86,11 @@ void interpolateVertexAttributes(float2 bary, out float3 vertPosition, out float
 
 	vertNormal = normalize(mul((float3x3) ObjectToWorld3x4(), vertNormal));
 	vertPosition = mul(ObjectToWorld3x4(), float4(vertPosition, 1)).xyz;
+}
+
+void interpolateVertexAttributes(float2 bary, out float3 vertPosition, out float3 vertNormal)
+{
+    interpolateVertexAttributes1(PrimitiveIndex(), bary, vertPosition, vertNormal);
 }
 
 float shootShadowRay(float3 orig, float3 dir, float minT, float maxT, uint currentDepth)
