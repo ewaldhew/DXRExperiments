@@ -10,10 +10,12 @@ namespace DXRFramework
     class RtScene
     {
     public:
-        using SharedPtr = std::shared_ptr<RtScene>;
+        using SharedPtr = std::shared_ptr<RtScene const>;
+        using SharedPtrMut = std::shared_ptr<RtScene>;
 
-        static SharedPtr create();
+        static SharedPtrMut create();
         ~RtScene();
+        SharedPtrMut copy() const { return SharedPtrMut(new RtScene(*this)); }
 
         class Node
         {

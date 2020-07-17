@@ -79,7 +79,7 @@ RealtimeRaytracingPipeline::~RealtimeRaytracingPipeline() = default;
 
 void RealtimeRaytracingPipeline::setScene(RtScene::SharedPtr scene)
 {
-    mRtScene = scene;
+    mRtScene = scene->copy();
     mRtBindings = RtBindings::create(mRtContext, mRtProgram, scene);
 }
 

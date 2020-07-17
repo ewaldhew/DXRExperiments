@@ -48,7 +48,7 @@ private:
     DXRFramework::RtState::SharedPtr mRtState;
 
     // Scene description
-    DXRFramework::RtScene::SharedPtr mRtScene;
+    DXRFramework::RtScene::SharedPtrMut mRtScene;
     std::vector<Material> mMaterials;
     std::shared_ptr<Math::Camera> mCamera;
 

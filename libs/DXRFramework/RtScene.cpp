@@ -4,9 +4,9 @@
 
 namespace DXRFramework
 {
-    RtScene::SharedPtr RtScene::create()
+    RtScene::SharedPtrMut RtScene::create()
     {
-        return SharedPtr(new RtScene());
+        return SharedPtrMut(new RtScene());
     }
 
     RtScene::RtScene()

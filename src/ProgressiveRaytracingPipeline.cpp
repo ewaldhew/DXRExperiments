@@ -117,7 +117,7 @@ ProgressiveRaytracingPipeline::~ProgressiveRaytracingPipeline() = default;
 
 void ProgressiveRaytracingPipeline::setScene(RtScene::SharedPtr scene)
 {
-    mRtScene = scene;
+    mRtScene = scene->copy();
     mRtBindings = RtBindings::create(mRtContext, mRtProgram, scene);
 }
 

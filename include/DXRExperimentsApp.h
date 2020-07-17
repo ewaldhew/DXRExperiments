@@ -34,7 +34,7 @@ private:
     std::shared_ptr<GameCore::CameraController> mCamController;
 
     DXRFramework::RtContext::SharedPtr mRtContext;
-    DXRFramework::RtScene::SharedPtr mRtScene;
+    DXRFramework::RtScene::SharedPtrMut mRtScene;
 
     std::vector<RaytracingPipeline::SharedPtr> mRaytracingPipelines;
     RaytracingPipeline *mActiveRaytracingPipeline;
