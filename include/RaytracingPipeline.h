@@ -13,7 +13,7 @@ public:
 
     virtual void userInterface() = 0;
     virtual void update(float elapsedTime, UINT elapsedFrames, UINT prevFrameIndex, UINT frameIndex, UINT width, UINT height) = 0;
-    virtual void render(ID3D12GraphicsCommandList *commandList, UINT frameIndex, UINT width, UINT height) = 0;
+    virtual void render(ID3D12GraphicsCommandList *commandList, UINT frameIndex, UINT width, UINT height, UINT& pass) = 0;
 
     virtual void loadResources(ID3D12CommandQueue *uploadCommandQueue, UINT frameCount) = 0;
     virtual void createOutputResource(DXGI_FORMAT format, UINT width, UINT height) = 0;

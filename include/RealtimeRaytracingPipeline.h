@@ -21,7 +21,7 @@ public:
 
     virtual void userInterface() override;
     virtual void update(float elapsedTime, UINT elapsedFrames, UINT prevFrameIndex, UINT frameIndex, UINT width, UINT height) override;
-    virtual void render(ID3D12GraphicsCommandList *commandList, UINT frameIndex, UINT width, UINT height) override;
+    virtual void render(ID3D12GraphicsCommandList *commandList, UINT frameIndex, UINT width, UINT height, UINT& pass) override;
 
     virtual void loadResources(ID3D12CommandQueue *uploadCommandQueue, UINT frameCount) override;
     virtual void createOutputResource(DXGI_FORMAT format, UINT width, UINT height) override;

@@ -165,6 +165,12 @@ float3 sampleEnvironment()
     return envSample.rgb * perFrameConstants.options.environmentStrength;
 }
 
+// Retrieve hit world position.
+float3 HitWorldPosition()
+{
+    return WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
+}
+
 bool isInCameraFrustum(float3 position)
 {
     // for each plane of the frustum, check that dot(position, planeNormal) + planeDist is nonnegative

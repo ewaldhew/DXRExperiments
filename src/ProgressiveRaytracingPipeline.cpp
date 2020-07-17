@@ -247,7 +247,7 @@ void ProgressiveRaytracingPipeline::update(float elapsedTime, UINT elapsedFrames
     mPointLights.CopyStagingToGpu(frameIndex);
 }
 
-void ProgressiveRaytracingPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIndex, UINT width, UINT height)
+void ProgressiveRaytracingPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIndex, UINT width, UINT height, UINT& pass)
 {
     // Update shader table root arguments
     auto program = mRtBindings->getProgram();

@@ -61,7 +61,7 @@ struct CameraParams
 struct DirectionalLightParams
 {
     XMFLOAT4 forwardDir;
-    XMFLOAT4 color;
+    XMFLOAT4 color; // radiant intensity at unit distance
 };
 
 struct PointLightParams
@@ -163,7 +163,17 @@ namespace PrimitiveType {
 }
 
 #define MAX_PHOTON_SEED_SAMPLES 100000
-#define MAX_PHOTONS 1000000
+#define PHOTON_EMISSION_GROUP_SIZE 64
+#define MAX_PHOTONS (MAX_PHOTON_SEED_SAMPLES * 10)
+
+struct PhotonEmitter
+{
+    XMFLOAT3 center;
+    float radius;
+    UINT samplesToTake;
+    UINT sampleStartIndex;
+    XMUINT2 pad2;
+};
 
 struct Photon
 {

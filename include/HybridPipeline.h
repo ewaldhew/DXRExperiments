@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Helpers/DirectXRaytracingHelper.h"
 #include "RaytracingHlslCompat.h"
 #include "RaytracingPipeline.h"
 #include "RtBindings.h"
@@ -21,7 +22,7 @@ public:
 
     virtual void userInterface() override;
     virtual void update(float elAapsedTime, UINT elapsedFrames, UINT prevFrameIndex, UINT frameIndex, UINT width, UINT height) override;
-    virtual void render(ID3D12GraphicsCommandList *commandList, UINT frameIndex, UINT width, UINT height) override;
+    virtual void render(ID3D12GraphicsCommandList *commandList, UINT frameIndex, UINT width, UINT height, UINT& pass) override;
 
     virtual void loadResources(ID3D12CommandQueue *uploadCommandQueue, UINT frameCount) override;
     virtual void createOutputResource(DXGI_FORMAT format, UINT width, UINT height) override;
@@ -42,13 +43,19 @@ private:
     HybridPipeline(DXRFramework::RtContext::SharedPtr context);
 
     void createPipelineStateObjects();
-    void buildPhotonMap(UINT frameIndex, UINT width, UINT height);
+    void collectEmitters(UINT& numLights, UINT& maxSamples);
 
     // Pipeline components
+    struct RtPass
+    {
+        DXRFramework::RtProgram::SharedPtr mRtProgram;
+        DXRFramework::RtBindings::SharedPtr mRtBindings;
+        DXRFramework::RtState::SharedPtr mRtState;
+    };
+
     DXRFramework::RtContext::SharedPtr mRtContext;
-    DXRFramework::RtProgram::SharedPtr mRtProgram;
-    DXRFramework::RtBindings::SharedPtr mRtBindings;
-    DXRFramework::RtState::SharedPtr mRtState;
+    RtPass mRtPhotonEmissionPass;
+    RtPass mRtPhotonMappingPass;
 
     // Scene description
     DXRFramework::RtScene::SharedPtrMut mRtScene;
@@ -65,10 +72,15 @@ private:
     ConstantBuffer<PerFrameConstants> mConstantBuffer;
     StructuredBuffer<DirectionalLightParams> mDirLights;
     StructuredBuffer<PointLightParams> mPointLights;
+    ConstantBuffer<PhotonMappingConstants> mPhotonMappingConstants;
 
     std::vector<ComPtr<ID3D12Resource>> mTextureResources;
     std::vector<D3D12_GPU_DESCRIPTOR_HANDLE> mTextureSrvGpuHandles;
 
+    ComPtr<ID3D12Resource> zeroResource;
+
+    StructuredBuffer<PhotonEmitter> mPhotonEmitters;
+    StructuredBuffer<Photon> mPhotonUploadBuffer;
     ComPtr<ID3D12Resource> mPhotonSeedResource;
     UINT mPhotonSeedUavHeapIndex = UINT_MAX;
     UINT mPhotonSeedSrvHeapIndex = UINT_MAX;
@@ -87,6 +99,9 @@ private:
     // Rendering states
     bool mActive;
     UINT mAccumCount;
+    bool mNeedPhotonMap;
+    UINT mSamplesCpu;
+    UINT mSamplesGpu;
     bool mFrameAccumulationEnabled;
     bool mAnimationPaused;
     DebugOptions mShaderDebugOptions;

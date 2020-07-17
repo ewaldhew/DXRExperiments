@@ -17,7 +17,7 @@ struct PhotonPayload
 };
 
 // Global root signature
-StructuredBuffer<Photon> photonSeed : register(t1);
+StructuredBuffer<Photon> photonSeed : register(t3);
 
 RWStructuredBuffer<Photon> gOutput : register(u0);
 RWTexture2D<uint> gPhotonDensityMap : register(u1);

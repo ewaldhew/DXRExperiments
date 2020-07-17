@@ -224,7 +224,13 @@ void DXRExperimentsApp::OnRender()
             BlitToBackbuffer(mDenoiser->getOutputResource());
         }
     } else {
-        mActiveRaytracingPipeline->render(commandList, currentFrame, GetWidth(), GetHeight());
+        UINT pass = 0;
+        do {
+            mActiveRaytracingPipeline->render(commandList, currentFrame, GetWidth(), GetHeight(), pass);
+            m_deviceResources->ExecuteCommandList();
+            m_deviceResources->WaitForGpu();
+            commandList->Reset(m_deviceResources->GetCommandAllocator(), nullptr);
+        } while (pass);
 
         if (dynamic_cast<RealtimeRaytracingPipeline*>(mActiveRaytracingPipeline) && mDenoiser->mActive) {
             for (int i = 0; i < mActiveRaytracingPipeline->getNumOutputs(); ++i) {

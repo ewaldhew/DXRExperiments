@@ -1,10 +1,10 @@
 #include "pch.h"
 #include "HybridPipeline.h"
+#include "CompiledShaders/PhotonEmission.hlsl.h"
 #include "CompiledShaders/PhotonTracing.hlsl.h"
 #include "WICTextureLoader.h"
 #include "DDSTextureLoader.h"
 #include "ResourceUploadBatch.h"
-#include "Helpers/DirectXRaytracingHelper.h"
 #include "ImGuiRendererDX.h"
 #include <chrono>
 
@@ -22,7 +22,25 @@ namespace GlobalRootSignatureParams
         AccelerationStructureSlot = 0,
         OutputViewSlot,
         PerFrameConstantsSlot,
+        PhotonSourcesSRVSlot,
+        PhotonDensityOutputViewSlot,
+        PhotonMappingConstantsSlot,
         Count
+    };
+}
+
+namespace Pass
+{
+    enum Enum
+    {
+        Begin = 0,
+
+        PhotonEmission = Begin,
+        PhotonTracing,
+        PhotonSplatting,
+        Combine,
+
+        End = 0,
     };
 }
 
@@ -30,9 +48,46 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context) :
     mRtContext(context),
     mFrameAccumulationEnabled(true),
     mAnimationPaused(true),
+    mNeedPhotonMap(true),
     mActive(true)
 {
-    RtProgram::Desc programDesc;
+
+    RtProgram::Desc photonEmit;
+    {
+        std::vector<std::wstring> libraryExports = {
+            L"RayGen", L"ClosestHit", L"Miss",
+        };
+        photonEmit.addShaderLibrary(g_pPhotonEmission, ARRAYSIZE(g_pPhotonEmission), libraryExports);
+        photonEmit.setRayGen("RayGen");
+        photonEmit
+            .addHitGroup(0, RtModel::GeometryType::Triangles, "ClosestHit", "")
+            .addMiss(0, "Miss");
+
+        photonEmit.configureGlobalRootSignature([](RootSignatureGenerator &config) {
+            // GlobalRootSignatureParams::AccelerationStructureSlot
+            config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 0 /* t0 */);
+            // GlobalRootSignatureParams::OutputViewSlot
+            config.AddHeapRangesParameter({{0 /* u0 */, 1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0}});
+            // GlobalRootSignatureParams::PerFrameConstantsSlot
+            config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_CBV, 0 /* b0 */);
+            // GlobalRootSignatureParams::PhotonSourcesSRVSlot
+            config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 3 /* t3 */);
+        });
+        photonEmit.configureHitGroupRootSignature([](RootSignatureGenerator &config) {
+            config = {};
+            config.AddHeapRangesParameter({{0 /* t0 */, 1, 1 /* space1 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // vertices
+            config.AddHeapRangesParameter({{1 /* t1 */, 1, 1 /* space1 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // indices
+            config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS, 0, 1, SizeOfInUint32(MaterialParams)); // space1 b0
+        }, RtModel::GeometryType::Triangles);
+    }
+    mRtPhotonEmissionPass.mRtProgram = RtProgram::create(context, photonEmit);
+    mRtPhotonEmissionPass.mRtState = RtState::create(context);
+    mRtPhotonEmissionPass.mRtState->setProgram(mRtPhotonEmissionPass.mRtProgram);
+    mRtPhotonEmissionPass.mRtState->setMaxTraceRecursionDepth(1);
+    mRtPhotonEmissionPass.mRtState->setMaxAttributeSize(8);
+    mRtPhotonEmissionPass.mRtState->setMaxPayloadSize(36);
+
+    RtProgram::Desc photonTrace;
     {
         std::vector<std::wstring> libraryExports = {
             L"RayGen",
@@ -40,22 +95,24 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context) :
             L"Miss",
             L"Intersection_AnalyticPrimitive", L"Intersection_VolumetricPrimitive", L"Intersection_SignedDistancePrimitive"
         };
-        programDesc.addShaderLibrary(g_pPhotonTracing, ARRAYSIZE(g_pPhotonTracing), libraryExports);
-        programDesc.setRayGen("RayGen");
-        programDesc
+        photonTrace.addShaderLibrary(g_pPhotonTracing, ARRAYSIZE(g_pPhotonTracing), libraryExports);
+        photonTrace.setRayGen("RayGen");
+        photonTrace
             .addHitGroup(0, RtModel::GeometryType::Triangles, "ClosestHit", "")
             .addHitGroup(0, RtModel::GeometryType::AABB_Analytic, "ClosestHit_AABB", "", "Intersection_AnalyticPrimitive")
             .addHitGroup(0, RtModel::GeometryType::AABB_Volumetric, "ClosestHit_AABB", "", "Intersection_VolumetricPrimitive")
             .addHitGroup(0, RtModel::GeometryType::AABB_SignedDistance, "ClosestHit_AABB", "", "Intersection_SignedDistancePrimitive")
             .addMiss(0, "Miss");
 
-        programDesc.configureGlobalRootSignature([](RootSignatureGenerator &config) {
+        photonTrace.configureGlobalRootSignature([](RootSignatureGenerator &config) {
             // GlobalRootSignatureParams::AccelerationStructureSlot
             config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 0 /* t0 */);
             // GlobalRootSignatureParams::OutputViewSlot
             config.AddHeapRangesParameter({{0 /* u0 */, 1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0}});
             // GlobalRootSignatureParams::PerFrameConstantsSlot
             config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_CBV, 0 /* b0 */);
+            // GlobalRootSignatureParams::PhotonSourcesSRVSlot
+            config.AddHeapRangesParameter({{3 /* t3 */, 1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}});
 
             D3D12_STATIC_SAMPLER_DESC cubeSampler = {};
             cubeSampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
@@ -66,11 +123,13 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context) :
             cubeSampler.ShaderRegister = 0;
             config.AddStaticSampler(cubeSampler);
 
-            config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 1 /* t1 */);
+            //photondensity
             config.AddHeapRangesParameter({{1 /* u1 */, 1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0}});
-            config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS, 1 /* b1 */, 0, SizeOfInUint32(PhotonMappingConstants));
+            //photonmapconsts
+            config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_CBV, 1 /* b1 */);
+            //config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS, 1 /* b1 */, 0, SizeOfInUint32(PhotonMappingConstants));
         });
-        programDesc.configureHitGroupRootSignature([] (RootSignatureGenerator &config) {
+        photonTrace.configureHitGroupRootSignature([] (RootSignatureGenerator &config) {
             config = {};
             config.AddHeapRangesParameter({{0 /* t0 */, 1, 1 /* space1 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // vertices
             config.AddHeapRangesParameter({{1 /* t1 */, 1, 1 /* space1 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // indices
@@ -81,16 +140,16 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context) :
             config.AddHeapRangesParameter({{1 /* b1 */, 1, 1 /* space1 */, D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 0}}); // attrs
             config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS, 0, 1, SizeOfInUint32(MaterialParams)); // space1 b0
         };
-        programDesc.configureHitGroupRootSignature(aabbHitGroupConfigurator, RtModel::GeometryType::AABB_Analytic);
-        programDesc.configureHitGroupRootSignature(aabbHitGroupConfigurator, RtModel::GeometryType::AABB_Volumetric);
-        programDesc.configureHitGroupRootSignature(aabbHitGroupConfigurator, RtModel::GeometryType::AABB_SignedDistance);
+        photonTrace.configureHitGroupRootSignature(aabbHitGroupConfigurator, RtModel::GeometryType::AABB_Analytic);
+        photonTrace.configureHitGroupRootSignature(aabbHitGroupConfigurator, RtModel::GeometryType::AABB_Volumetric);
+        photonTrace.configureHitGroupRootSignature(aabbHitGroupConfigurator, RtModel::GeometryType::AABB_SignedDistance);
     }
-    mRtProgram = RtProgram::create(context, programDesc);
-    mRtState = RtState::create(context);
-    mRtState->setProgram(mRtProgram);
-    mRtState->setMaxTraceRecursionDepth(4);
-    mRtState->setMaxAttributeSize(sizeof(ProceduralPrimitiveAttributes));
-    mRtState->setMaxPayloadSize(20);
+    mRtPhotonMappingPass.mRtProgram = RtProgram::create(context, photonTrace);
+    mRtPhotonMappingPass.mRtState = RtState::create(context);
+    mRtPhotonMappingPass.mRtState->setProgram(mRtPhotonMappingPass.mRtProgram);
+    mRtPhotonMappingPass.mRtState->setMaxTraceRecursionDepth(4);
+    mRtPhotonMappingPass.mRtState->setMaxAttributeSize(sizeof(ProceduralPrimitiveAttributes));
+    mRtPhotonMappingPass.mRtState->setMaxPayloadSize(28);
 
     mShaderDebugOptions.maxIterations = 1024;
     mShaderDebugOptions.cosineHemisphereSampling = true;
@@ -114,12 +173,13 @@ HybridPipeline::~HybridPipeline() = default;
 void HybridPipeline::setScene(RtScene::SharedPtr scene)
 {
     mRtScene = scene->copy();
-    mRtBindings = RtBindings::create(mRtContext, mRtProgram, scene);
+    mRtPhotonEmissionPass.mRtBindings = RtBindings::create(mRtContext, mRtPhotonEmissionPass.mRtProgram, scene);
+    mRtPhotonMappingPass.mRtBindings = RtBindings::create(mRtContext, mRtPhotonMappingPass.mRtProgram, scene);
 }
 
 void HybridPipeline::buildAccelerationStructures()
 {
-    mRtScene->build(mRtContext, mRtProgram->getHitProgramCount());
+    mRtScene->build(mRtContext, mRtPhotonMappingPass.mRtProgram->getHitProgramCount());
 }
 
 void HybridPipeline::loadResources(ID3D12CommandQueue *uploadCommandQueue, UINT frameCount)
@@ -146,6 +206,11 @@ void HybridPipeline::loadResources(ID3D12CommandQueue *uploadCommandQueue, UINT 
 
     mDirLights.Create(device, NUM_DIR_LIGHTS, frameCount, L"DirectionalLightBuffer");
     mPointLights.Create(device, NUM_POINT_LIGHTS, frameCount, L"PointLightBuffer");
+
+    mPhotonMappingConstants.Create(device, 1, L"PhotonMappingConstantBuffer");
+
+    UINT zero = 0;
+    AllocateUploadBuffer(device, &zero, 4, zeroResource.GetAddressOf());
 }
 
 void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT height)
@@ -175,6 +240,8 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
 
     // Intermediate output resources
 
+    mPhotonEmitters.Create(device, mRtScene->getNumInstances(), 1, L"PhotonEmitters");
+    mPhotonUploadBuffer.Create(device, MAX_PHOTON_SEED_SAMPLES, 1, L"PhotonSeed");
     AllocateUAVBuffer(device, MAX_PHOTON_SEED_SAMPLES * sizeof(Photon), mPhotonSeedResource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
     {
@@ -216,9 +283,10 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
         mPhotonMapUavGpuHandle = mRtContext->getDescriptorGPUHandle(mPhotonMapUavHeapIndex);
     }
 
-    const double preferredTileSizeInPixels = 16.0;
+    const double preferredTileSizeInPixels = 8.0;
     UINT numTilesX = static_cast<UINT>(ceil(width / preferredTileSizeInPixels));
     UINT numTilesY = static_cast<UINT>(ceil(height / preferredTileSizeInPixels));
+    mPhotonMappingConstants->numTiles = XMUINT2(numTilesX, numTilesY);
     AllocateUAVTexture(device, DXGI_FORMAT_R32_UINT, numTilesX, numTilesY, mPhotonDensityResource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
     {
@@ -231,6 +299,8 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
 
         mPhotonDensityUavGpuHandle = mRtContext->getDescriptorGPUHandle(mPhotonDensityUavHeapIndex);
     }
+
+    mPhotonMappingConstants.CopyStagingToGpu();
 }
 
 inline void calculateCameraVariables(Math::Camera &camera, float aspectRatio, XMFLOAT4 *U, XMFLOAT4 *V, XMFLOAT4 *W)
@@ -280,6 +350,7 @@ void HybridPipeline::update(float elapsedTime, UINT elapsedFrames, UINT prevFram
     if (hasCameraMoved(*mCamera, mLastCameraVPMatrix) || !mFrameAccumulationEnabled) {
         mAccumCount = 0;
         mLastCameraVPMatrix = mCamera->GetViewProjMatrix();
+        mNeedPhotonMap = true;
     }
 
     CameraParams &cameraParams = mConstantBuffer->cameraParams;
@@ -316,18 +387,164 @@ void HybridPipeline::createPipelineStateObjects()
 
 }
 
-void HybridPipeline::buildPhotonMap(UINT frameIndex, UINT width, UINT height)
+void HybridPipeline::collectEmitters(UINT& numLights, UINT& maxSamples)
 {
-    auto commandList = mRtContext->getCommandList();
+    // collect total intensity
+    auto totalRadiance = 0.0f;
+    auto getLightMagnitude = [](XMFLOAT4 radiance) {
+        float result = 0.0f;
+        result += radiance.x * radiance.w;
+        result += radiance.y * radiance.w;
+        result += radiance.z * radiance.w;
+        return result;
+    };
+    std::vector<RtModel::SharedPtr> complexLights;
+
+    for (UINT i = 0; i < NUM_DIR_LIGHTS; i++) {
+        totalRadiance += getLightMagnitude(mDirLights[i].color);
+    }
+    for (UINT i = 0; i < NUM_POINT_LIGHTS; i++) {
+        totalRadiance += getLightMagnitude(mPointLights[i].color);
+    }
+    for (UINT i = 0; i < mRtScene->getNumInstances(); i++) {
+        auto model = mRtScene->getModel(i);
+        XMFLOAT4 emission = mMaterials[model->mMaterialIndex].params.emissive;
+        if (emission.w > 0.0f && (emission.x > 0.0f || emission.y > 0.0f || emission.z > 0.0f)) {
+            totalRadiance += getLightMagnitude(emission);
+            complexLights.push_back(model);
+        }
+    }
+
+    mSamplesCpu = 0;
+    mSamplesGpu = 0;
+    maxSamples = 0;
+    numLights = static_cast<UINT>(complexLights.size());
+
+    std::uniform_int_distribution<UINT> rand;
+    auto getScaledSamplePower = [&](XMFLOAT4 radiance, float& proportion, XMVECTOR& lightRadiance) {
+        lightRadiance = XMLoadFloat4(&radiance);
+        proportion = getLightMagnitude(radiance) / totalRadiance;
+        lightRadiance = XMVectorScale(lightRadiance, radiance.w * proportion);
+    };
+    auto storePhoton = [&](XMVECTOR power, XMVECTOR position, XMVECTOR direction) {
+        Photon photon = {};
+        photon.randSeed = rand(mRng);
+        XMStoreFloat3(&photon.power, power);
+        XMStoreFloat3(&photon.position, position);
+        XMStoreFloat3(&photon.direction, direction);
+        photon.distTravelled = 1.337;
+
+        mPhotonUploadBuffer[mSamplesCpu++] = photon;
+    };
+
+    // for each light, take samples proportional to light intensity
+    for (UINT i = 0; i < NUM_DIR_LIGHTS; i++) {
+
+    }
+    for (UINT i = 0; i < NUM_POINT_LIGHTS; i++) {
+        XMVECTOR lightPos = XMLoadFloat4(&mPointLights[i].worldPos);
+        XMVECTOR lightRadiance;
+        float proportion;
+        getScaledSamplePower(mPointLights[i].color, proportion, lightRadiance);
+
+        for (UINT j = 0; j < proportion * MAX_PHOTON_SEED_SAMPLES; j++) {
+            XMVECTOR photonDir = XMVectorSet(1.0, 0.0, 0.0, 0.0);
+            XMMATRIX rotation = XMMatrixRotationRollPitchYaw(mRngDist(mRng) * XM_2PI, mRngDist(mRng) * XM_2PI, mRngDist(mRng) * XM_2PI);
+            photonDir = XMVector4Transform(photonDir, rotation);
+            storePhoton(lightRadiance, lightPos, photonDir);
+        }
+    }
+    for (UINT i = 0; i < complexLights.size(); i++) {
+        auto light = complexLights[i];
+
+        XMVECTOR lightRadiance;
+        float proportion;
+        getScaledSamplePower(mMaterials[light->mMaterialIndex].params.emissive, proportion, lightRadiance);
+
+        UINT numSamples = static_cast<UINT>(proportion * MAX_PHOTON_SEED_SAMPLES);
+        mPhotonEmitters[i].samplesToTake = numSamples;
+        mPhotonEmitters[i].sampleStartIndex = mSamplesGpu;
+        //TODO: Calculate bounding volume and make raycast scheme
+        //XMStoreFloat3(&mPhotonEmitters[i].center, light->getBoundingSphere().GetCenter());
+        //mPhotonEmitters[i].radius = light->getBoundingSphere().GetRadius();
+        mPhotonEmitters[i].center = XMFLOAT3(0, 9.999, 0);
+        mPhotonEmitters[i].radius = 2;
+
+        mSamplesGpu += numSamples;
+        maxSamples = max(maxSamples, numSamples);
+    }
+
+    mPhotonUploadBuffer.CopyStagingToGpu();
+    mPhotonEmitters.CopyStagingToGpu();
+}
+
+void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIndex, UINT width, UINT height, UINT& pass)
+{
+    if (!mNeedPhotonMap && pass < Pass::PhotonSplatting)
+    {
+        pass = Pass::PhotonSplatting;
+    }
 
     // generate photon seed
+    if (pass == Pass::PhotonEmission)
     {
+        UINT numLights, maxSamples;
+        collectEmitters(numLights, maxSamples);
 
+        // Update shader table root arguments
+        auto mRtBindings = mRtPhotonEmissionPass.mRtBindings;
+        auto mRtState = mRtPhotonEmissionPass.mRtState;
+        auto program = mRtBindings->getProgram();
+
+        for (UINT rayType = 0; rayType < program->getHitProgramCount(); ++rayType) {
+            for (UINT instance = 0; instance < mRtScene->getNumInstances(); ++instance) {
+                auto &hitVars = mRtBindings->getHitVars(rayType, instance);
+                switch (mRtScene->getModel(instance)->getGeometryType())
+                {
+                case RtModel::GeometryType::Triangles: {
+                    auto model = toRtMesh(mRtScene->getModel(instance));
+                    hitVars->appendHeapRanges(model->getVertexBufferSrvHandle().ptr);
+                    hitVars->appendHeapRanges(model->getIndexBufferSrvHandle().ptr);
+                    hitVars->append32BitConstants((void*)&mMaterials[model->mMaterialIndex].params, SizeOfInUint32(MaterialParams));
+                    break;
+                }
+                default: {
+                    //TODO
+                    // no-op shader
+                    break;
+                }
+                }
+            }
+        }
+
+        mRtBindings->apply(mRtContext, mRtState);
+
+        // Set global root arguments
+        mRtContext->bindDescriptorHeap();
+        commandList->SetComputeRootSignature(program->getGlobalRootSignature());
+        commandList->SetComputeRootConstantBufferView(GlobalRootSignatureParams::PerFrameConstantsSlot, mConstantBuffer.GpuVirtualAddress(frameIndex));
+        commandList->SetComputeRootDescriptorTable(GlobalRootSignatureParams::OutputViewSlot, mPhotonSeedUavGpuHandle);
+        commandList->SetComputeRootShaderResourceView(GlobalRootSignatureParams::PhotonSourcesSRVSlot, mPhotonEmitters.GpuVirtualAddress());
+        mRtContext->getFallbackCommandList()->SetTopLevelAccelerationStructure(GlobalRootSignatureParams::AccelerationStructureSlot, mRtScene->getTlasWrappedPtr());
+
+        mRtContext->raytrace(mRtBindings, mRtState, maxSamples, numLights, 1);
+
+        mRtContext->insertUAVBarrier(mPhotonSeedResource.Get());
+
+        // copy photons emitted on CPU to the buffer
+        mRtContext->transitionResource(mPhotonSeedResource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_DEST);
+        commandList->CopyBufferRegion(mPhotonSeedResource.Get(), mSamplesGpu * sizeof(Photon), mPhotonUploadBuffer.GetResource().Get(), 0, mSamplesCpu * sizeof(Photon));
+
+        pass = Pass::PhotonTracing;
+        return;
     }
 
     // generate photon map
+    if (pass == Pass::PhotonTracing)
     {
         // Update shader table root arguments
+        auto mRtBindings = mRtPhotonMappingPass.mRtBindings;
+        auto mRtState = mRtPhotonMappingPass.mRtState;
         auto program = mRtBindings->getProgram();
 
         for (UINT rayType = 0; rayType < program->getHitProgramCount(); ++rayType) {
@@ -352,6 +569,7 @@ void HybridPipeline::buildPhotonMap(UINT frameIndex, UINT width, UINT height)
             }
         }
 
+        mRtContext->transitionResource(mPhotonSeedResource.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         mRtBindings->apply(mRtContext, mRtState);
 
         // Set global root arguments
@@ -359,22 +577,34 @@ void HybridPipeline::buildPhotonMap(UINT frameIndex, UINT width, UINT height)
         commandList->SetComputeRootSignature(program->getGlobalRootSignature());
         commandList->SetComputeRootConstantBufferView(GlobalRootSignatureParams::PerFrameConstantsSlot, mConstantBuffer.GpuVirtualAddress(frameIndex));
         commandList->SetComputeRootDescriptorTable(GlobalRootSignatureParams::OutputViewSlot, mOutputUavGpuHandle);
+        commandList->SetComputeRootDescriptorTable(GlobalRootSignatureParams::PhotonSourcesSRVSlot, mPhotonSeedSrvGpuHandle);
+        commandList->SetComputeRootDescriptorTable(GlobalRootSignatureParams::PhotonDensityOutputViewSlot, mPhotonDensityUavGpuHandle);
+        commandList->SetComputeRootConstantBufferView(GlobalRootSignatureParams::PhotonMappingConstantsSlot, mPhotonMappingConstants.GpuVirtualAddress());
         mRtContext->getFallbackCommandList()->SetTopLevelAccelerationStructure(GlobalRootSignatureParams::AccelerationStructureSlot, mRtScene->getTlasWrappedPtr());
 
-        mRtContext->raytrace(mRtBindings, mRtState, width, height, 3);
+        mRtContext->raytrace(mRtBindings, mRtState, mSamplesCpu + mSamplesGpu, 1, 1);
 
         mRtContext->insertUAVBarrier(mOutputResource.Get());
+        mRtContext->transitionResource(mPhotonSeedResource.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+        mRtContext->transitionResource(mPhotonMapCounter.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_DEST);
+        commandList->CopyResource(mPhotonMapCounter.Get(), zeroResource.Get());
+        mRtContext->transitionResource(mPhotonMapCounter.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+        //mNeedPhotonMap = false;
+        pass = Pass::PhotonSplatting;
+        return;
     }
-}
 
-void HybridPipeline::render(ID3D12GraphicsCommandList *, UINT frameIndex, UINT width, UINT height)
-{
-    auto commandList = mRtContext->getCommandList();
-
-    // rendering pass
+    if (pass == Pass::PhotonSplatting)
     {
-        buildPhotonMap(frameIndex, width, height);
+        pass = Pass::Combine;
+    }
 
+    // final render pass
+    if (pass == Pass::Combine)
+    {
+        pass = Pass::End;
     }
 }
 

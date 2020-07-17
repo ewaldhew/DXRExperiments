@@ -33,6 +33,7 @@ namespace DXRFramework
 
         void addModel(RtModel::SharedPtr model, DirectX::XMMATRIX transform, UCHAR instanceMask) { mInstances.emplace_back(Node::create(model, transform, instanceMask)); }
         RtModel::SharedPtr getModel(UINT index) const { return mInstances[index]->mModel; }
+        DirectX::XMMATRIX getTransform(UINT index) const { return mInstances[index]->mTransform; }
         UINT getNumInstances() const { return static_cast<UINT>(mInstances.size()); }
 
         ID3D12Resource *getTlasResource() const { return mTlasBuffer.Get(); }

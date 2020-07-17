@@ -198,7 +198,7 @@ void RealtimeRaytracingPipeline::update(float elapsedTime, UINT elapsedFrames, U
     mConstantBuffer.CopyStagingToGpu(frameIndex);
 }
 
-void RealtimeRaytracingPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIndex, UINT width, UINT height)
+void RealtimeRaytracingPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIndex, UINT width, UINT height, UINT& pass)
 {
     // Update shader table root arguments
     auto program = mRtBindings->getProgram();
