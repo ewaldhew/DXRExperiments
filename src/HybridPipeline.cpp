@@ -10,6 +10,8 @@
 
 using namespace DXRFramework;
 
+#define NUM_POINT_LIGHTS 1
+#define NUM_DIR_LIGHTS 1
 static XMFLOAT4 pointLightColor = XMFLOAT4(0.2f, 0.8f, 0.6f, 2.0f);
 static XMFLOAT4 dirLightColor = XMFLOAT4(0.9f, 0.9f, 0.9f, 1.0f);
 
@@ -141,6 +143,9 @@ void HybridPipeline::loadResources(ID3D12CommandQueue *uploadCommandQueue, UINT 
 
     // Create per-frame constant buffer
     mConstantBuffer.Create(device, frameCount, L"PerFrameConstantBuffer");
+
+    mDirLights.Create(device, NUM_DIR_LIGHTS, frameCount, L"DirectionalLightBuffer");
+    mPointLights.Create(device, NUM_POINT_LIGHTS, frameCount, L"PointLightBuffer");
 }
 
 void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT height)
@@ -287,22 +292,23 @@ void HybridPipeline::update(float elapsedTime, UINT elapsedFrames, UINT prevFram
     cameraParams.frameCount = elapsedFrames;
     cameraParams.accumCount = mAccumCount++;
 
+    mConstantBuffer->options = mShaderDebugOptions;
+    mConstantBuffer.CopyStagingToGpu(frameIndex);
+
     XMVECTOR dirLightVector = XMVectorSet(0.3f, -0.2f, -1.0f, 0.0f);
     XMMATRIX rotation = XMMatrixRotationY(sin(elapsedTime * 0.2f) * 3.14f * 0.5f);
     dirLightVector = XMVector4Transform(dirLightVector, rotation);
-    XMStoreFloat4(&mConstantBuffer->directionalLight.forwardDir, dirLightVector);
-    mConstantBuffer->directionalLight.color = dirLightColor;
+    XMStoreFloat4(&mDirLights[0].forwardDir, dirLightVector);
+    mDirLights[0].color = dirLightColor;
+    mDirLights.CopyStagingToGpu(frameIndex);
 
     // XMVECTOR pointLightPos = XMVectorSet(sin(elapsedTime * 0.97f), sin(elapsedTime * 0.45f), sin(elapsedTime * 0.32f), 1.0f);
     // pointLightPos = XMVectorAdd(pointLightPos, XMVectorSet(0.0f, 0.5f, 1.0f, 0.0f));
     // pointLightPos = XMVectorMultiply(pointLightPos, XMVectorSet(0.221f, 0.049f, 0.221f, 1.0f));
     XMVECTOR pointLightPos = XMVectorSet(0.0f, 0.0f, 0.0f, 1.0f);
-    XMStoreFloat4(&mConstantBuffer->pointLight.worldPos, pointLightPos);
-    mConstantBuffer->pointLight.color = pointLightColor;
-
-    mConstantBuffer->options = mShaderDebugOptions;
-
-    mConstantBuffer.CopyStagingToGpu(frameIndex);
+    XMStoreFloat4(&mPointLights[0].worldPos, pointLightPos);
+    mPointLights[0].color = pointLightColor;
+    mPointLights.CopyStagingToGpu(frameIndex);
 }
 
 void HybridPipeline::createPipelineStateObjects()

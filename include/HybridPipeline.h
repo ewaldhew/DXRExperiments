@@ -63,6 +63,8 @@ private:
     D3D12_GPU_DESCRIPTOR_HANDLE mOutputSrvGpuHandle;
 
     ConstantBuffer<PerFrameConstants> mConstantBuffer;
+    StructuredBuffer<DirectionalLightParams> mDirLights;
+    StructuredBuffer<PointLightParams> mPointLights;
 
     std::vector<ComPtr<ID3D12Resource>> mTextureResources;
     std::vector<D3D12_GPU_DESCRIPTOR_HANDLE> mTextureSrvGpuHandles;
