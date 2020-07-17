@@ -69,12 +69,15 @@ void TopLevelASGenerator::AddInstance(
                                         // positions
     UINT instanceID,                    // Instance ID, which can be used in the shaders to
                                         // identify this specific instance
-    UINT hitGroupIndex                  // Hit group index, corresponding the the index of the
+    UINT hitGroupIndex,                 // Hit group index, corresponding the the index of the
                                         // hit group in the Shader Binding Table that will be
                                         // invocated upon hitting the geometry
+    UCHAR instanceMask = 0xFF           // Instance mask used to determine visibility of the instance
+                                        // using the InstanceInclusionMask argument of a particular
+                                        // TraceRay() call
 )
 {
-  m_instances.emplace_back(Instance(bottomLevelAS, transform, instanceID, hitGroupIndex));
+  m_instances.emplace_back(Instance(bottomLevelAS, transform, instanceID, hitGroupIndex, instanceMask));
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -250,7 +253,7 @@ void TopLevelASGenerator::Generate(
     instanceDescs[i].AccelerationStructure = m_instances[i].bottomLevelAS->GetGPUVirtualAddress();
     // Visibility mask, always visible here - TODO: should be accessible from
     // outside
-    instanceDescs[i].InstanceMask = 0xFF;
+    instanceDescs[i].InstanceMask = m_instances[i].instanceMask;
   }
 
   descriptorsBuffer->Unmap(0, nullptr);
@@ -358,7 +361,7 @@ void TopLevelASGenerator::Generate(
     instanceDescs[i].AccelerationStructure = createWrappedPtrFunc(m_instances[i].bottomLevelAS);
     // Visibility mask, always visible here - TODO: should be accessible from
     // outside
-    instanceDescs[i].InstanceMask = 0xFF;
+    instanceDescs[i].InstanceMask = m_instances[i].instanceMask;
   }
 
   descriptorsBuffer->Unmap(0, nullptr);
@@ -417,8 +420,8 @@ void TopLevelASGenerator::Generate(
 //
 //
 TopLevelASGenerator::Instance::Instance(ID3D12Resource* blAS, const DirectX::XMMATRIX& tr, UINT iID,
-                                        UINT hgId)
-    : bottomLevelAS(blAS), transform(tr), instanceID(iID), hitGroupIndex(hgId)
+                                        UINT hgId, UCHAR iMask)
+    : bottomLevelAS(blAS), transform(tr), instanceID(iID), hitGroupIndex(hgId), instanceMask(iMask)
 {
 }
 } // namespace nv_helpers_dx12

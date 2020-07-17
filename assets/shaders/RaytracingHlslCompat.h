@@ -114,6 +114,15 @@ struct MaterialParams
     UINT type; // 0: diffuse, 1: glossy, 2: specular (glass)
 };
 
+namespace MaterialSceneFlags
+{
+    enum Enum
+    {
+        None     = 1 << 0,
+        Emissive = 1 << 1,
+    };
+}
+
 struct PhotonMappingConstants
 {
     XMUINT2 numTiles;

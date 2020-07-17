@@ -21,16 +21,17 @@ namespace DXRFramework
         {
         public:
             using SharedPtr = std::shared_ptr<Node>;
-            static SharedPtr create(RtModel::SharedPtr model, DirectX::XMMATRIX transform) { return SharedPtr(new Node(model, transform)); }
+            static SharedPtr create(RtModel::SharedPtr model, DirectX::XMMATRIX transform, UCHAR mask) { return SharedPtr(new Node(model, transform, mask)); }
         private:
             friend class RtScene;
-            Node(RtModel::SharedPtr model, DirectX::XMMATRIX transform) : mModel(model), mTransform(transform) {}
+            Node(RtModel::SharedPtr model, DirectX::XMMATRIX transform, UCHAR mask) : mModel(model), mTransform(transform), mMask(mask) {}
 
             RtModel::SharedPtr mModel;
             DirectX::XMMATRIX mTransform;
+            UCHAR mMask;
         };
 
-        void addModel(RtModel::SharedPtr model, DirectX::XMMATRIX transform) { mInstances.emplace_back(Node::create(model, transform)); }
+        void addModel(RtModel::SharedPtr model, DirectX::XMMATRIX transform, UCHAR instanceMask) { mInstances.emplace_back(Node::create(model, transform, instanceMask)); }
         RtModel::SharedPtr getModel(UINT index) const { return mInstances[index]->mModel; }
         UINT getNumInstances() const { return static_cast<UINT>(mInstances.size()); }
 

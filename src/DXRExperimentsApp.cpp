@@ -90,7 +90,7 @@ void DXRExperimentsApp::InitRaytracing()
 
         // working directory is "vc2015"
         RtMesh::importMeshesFromFile([&](RtMesh::SharedPtr mesh) {
-            mRtScene->addModel(mesh, DirectX::XMMatrixScaling(10, 10, 10));
+            mRtScene->addModel(mesh, DirectX::XMMatrixScaling(10, 10, 10), MaterialSceneFlags::None);
         }, mRtContext, "..\\assets\\models\\cornell.obj", { 2, 0, 0, 1, 0, 0, 0 });
 
         auto lightMeshTransform =
@@ -104,7 +104,7 @@ void DXRExperimentsApp::InitRaytracing()
             { { 1.0f, -1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f } },
             { { 1.0f, 1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f } },
         };
-        mRtScene->addModel(RtMesh::create(mRtContext, squareVerts, { 0, 1, 3, 1, 2, 3 }, 3), lightMeshTransform);
+        mRtScene->addModel(RtMesh::create(mRtContext, squareVerts, { 0, 1, 3, 1, 2, 3 }, 3), lightMeshTransform, MaterialSceneFlags::Emissive);
     }
 
     // Create materials

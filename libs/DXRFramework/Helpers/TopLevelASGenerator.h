@@ -94,9 +94,12 @@ public:
                                                   /// at several world-space positions
               UINT instanceID,   /// Instance ID, which can be used in the shaders to
                                  /// identify this specific instance
-              UINT hitGroupIndex /// Hit group index, corresponding the the index of the
+              UINT hitGroupIndex,/// Hit group index, corresponding the the index of the
                                  /// hit group in the Shader Binding Table that will be
                                  /// invocated upon hitting the geometry
+              UCHAR instanceMask        /// Instance mask used to determine visibility of the instance
+                                        /// using the InstanceInclusionMask argument of a particular
+                                        /// TraceRay() call
   );
 
   /// Compute the size of the scratch space required to build the acceleration
@@ -165,7 +168,7 @@ private:
   /// Helper struct storing the instance data
   struct Instance
   {
-    Instance(ID3D12Resource* blAS, const DirectX::XMMATRIX& tr, UINT iID, UINT hgId);
+    Instance(ID3D12Resource* blAS, const DirectX::XMMATRIX& tr, UINT iID, UINT hgId, UCHAR iMask);
     /// Bottom-level AS
     ID3D12Resource* bottomLevelAS;
     /// Transform matrix
@@ -174,6 +177,8 @@ private:
     UINT instanceID;
     /// Hit group index used to fetch the shaders from the SBT
     UINT hitGroupIndex;
+    /// Instance mask used to determine visibility in a particular TraceRay() call
+    UCHAR instanceMask;
   };
 
   /// Construction flags, indicating whether the AS supports iterative updates
