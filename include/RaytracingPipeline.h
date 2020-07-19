@@ -22,16 +22,18 @@ public:
     struct MaterialTexture
     {
         // Spatially varying material params
-        std::vector<float> data;
+        std::vector<XMFLOAT4> data;
         UINT width;
         UINT height;
         UINT depth;
+
+        MaterialTextureParams params;
     };
     struct Material
     {
         MaterialParams params;
         // textures
-        std::vector<MaterialTexture> textures;
+        std::vector<MaterialTexture> textures; // one for each materialParam
     };
 
     virtual void addMaterial(Material material) = 0;

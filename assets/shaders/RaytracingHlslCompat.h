@@ -126,6 +126,11 @@ struct MaterialParams
     UINT type; // 0: diffuse, 1: glossy, 2: specular (glass)
 };
 
+struct MaterialTextureParams
+{
+    XMMATRIX objectSpaceToTex;
+};
+
 namespace MaterialSceneFlags
 {
     enum Enum

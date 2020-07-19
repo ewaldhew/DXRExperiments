@@ -156,14 +156,15 @@ void DXRExperimentsApp::InitRaytracing()
         texTest.params.type = MaterialType::DiffuseTexture;
         RaytracingPipeline::MaterialTexture tex = {};
         tex.data = { // starts bottom-left
-            1,0,0,1,
-            0,0,1,1,
-            0,1,0,1,
-            1,1,0,1,
+            {1,0,0,1},
+            {0,0,1,1},
+            {0,1,0,1},
+            {1,1,0,1},
         };
         tex.depth = 1;
         tex.height = 2;
         tex.width = 2;
+        tex.params.objectSpaceToTex = XMMatrixIdentity();
         texTest.textures = { tex };
     }
 

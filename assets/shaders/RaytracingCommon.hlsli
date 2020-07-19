@@ -24,7 +24,8 @@ StructuredBuffer<PointLightParams> pointLights : register(t2);
 SamplerState defaultSampler : register(s0);
 SamplerState matTexSampler : register(s1);
 
-Texture3D<float4> materialParamsTex[] : register(t0, space9);
+Texture3D<float4> materialParamsTex[] : register(t1, space9);
+StructuredBuffer<MaterialTextureParams> texParams : register(t0, space9);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Hit-group local root signature
@@ -172,8 +173,9 @@ float4 sampleMaterial(float4 materialParam)
 {
     if (materialParam.w == 0.0) {
         uint materialTexIndex = materialParam.x;
-        float3 position = mul(WorldToObject3x4(), float4(HitWorldPosition(), 1)).xyz;
-        return materialParamsTex[materialTexIndex].SampleLevel(matTexSampler, position, 0.0);
+        float3 objPos = mul(WorldToObject3x4(), float4(HitWorldPosition(), 1)).xyz;
+        float3 texPos = mul(float4(objPos, 1), (float4x4) texParams[materialTexIndex].objectSpaceToTex).xyz;
+        return materialParamsTex[materialTexIndex].SampleLevel(matTexSampler, texPos, 0.0);
     }
     else {
         return materialParam;

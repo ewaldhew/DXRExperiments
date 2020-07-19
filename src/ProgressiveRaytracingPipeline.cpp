@@ -23,6 +23,7 @@ namespace GlobalRootSignatureParams
         PerFrameConstantsSlot,
         DirectionalLightBufferSlot,
         PointLightBufferSlot,
+        MaterialTextureParamsSlot,
         MaterialTextureSrvSlot,
         Count
     };
@@ -87,8 +88,10 @@ ProgressiveRaytracingPipeline::ProgressiveRaytracingPipeline(RtContext::SharedPt
             matTexSampler.ShaderRegister = 1;
             config.AddStaticSampler(matTexSampler);
 
+            // GlobalRootSignatureParams::MaterialTextureParamsSlot
+            config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 0 /* t0 */, 9); // space9 t0
             // GlobalRootSignatureParams::MaterialTextureSrvSlot
-            config.AddHeapRangesParameter({{0 /* t0 */, -1 /* unbounded */, 9 /* space9 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}});
+            config.AddHeapRangesParameter({{1 /* t1 */, -1 /* unbounded */, 9 /* space9 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}});
         });
         programDesc.configureHitGroupRootSignature([] (RootSignatureGenerator &config) {
             config = {};
@@ -148,11 +151,14 @@ void ProgressiveRaytracingPipeline::buildAccelerationStructures()
 
 void ProgressiveRaytracingPipeline::loadResources(ID3D12CommandQueue *uploadCommandQueue, UINT frameCount)
 {
+    auto device = mRtContext->getDevice();
+
     mTextureResources.resize(2);
     mTextureSrvGpuHandles.resize(3);
 
+    mTextureParams.Create(device, mMaterials.size(), 1, L"MaterialTextureParams");
+
     // Create and upload global textures
-    auto device = mRtContext->getDevice();
     ResourceUploadBatch resourceUpload(device);
     resourceUpload.Begin();
     {
@@ -173,6 +179,7 @@ void ProgressiveRaytracingPipeline::loadResources(ID3D12CommandQueue *uploadComm
                     tex.width, tex.height, tex.depth, tex.width * sizeof(XMFLOAT4), tex.height,
                     DXGI_FORMAT_R32G32B32A32_FLOAT, tex.data.data(), textureResource);
                 mTextureResources.push_back(textureResource);
+                mTextureParams[textureIndex] = tex.params;
 
                 D3D12_CPU_DESCRIPTOR_HANDLE srvCpuHandle;
                 auto descriptorIndex = mRtContext->allocateDescriptor(&srvCpuHandle);
@@ -294,6 +301,8 @@ void ProgressiveRaytracingPipeline::update(float elapsedTime, UINT elapsedFrames
     XMStoreFloat4(&mPointLights[0].worldPos, pointLightPos);
     mPointLights[0].color = pointLightColor;
     mPointLights.CopyStagingToGpu(frameIndex);
+
+    mTextureParams.CopyStagingToGpu();
 }
 
 void ProgressiveRaytracingPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIndex, UINT width, UINT height)
@@ -338,6 +347,7 @@ void ProgressiveRaytracingPipeline::render(ID3D12GraphicsCommandList *commandLis
     commandList->SetComputeRootShaderResourceView(GlobalRootSignatureParams::DirectionalLightBufferSlot, mDirLights.GpuVirtualAddress(frameIndex));
     commandList->SetComputeRootShaderResourceView(GlobalRootSignatureParams::PointLightBufferSlot, mPointLights.GpuVirtualAddress(frameIndex));
     commandList->SetComputeRootDescriptorTable(GlobalRootSignatureParams::MaterialTextureSrvSlot, mTextureSrvGpuHandles[2]);
+    commandList->SetComputeRootShaderResourceView(GlobalRootSignatureParams::MaterialTextureParamsSlot, mTextureParams.GpuVirtualAddress());
     commandList->SetComputeRootDescriptorTable(GlobalRootSignatureParams::OutputViewSlot, mOutputUavGpuHandle);
     mRtContext->getFallbackCommandList()->SetTopLevelAccelerationStructure(GlobalRootSignatureParams::AccelerationStructureSlot, mRtScene->getTlasWrappedPtr());
 
