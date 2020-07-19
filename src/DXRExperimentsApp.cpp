@@ -96,7 +96,7 @@ void DXRExperimentsApp::InitRaytracing()
         auto lightMeshTransform =
             DirectX::XMMatrixRotationX(XM_PIDIV2) *
             DirectX::XMMatrixScaling(2, 2, 2) *
-            DirectX::XMMatrixTranslation(0, 9.999, 0);
+            DirectX::XMMatrixTranslation(0, 9.999f, 0);
         std::vector<Vertex> squareVerts =
         {
             { { -1.0f, 1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f } },
