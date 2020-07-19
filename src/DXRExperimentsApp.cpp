@@ -91,7 +91,8 @@ void DXRExperimentsApp::InitRaytracing()
         // working directory is "vc2015"
         RtMesh::importMeshesFromFile([&](RtMesh::SharedPtr mesh) {
             mRtScene->addModel(mesh, DirectX::XMMatrixScaling(10, 10, 10), MaterialSceneFlags::None);
-        }, mRtContext, "..\\assets\\models\\cornell.obj", { 2, 0, 0, 1, 0, 0, 0 });
+        //}, mRtContext, "..\\assets\\models\\cornell.obj", { 2, 0, 0, 1, 0, 0, 0 });
+        }, mRtContext, "..\\assets\\models\\cornell.obj", { 5, 5, 5, 5, 5, 0, 0 });
 
         auto lightMeshTransform =
             DirectX::XMMatrixRotationX(XM_PIDIV2) *
@@ -105,35 +106,65 @@ void DXRExperimentsApp::InitRaytracing()
             { { 1.0f, 1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f } },
         };
         mRtScene->addModel(RtMesh::create(mRtContext, squareVerts, { 0, 1, 3, 1, 2, 3 }, 3), lightMeshTransform, MaterialSceneFlags::Emissive);
+
+        //mRtScene->addModel(RtProcedural::create(mRtContext, PrimitiveType::AnalyticPrimitive_AABB, XMFLOAT3(-3, -3, -3), XMFLOAT3(7, 7, 7), 4), identity);
     }
 
     // Create materials
     std::vector<RaytracingPipeline::Material> materials;
-    materials.resize(4);
+    auto material = std::back_inserter(materials);
     {
-        RaytracingPipeline::Material &white = materials[0];
+        material = {};
+        RaytracingPipeline::Material &white = materials.back();
         white.params.albedo = XMFLOAT4(0.72f, 0.75f, 0.65f, 1.0f);
         white.params.roughness = 1.0f;
-        white.params.type = 0;
+        white.params.type = MaterialType::Diffuse;
     }
     {
-        RaytracingPipeline::Material &green = materials[1];
+        material = {};
+        RaytracingPipeline::Material &green = materials.back();
         green.params.albedo = XMFLOAT4(0.15f, 0.45f, 0.10f, 1.0f);
         green.params.roughness = 1.0f;
-        green.params.type = 0;
+        green.params.type = MaterialType::Diffuse;
     }
     {
-        RaytracingPipeline::Material &red = materials[2];
+        material = {};
+        RaytracingPipeline::Material &red = materials.back();
         red.params.albedo = XMFLOAT4(0.60f, 0.07f, 0.05f, 1.0f);
         red.params.roughness = 1.0f;
-        red.params.type = 0;
+        red.params.type = MaterialType::Diffuse;
     }
     {
-        RaytracingPipeline::Material &light = materials[3];
+        material = {};
+        RaytracingPipeline::Material &light = materials.back();
         light.params.albedo = XMFLOAT4(0.78f, 0.78f, 0.78f, 1.0f);
         light.params.emissive = XMFLOAT4(16.8f, 14.5f, 8.0f, 1.0f);
         light.params.reflectivity = 0.7f;
-        light.params.type = 0;
+        light.params.type = MaterialType::Diffuse;
+    }
+    {
+        material = {};
+        RaytracingPipeline::Material &glass = materials.back();
+        glass.params.albedo = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
+        glass.params.reflectivity = 0.7f;
+        glass.params.type = MaterialType::Glass;
+        glass.params.IoR = 1.2;
+    }
+    {
+        material = {};
+        RaytracingPipeline::Material &texTest = materials.back();
+        texTest.params.type = MaterialType::DiffuseTexture;
+        RaytracingPipeline::MaterialTexture tex = {};
+        tex.data = { // starts bottom-left
+            1,0,0,1,
+            0,0,1,1,
+            0,1,0,1,
+            1,1,0,1,
+        };
+        tex.depth = 1;
+        tex.height = 2;
+        tex.width = 2;
+        texTest.textures = { tex };
     }
 
     // Create raytracing pipelines

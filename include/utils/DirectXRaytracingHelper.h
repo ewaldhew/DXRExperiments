@@ -11,8 +11,6 @@
 
 #pragma once
 
-#include "DirectXHelper.h"
-
 #define SizeOfInUint32(obj) ((sizeof(obj) - 1) / sizeof(UINT32) + 1)
 
 // Shader record = {{Shader ID}, {RootArguments}}

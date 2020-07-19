@@ -19,10 +19,19 @@ public:
     virtual void createOutputResource(DXGI_FORMAT format, UINT width, UINT height) = 0;
     virtual void buildAccelerationStructures() = 0;
 
+    struct MaterialTexture
+    {
+        // Spatially varying material params
+        std::vector<float> data;
+        UINT width;
+        UINT height;
+        UINT depth;
+    };
     struct Material
     {
         MaterialParams params;
         // textures
+        std::vector<MaterialTexture> textures;
     };
 
     virtual void addMaterial(Material material) = 0;

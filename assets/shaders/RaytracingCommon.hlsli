@@ -22,6 +22,9 @@ StructuredBuffer<DirectionalLightParams> directionalLights : register(t1);
 StructuredBuffer<PointLightParams> pointLights : register(t2);
 
 SamplerState defaultSampler : register(s0);
+SamplerState matTexSampler : register(s1);
+
+Texture3D<float4> materialParamsTex[] : register(t0, space9);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Hit-group local root signature
@@ -163,6 +166,18 @@ float3 sampleEnvironment()
     // float4 envSample = envMap.SampleLevel(defaultSampler, uv, 0.0);
 
     return envSample.rgb * perFrameConstants.options.environmentStrength;
+}
+
+float4 sampleMaterial(float4 materialParam)
+{
+    if (materialParam.w == 0.0) {
+        uint materialTexIndex = materialParam.x;
+        float3 position = mul(WorldToObject3x4(), float4(HitWorldPosition(), 1)).xyz;
+        return materialParamsTex[materialTexIndex].SampleLevel(matTexSampler, position, 0.0);
+    }
+    else {
+        return materialParam;
+    }
 }
 
 bool isInCameraFrustum(float3 position)

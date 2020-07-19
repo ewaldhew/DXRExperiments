@@ -144,6 +144,7 @@ PostbuildCopy.bat "$(SolutionDir)vc2015\build\bin\$(Configuration)\"
     <ClInclude Include="..\include\RealtimeRaytracingPipeline.h" />
     <ClInclude Include="..\include\pch.h" />
     <ClInclude Include="..\include\utils\DeviceResources.h" />
+    <ClInclude Include="..\include\utils\DirectXHelper.h" />
     <ClInclude Include="..\include\utils\DirectXRaytracingHelper.h" />
     <ClInclude Include="..\include\utils\ImGuiRendererDX.h" />
     <ClInclude Include="..\include\utils\DXSample.h" />

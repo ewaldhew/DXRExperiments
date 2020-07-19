@@ -85,23 +85,31 @@ float3 shade(float3 position, float3 normal, uint currentDepth)
     uint2 numPix = DispatchRaysDimensions().xy;
     uint randSeed = initRand(pixIdx.x + pixIdx.y * numPix.x, perFrameConstants.cameraParams.frameCount);
 
-    float3 atten = materialParams.albedo.rgb;
+    MaterialParams mat = materialParams;
+    if (materialParams.type > MaterialType::__UniformMaterials) { // use texture
+        mat.albedo = sampleMaterial(materialParams.albedo);
+    }
+
+    float3 directAtten = mat.albedo.rgb;
+    float3 indirectAtten = mat.albedo.rgb;
+    float3 emission = mat.emissive.rgb * mat.emissive.a;
     float3 directContrib = 0.0;
     float3 indirectContrib = 0.0;
     float emissiveAtten = dot(-WorldRayDirection().xyz, normal.xyz) < 0. ? 0. : 1.;
 
     // indirect light - sample scattering direction to evaluate secondary ray
-    switch (materialParams.type)
+    switch (mat.type)
     {
-    case 0: { // lambertian
+    case MaterialType::Diffuse:
+    case MaterialType::DiffuseTexture: { // lambertian
         // Calculate indirect diffuse
         if (!perFrameConstants.options.noIndirectDiffuse) {
             indirectContrib = evaluateIndirectDiffuse(position, normal, randSeed, currentDepth) / M_PI;
         }
         break;
     }
-    case 1: { // metal
-        float exponent = exp((1.0 - materialParams.roughness) * 12.0);
+    case MaterialType::Glossy: { // metal
+        float exponent = exp((1.0 - mat.roughness) * 12.0);
         float pdf;
         float brdf;
         float3 mirrorDir = reflect(WorldRayDirection(), normal);
@@ -112,12 +120,12 @@ float3 shade(float3 position, float3 normal, uint currentDepth)
         }
         break;
     }
-    case 2: { // dielectric
+    case MaterialType::Glass: { // dielectric
         float3 refractDir;
         float3 reflectProb;
-        bool refracted = refract(refractDir, WorldRayDirection(), normal, materialParams.IoR);
+        bool refracted = refract(refractDir, WorldRayDirection(), normal, mat.IoR);
         if (refracted) {
-            float f0 = ((materialParams.IoR-1)*(materialParams.IoR-1) / (materialParams.IoR+1)*(materialParams.IoR+1));
+            float f0 = ((mat.IoR-1)*(mat.IoR-1) / (mat.IoR+1)*(mat.IoR+1));
             reflectProb = FresnelReflectanceSchlick(WorldRayDirection(), normal, f0);
         } else {
             reflectProb = 1.0;
@@ -134,7 +142,7 @@ float3 shade(float3 position, float3 normal, uint currentDepth)
     }
     }
 
-    return emissiveAtten * materialParams.emissive.rgb * materialParams.emissive.a + materialParams.albedo.rgb * directContrib + atten * indirectContrib;
+    return emissiveAtten * emission + directAtten * directContrib + indirectAtten * indirectContrib;
 }
 
 [shader("closesthit")]
