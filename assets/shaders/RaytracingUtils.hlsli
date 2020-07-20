@@ -107,6 +107,21 @@ float3 getUniformHemisphereSample(inout uint randSeed, float3 hitNorm)
     return x * tangent + y * hitNorm.xyz + z * bitangent;
 }
 
+// http://corysimon.github.io/articles/uniformdistn-on-sphere/
+float3 getUniformSphereSample(inout uint randSeed)
+{
+    // Get 2 random numbers to select our sample with
+    float2 randVal = float2(nextRand(randSeed), nextRand(randSeed));
+
+    float theta = acos(1 - 2 * randVal.x);
+    float phi = 2.0f * 3.14159265f * randVal.y;
+
+    double x = sin(theta) * cos(phi);
+    double y = sin(theta) * sin(phi);
+    double z = cos(theta);
+    return float3(x, y, z);
+}
+
 // From OptiX helpers.h
 float3 samplePhongLobe(inout uint randSeed, float3 mirrorDir, float exponent, inout float pdf, inout float brdf)
 {
