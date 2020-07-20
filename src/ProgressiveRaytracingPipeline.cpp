@@ -41,6 +41,7 @@ ProgressiveRaytracingPipeline::ProgressiveRaytracingPipeline(RtContext::SharedPt
             L"RayGen",
             L"PrimaryClosestHit", L"PrimaryClosestHit_AABB", L"PrimaryMiss",
             L"ShadowClosestHit", L"ShadowAnyHit", L"ShadowMiss",
+            L"VolumeClosestHit", L"VolumeClosestHit_AABB", L"VolumeMiss",
             L"Intersection_AnalyticPrimitive", L"Intersection_VolumetricPrimitive", L"Intersection_SignedDistancePrimitive"
         };
         programDesc.addShaderLibrary(g_pProgressivePathtracing, ARRAYSIZE(g_pProgressivePathtracing), libraryExports);
@@ -57,6 +58,12 @@ ProgressiveRaytracingPipeline::ProgressiveRaytracingPipeline(RtContext::SharedPt
             .addHitGroup(1, RtModel::GeometryType::AABB_Volumetric, "", "", "Intersection_VolumetricPrimitive")
             .addHitGroup(1, RtModel::GeometryType::AABB_SignedDistance, "", "", "Intersection_SignedDistancePrimitive")
             .addMiss(1, "ShadowMiss");
+        programDesc
+            .addHitGroup(2, RtModel::GeometryType::Triangles, "VolumeClosestHit", "")
+            .addHitGroup(2, RtModel::GeometryType::AABB_Analytic, "VolumeClosestHit_AABB", "", "Intersection_AnalyticPrimitive")
+            .addHitGroup(2, RtModel::GeometryType::AABB_Volumetric, "VolumeClosestHit_AABB", "", "Intersection_VolumetricPrimitive")
+            .addHitGroup(2, RtModel::GeometryType::AABB_SignedDistance, "VolumeClosestHit_AABB", "", "Intersection_SignedDistancePrimitive")
+            .addMiss(2, "VolumeMiss");
 
         programDesc.configureGlobalRootSignature([] (RootSignatureGenerator &config) {
             // GlobalRootSignatureParams::AccelerationStructureSlot

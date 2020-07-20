@@ -112,6 +112,7 @@ namespace MaterialType {
         __UniformMaterials,
 
         DiffuseTexture,
+        ParticipatingMedia,
     };
 }
 
@@ -137,6 +138,7 @@ namespace MaterialSceneFlags
     {
         None     = 1 << 0,
         Emissive = 1 << 1,
+        Volume   = 1 << 2,
     };
 }
 

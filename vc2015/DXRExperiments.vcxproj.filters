@@ -570,6 +570,9 @@
     <None Include="..\assets\shaders\PhotonSplatting.ps.hlsl">
       <Filter>Assets\Shaders</Filter>
     </None>
+    <None Include="..\assets\shaders\ParticipatingMedia.hlsli">
+      <Filter>Assets\Shaders</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="..\assets\shaders\RealtimeRaytracing.hlsl">

@@ -1,5 +1,6 @@
 #include "RaytracingCommon.hlsli"
 #include "ProceduralPrimitives.hlsli"
+#include "ParticipatingMedia.hlsli"
 
 RWTexture2D<float4> gOutput : register(u0);
 
@@ -139,6 +140,47 @@ float3 shade(float3 position, float3 normal, uint currentDepth)
             indirectContrib = shootSecondaryRay(position, mirrorDir, RAY_EPSILON, currentDepth);
         } else {
             indirectContrib = shootSecondaryRay(position, refractDir, RAY_EPSILON, currentDepth);
+        }
+        break;
+    }
+    case MaterialType::ParticipatingMedia: {
+        // the object represents the boundary
+        // we are somewhere inside the volume now
+
+        float w = 1.0;
+        uint numInteractions = 0;
+        float3 params; // x - extinction, y - scattering
+        float3 rayDir = WorldRayDirection();
+        while (evaluateVolumeInteraction(randSeed, position, rayDir, params, currentDepth))
+        {
+            if (numInteractions++ > MAX_VOLUME_INTERACTIONS) {
+                w = 0.0;
+                break;
+            }
+
+            // attenuate by albedo = scattering / extinction
+            w *= params.y / params.x;
+
+            // Russian roulette absorption
+            if (w < 0.2) {
+                if (nextRand(randSeed) > w * 5.0) {
+                    w = 0.0;
+                    break;
+                }
+                w = 0.2;
+            }
+
+            // Sample the phase function
+            { // isotropic
+                rayDir = getUniformSphereSample(randSeed);
+            }
+        }
+
+        indirectAtten = w;
+
+        if (w > 0) {
+            // exited volume, look up the environment
+            indirectContrib = shootSecondaryRay(position, rayDir, RAY_EPSILON, currentDepth);
         }
         break;
     }
