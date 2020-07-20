@@ -193,7 +193,7 @@ void ProgressiveRaytracingPipeline::loadResources(ID3D12CommandQueue *uploadComm
                 }
 
                 prevDescriptorHeapIndex = descriptorIndex;
-                material.params.albedo.x = textureIndex++;
+                material.params.*tex.targetParam = XMFLOAT4(textureIndex++, 0, 0, -1.0f);
             }
         }
     }

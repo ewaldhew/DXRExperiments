@@ -22,6 +22,7 @@ public:
     struct MaterialTexture
     {
         // Spatially varying material params
+        XMFLOAT4 MaterialParams::* targetParam;
         std::vector<XMFLOAT4> data;
         UINT width;
         UINT height;

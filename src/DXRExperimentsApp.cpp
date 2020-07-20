@@ -154,7 +154,7 @@ void DXRExperimentsApp::InitRaytracing()
         material = {};
         RaytracingPipeline::Material &texTest = materials.back();
         texTest.params.type = MaterialType::DiffuseTexture;
-        RaytracingPipeline::MaterialTexture tex = {};
+        RaytracingPipeline::MaterialTexture tex{ &MaterialParams::albedo };
         tex.data = { // starts bottom-left
             {1,0,0,1},
             {0,0,1,1},
@@ -165,7 +165,7 @@ void DXRExperimentsApp::InitRaytracing()
         tex.height = 2;
         tex.width = 2;
         tex.params.objectSpaceToTex = XMMatrixIdentity();
-        texTest.textures = { tex };
+        texTest.textures.push_back(tex);
     }
 
     // Create raytracing pipelines

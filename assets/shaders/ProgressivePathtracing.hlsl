@@ -88,6 +88,8 @@ float3 shade(float3 position, float3 normal, uint currentDepth)
     MaterialParams mat = materialParams;
     if (materialParams.type > MaterialType::__UniformMaterials) { // use texture
         mat.albedo = sampleMaterial(materialParams.albedo);
+        mat.specular = sampleMaterial(materialParams.specular);
+        mat.emissive = sampleMaterial(materialParams.emissive);
     }
 
     float3 directAtten = mat.albedo.rgb;

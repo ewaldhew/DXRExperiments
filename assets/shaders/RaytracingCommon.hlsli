@@ -169,17 +169,23 @@ float3 sampleEnvironment()
     return envSample.rgb * perFrameConstants.options.environmentStrength;
 }
 
-float4 sampleMaterial(float4 materialParam)
+float4 sampleMaterialEx(float4 materialParam, float3 position)
 {
-    if (materialParam.w == 0.0) {
+    if (materialParam.w < 0.0) {
         uint materialTexIndex = materialParam.x;
-        float3 objPos = mul(WorldToObject3x4(), float4(HitWorldPosition(), 1)).xyz;
+        float3 objPos = mul(WorldToObject3x4(), float4(position, 1)).xyz;
         float3 texPos = mul(float4(objPos, 1), (float4x4) texParams[materialTexIndex].objectSpaceToTex).xyz;
         return materialParamsTex[materialTexIndex].SampleLevel(matTexSampler, texPos, 0.0);
     }
     else {
         return materialParam;
     }
+
+}
+
+float4 sampleMaterial(float4 materialParam)
+{
+    return sampleMaterialEx(materialParam, HitWorldPosition());
 }
 
 bool isInCameraFrustum(float3 position)
