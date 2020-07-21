@@ -62,7 +62,7 @@
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(IntDir);$(SolutionDir)assets\shaders;$(SolutionDir)include;$(SolutionDir)include\utils;$(SolutionDir)libs\DXRFramework;$(SolutionDir)libs\MiniEngine;$(SolutionDir)libs\imgui;$(SolutionDir)libs\assimp\include;$(SolutionDir)externals\DirectXTK12\Inc;$(SolutionDir)externals\D3D12RaytracingFallback\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(IntDir);$(SolutionDir)assets\shaders;$(SolutionDir)include;$(SolutionDir)include\utils;$(SolutionDir)libs\DXRFramework;$(SolutionDir)libs\OpenSimplexNoise;$(SolutionDir)libs\MiniEngine;$(SolutionDir)libs\imgui;$(SolutionDir)libs\assimp\include;$(SolutionDir)externals\DirectXTK12\Inc;$(SolutionDir)externals\D3D12RaytracingFallback\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <CompileAsWinRT>false</CompileAsWinRT>
     </ClCompile>
     <Link>
@@ -104,7 +104,7 @@ PostbuildCopy.bat "$(SolutionDir)vc2015\build\bin\$(Configuration)\"
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(IntDir);$(SolutionDir)assets\shaders;$(SolutionDir)include;$(SolutionDir)include\utils;$(SolutionDir)libs\DXRFramework;$(SolutionDir)libs\MiniEngine;$(SolutionDir)libs\imgui;$(SolutionDir)libs\assimp\include;$(SolutionDir)externals\DirectXTK12\Inc;$(SolutionDir)externals\D3D12RaytracingFallback\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(IntDir);$(SolutionDir)assets\shaders;$(SolutionDir)include;$(SolutionDir)include\utils;$(SolutionDir)libs\DXRFramework;$(SolutionDir)libs\OpenSimplexNoise;$(SolutionDir)libs\MiniEngine;$(SolutionDir)libs\imgui;$(SolutionDir)libs\assimp\include;$(SolutionDir)externals\DirectXTK12\Inc;$(SolutionDir)externals\D3D12RaytracingFallback\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <CompileAsWinRT>false</CompileAsWinRT>
     </ClCompile>
     <Link>
@@ -345,6 +345,10 @@ PostbuildCopy.bat "$(SolutionDir)vc2015\build\bin\$(Configuration)\"
     <ClCompile Include="..\libs\MiniEngine\Math\Random.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="..\libs\OpenSimplexNoise\OpenSimplexNoise.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="..\src\DenoiseCompositor.cpp">
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
@@ -386,6 +390,7 @@ PostbuildCopy.bat "$(SolutionDir)vc2015\build\bin\$(Configuration)\"
     <ClInclude Include="..\libs\MiniEngine\Math\Transform.h" />
     <ClInclude Include="..\libs\MiniEngine\Math\Vector.h" />
     <ClInclude Include="..\libs\MiniEngine\VectorMath.h" />
+    <ClInclude Include="..\libs\OpenSimplexNoise\OpenSimplexNoise.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\DXRExperimentsApp.cpp">
