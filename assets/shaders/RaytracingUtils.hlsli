@@ -150,7 +150,7 @@ float3 samplePhongLobe(inout uint randSeed, float3 mirrorDir, float exponent, in
 // Fresnel reflectance - schlick approximation.
 float3 FresnelReflectanceSchlick(in float3 I, in float3 N, in float3 f0)
 {
-    float cosi = saturate(dot(-I, N));
+    float cosi = abs(dot(-I, N));
     return f0 + (1 - f0)*pow(1 - cosi, 5);
 }
 
