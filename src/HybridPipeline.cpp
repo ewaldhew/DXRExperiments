@@ -167,6 +167,14 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context) :
     auto now = std::chrono::high_resolution_clock::now();
     auto msTime = std::chrono::time_point_cast<std::chrono::milliseconds>(now);
     mRng = std::mt19937(uint32_t(msTime.time_since_epoch().count()));
+
+    D3D12_DESCRIPTOR_HEAP_DESC descriptorHeapDesc = {};
+    descriptorHeapDesc.NumDescriptors = 4;
+    descriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+    context->getDevice()->CreateDescriptorHeap(&descriptorHeapDesc, IID_PPV_ARGS(&mCpuOnlyDescriptorHeap));
+    SetName(mCpuOnlyDescriptorHeap.Get(), L"CPU-only descriptor heap");
+
+    mDescriptorSize = context->getDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 }
 
 HybridPipeline::~HybridPipeline() = default;
@@ -231,6 +239,7 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
         device->CreateUnorderedAccessView(mOutputResource.Get(), nullptr, &uavDesc, uavCpuHandle);
 
         mOutputUavGpuHandle = mRtContext->getDescriptorGPUHandle(mOutputUavHeapIndex);
+        createClearableUav(mOutputResource.Get(), &uavDesc, mOutputUavGpuHandle);
     }
 
     {
@@ -299,9 +308,31 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
         device->CreateUnorderedAccessView(mPhotonDensityResource.Get(), nullptr, &uavDesc, uavCpuHandle);
 
         mPhotonDensityUavGpuHandle = mRtContext->getDescriptorGPUHandle(mPhotonDensityUavHeapIndex);
+        createClearableUav(mPhotonDensityResource.Get(), &uavDesc, mPhotonDensityUavGpuHandle);
     }
 
     mPhotonMappingConstants.CopyStagingToGpu();
+}
+
+void HybridPipeline::createClearableUav(ID3D12Resource* pResource, const D3D12_UNORDERED_ACCESS_VIEW_DESC* uavDesc, D3D12_GPU_DESCRIPTOR_HANDLE uavHandle)
+{
+    auto device = mRtContext->getDevice();
+
+    auto descriptorHeapCpuBase = mCpuOnlyDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+    auto uavCpuHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(descriptorHeapCpuBase, mClearableUavs.size(), mDescriptorSize);
+    device->CreateUnorderedAccessView(pResource, nullptr, uavDesc, uavCpuHandle);
+
+    mClearableUavs.push_back({ uavHandle, uavCpuHandle, pResource });
+}
+
+void HybridPipeline::clearUavs()
+{
+    auto commandList = mRtContext->getCommandList();
+
+    const UINT clear[4] = { 0 };
+    for (auto const& uav : mClearableUavs) {
+        commandList->ClearUnorderedAccessViewUint(uav.gpuHandle, uav.cpuHandle, uav.pResource, clear, 0, nullptr);
+    }
 }
 
 inline void calculateCameraVariables(Math::Camera &camera, float aspectRatio, XMFLOAT4 *U, XMFLOAT4 *V, XMFLOAT4 *W)
@@ -495,6 +526,8 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
     // generate photon seed
     if (pass == Pass::PhotonEmission)
     {
+        clearUavs();
+
         UINT numLights, maxSamples;
         collectEmitters(numLights, maxSamples);
 

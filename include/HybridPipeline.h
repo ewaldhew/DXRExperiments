@@ -42,6 +42,8 @@ public:
 private:
     HybridPipeline(DXRFramework::RtContext::SharedPtr context);
 
+    void createClearableUav(ID3D12Resource* pResource, const D3D12_UNORDERED_ACCESS_VIEW_DESC * uavDesc, D3D12_GPU_DESCRIPTOR_HANDLE uavHandle);
+    void clearUavs();
     void createPipelineStateObjects();
     void collectEmitters(UINT& numLights, UINT& maxSamples);
 
@@ -77,8 +79,6 @@ private:
     std::vector<ComPtr<ID3D12Resource>> mTextureResources;
     std::vector<D3D12_GPU_DESCRIPTOR_HANDLE> mTextureSrvGpuHandles;
 
-    ComPtr<ID3D12Resource> zeroResource;
-
     StructuredBuffer<PhotonEmitter> mPhotonEmitters;
     StructuredBuffer<Photon> mPhotonUploadBuffer;
     ComPtr<ID3D12Resource> mPhotonSeedResource;
@@ -95,6 +95,17 @@ private:
     ComPtr<ID3D12Resource> mPhotonDensityResource;
     UINT mPhotonDensityUavHeapIndex = UINT_MAX;
     D3D12_GPU_DESCRIPTOR_HANDLE mPhotonDensityUavGpuHandle;
+
+    struct ClearableUAV
+    {
+        D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle;
+        D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle;
+        ID3D12Resource* pResource;
+    };
+    ComPtr<ID3D12DescriptorHeap> mCpuOnlyDescriptorHeap; // for clearing photon map resources
+    UINT mDescriptorSize;
+    std::vector<ClearableUAV> mClearableUavs;
+    ComPtr<ID3D12Resource> zeroResource;
 
     // Rendering states
     bool mActive;
