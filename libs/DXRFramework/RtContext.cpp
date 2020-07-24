@@ -163,12 +163,24 @@ namespace DXRFramework
         return getDescriptorGPUHandle(descriptorHeapIndex);
     }
 
+    inline D3D12_SRV_DIMENSION getDimension(D3D12_RESOURCE_DIMENSION dimension)
+    {
+        switch (dimension) {
+        case D3D12_RESOURCE_DIMENSION_TEXTURE2D:
+            return D3D12_SRV_DIMENSION_TEXTURE2D;
+        case D3D12_RESOURCE_DIMENSION_TEXTURE3D:
+            return D3D12_SRV_DIMENSION_TEXTURE3D;
+        default:
+            return D3D12_SRV_DIMENSION_UNKNOWN;
+        }
+    }
+
     static D3D12_SHADER_RESOURCE_VIEW_DESC createTextureSRVDesc(ID3D12Resource *resource, bool cubemap)
     {
         auto textureDesc = resource->GetDesc();
 
         D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-        srvDesc.ViewDimension = cubemap ? D3D12_SRV_DIMENSION_TEXTURECUBE : D3D12_SRV_DIMENSION_TEXTURE2D;
+        srvDesc.ViewDimension = cubemap ? D3D12_SRV_DIMENSION_TEXTURECUBE : getDimension(textureDesc.Dimension);
         srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
         srvDesc.Format = textureDesc.Format;
         srvDesc.Texture2D.MipLevels = (!textureDesc.MipLevels) ? -1 : textureDesc.MipLevels;

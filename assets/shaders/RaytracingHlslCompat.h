@@ -103,6 +103,19 @@ struct PrimitiveInstanceConstants
     XMMATRIX bottomLevelASToLocalSpace;   // Matrix from bottom-level object space to local primitive space.
 };
 
+namespace MaterialType {
+    enum Enum
+    {
+        Diffuse = 0,
+        Glossy,
+        Glass,
+        __UniformMaterials,
+
+        DiffuseTexture,
+        ParticipatingMedia,
+    };
+}
+
 struct MaterialParams
 {
     XMFLOAT4 albedo;
@@ -114,12 +127,18 @@ struct MaterialParams
     UINT type; // 0: diffuse, 1: glossy, 2: specular (glass)
 };
 
+struct MaterialTextureParams
+{
+    XMMATRIX objectSpaceToTex;
+};
+
 namespace MaterialSceneFlags
 {
     enum Enum
     {
         None     = 1 << 0,
         Emissive = 1 << 1,
+        Volume   = 1 << 2,
     };
 }
 

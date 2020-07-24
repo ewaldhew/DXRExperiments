@@ -4,6 +4,7 @@
 #include "WICTextureLoader.h"
 #include "DDSTextureLoader.h"
 #include "ResourceUploadBatch.h"
+#include "utils/DirectXHelper.h"
 #include "Helpers/DirectXRaytracingHelper.h"
 #include "ImGuiRendererDX.h"
 #include <chrono>
@@ -22,6 +23,8 @@ namespace GlobalRootSignatureParams
         PerFrameConstantsSlot,
         DirectionalLightBufferSlot,
         PointLightBufferSlot,
+        MaterialTextureParamsSlot,
+        MaterialTextureSrvSlot,
         Count
     };
 }
@@ -38,6 +41,7 @@ ProgressiveRaytracingPipeline::ProgressiveRaytracingPipeline(RtContext::SharedPt
             L"RayGen",
             L"PrimaryClosestHit", L"PrimaryClosestHit_AABB", L"PrimaryMiss",
             L"ShadowClosestHit", L"ShadowAnyHit", L"ShadowMiss",
+            L"VolumeClosestHit", L"VolumeClosestHit_AABB", L"VolumeMiss",
             L"Intersection_AnalyticPrimitive", L"Intersection_VolumetricPrimitive", L"Intersection_SignedDistancePrimitive"
         };
         programDesc.addShaderLibrary(g_pProgressivePathtracing, ARRAYSIZE(g_pProgressivePathtracing), libraryExports);
@@ -54,6 +58,12 @@ ProgressiveRaytracingPipeline::ProgressiveRaytracingPipeline(RtContext::SharedPt
             .addHitGroup(1, RtModel::GeometryType::AABB_Volumetric, "", "", "Intersection_VolumetricPrimitive")
             .addHitGroup(1, RtModel::GeometryType::AABB_SignedDistance, "", "", "Intersection_SignedDistancePrimitive")
             .addMiss(1, "ShadowMiss");
+        programDesc
+            .addHitGroup(2, RtModel::GeometryType::Triangles, "VolumeClosestHit", "")
+            .addHitGroup(2, RtModel::GeometryType::AABB_Analytic, "VolumeClosestHit_AABB", "", "Intersection_AnalyticPrimitive")
+            .addHitGroup(2, RtModel::GeometryType::AABB_Volumetric, "VolumeClosestHit_AABB", "", "Intersection_VolumetricPrimitive")
+            .addHitGroup(2, RtModel::GeometryType::AABB_SignedDistance, "VolumeClosestHit_AABB", "", "Intersection_SignedDistancePrimitive")
+            .addMiss(2, "VolumeMiss");
 
         programDesc.configureGlobalRootSignature([] (RootSignatureGenerator &config) {
             // GlobalRootSignatureParams::AccelerationStructureSlot
@@ -75,6 +85,20 @@ ProgressiveRaytracingPipeline::ProgressiveRaytracingPipeline(RtContext::SharedPt
             cubeSampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
             cubeSampler.ShaderRegister = 0;
             config.AddStaticSampler(cubeSampler);
+
+            D3D12_STATIC_SAMPLER_DESC matTexSampler = {};
+            matTexSampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+            matTexSampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+            matTexSampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+            matTexSampler.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+            matTexSampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+            matTexSampler.ShaderRegister = 1;
+            config.AddStaticSampler(matTexSampler);
+
+            // GlobalRootSignatureParams::MaterialTextureParamsSlot
+            config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 0 /* t0 */, 9); // space9 t0
+            // GlobalRootSignatureParams::MaterialTextureSrvSlot
+            config.AddHeapRangesParameter({{1 /* t1 */, -1 /* unbounded */, 9 /* space9 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}});
         });
         programDesc.configureHitGroupRootSignature([] (RootSignatureGenerator &config) {
             config = {};
@@ -98,7 +122,7 @@ ProgressiveRaytracingPipeline::ProgressiveRaytracingPipeline(RtContext::SharedPt
     mRtProgram = RtProgram::create(context, programDesc);
     mRtState = RtState::create(context);
     mRtState->setProgram(mRtProgram);
-    mRtState->setMaxTraceRecursionDepth(4);
+    mRtState->setMaxTraceRecursionDepth(8);
     mRtState->setMaxAttributeSize(sizeof(ProceduralPrimitiveAttributes));
     mRtState->setMaxPayloadSize(20);
 
@@ -134,22 +158,61 @@ void ProgressiveRaytracingPipeline::buildAccelerationStructures()
 
 void ProgressiveRaytracingPipeline::loadResources(ID3D12CommandQueue *uploadCommandQueue, UINT frameCount)
 {
+    auto device = mRtContext->getDevice();
+
     mTextureResources.resize(2);
-    mTextureSrvGpuHandles.resize(2);
+    mTextureSrvGpuHandles.resize(3);
+
+    mTextureParams.Create(device, mMaterials.size(), 1, L"MaterialTextureParams");
 
     // Create and upload global textures
-    auto device = mRtContext->getDevice();
     ResourceUploadBatch resourceUpload(device);
     resourceUpload.Begin();
     {
         ThrowIfFailed(CreateWICTextureFromFile(device, resourceUpload, L"..\\assets\\textures\\HdrStudioProductNightStyx001_JPG_8K.jpg", &mTextureResources[0], true));
         ThrowIfFailed(CreateDDSTextureFromFile(device, resourceUpload, L"..\\assets\\textures\\CathedralRadiance.dds", &mTextureResources[1]));
+
+        UINT textureIndex = 0;
+        UINT prevDescriptorHeapIndex = -1;
+        for (auto & material : mMaterials)
+        {
+            if (material.params.type <= MaterialType::__UniformMaterials) continue;
+
+            for (auto const& tex : material.textures)
+            {
+                ComPtr<ID3D12Resource> textureResource;
+                CreateTextureResource(
+                    device, resourceUpload,
+                    tex.width, tex.height, tex.depth, tex.width * sizeof(XMFLOAT4), tex.height,
+                    DXGI_FORMAT_R32G32B32A32_FLOAT, tex.data.data(), textureResource);
+                mTextureResources.push_back(textureResource);
+                mTextureParams[textureIndex] = tex.params;
+
+                D3D12_CPU_DESCRIPTOR_HANDLE srvCpuHandle;
+                auto descriptorIndex = mRtContext->allocateDescriptor(&srvCpuHandle);
+                auto texSrvGpuHandle = mRtContext->createTextureSRVHandle(textureResource.Get(), false, descriptorIndex);
+
+                if (prevDescriptorHeapIndex == -1) {
+                    mTextureSrvGpuHandles[2] = texSrvGpuHandle;
+                }
+                else {
+                    ThrowIfFalse(descriptorIndex == prevDescriptorHeapIndex + 1, L"Material texture descriptor indices not contiguous");
+                }
+
+                prevDescriptorHeapIndex = descriptorIndex;
+                material.params.*tex.targetParam = XMFLOAT4(textureIndex++, 0, 0, -1.0f);
+            }
+        }
     }
     auto uploadResourcesFinished = resourceUpload.End(uploadCommandQueue);
     uploadResourcesFinished.wait();
 
     mTextureSrvGpuHandles[0] = mRtContext->createTextureSRVHandle(mTextureResources[0].Get());
     mTextureSrvGpuHandles[1] = mRtContext->createTextureSRVHandle(mTextureResources[1].Get(), true);
+
+    if (!mTextureSrvGpuHandles[2].ptr) {
+        mTextureSrvGpuHandles[2] = mTextureSrvGpuHandles[1];
+    }
 
     // Create per-frame constant buffer
     mConstantBuffer.Create(device, frameCount, L"PerFrameConstantBuffer");
@@ -245,6 +308,8 @@ void ProgressiveRaytracingPipeline::update(float elapsedTime, UINT elapsedFrames
     XMStoreFloat4(&mPointLights[0].worldPos, pointLightPos);
     mPointLights[0].color = pointLightColor;
     mPointLights.CopyStagingToGpu(frameIndex);
+
+    mTextureParams.CopyStagingToGpu();
 }
 
 void ProgressiveRaytracingPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIndex, UINT width, UINT height, UINT& pass)
@@ -288,6 +353,8 @@ void ProgressiveRaytracingPipeline::render(ID3D12GraphicsCommandList *commandLis
     commandList->SetComputeRootConstantBufferView(GlobalRootSignatureParams::PerFrameConstantsSlot, mConstantBuffer.GpuVirtualAddress(frameIndex));
     commandList->SetComputeRootShaderResourceView(GlobalRootSignatureParams::DirectionalLightBufferSlot, mDirLights.GpuVirtualAddress(frameIndex));
     commandList->SetComputeRootShaderResourceView(GlobalRootSignatureParams::PointLightBufferSlot, mPointLights.GpuVirtualAddress(frameIndex));
+    commandList->SetComputeRootDescriptorTable(GlobalRootSignatureParams::MaterialTextureSrvSlot, mTextureSrvGpuHandles[2]);
+    commandList->SetComputeRootShaderResourceView(GlobalRootSignatureParams::MaterialTextureParamsSlot, mTextureParams.GpuVirtualAddress());
     commandList->SetComputeRootDescriptorTable(GlobalRootSignatureParams::OutputViewSlot, mOutputUavGpuHandle);
     mRtContext->getFallbackCommandList()->SetTopLevelAccelerationStructure(GlobalRootSignatureParams::AccelerationStructureSlot, mRtScene->getTlasWrappedPtr());
 

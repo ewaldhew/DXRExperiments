@@ -6,6 +6,7 @@
 #include "Helpers/DirectXRaytracingHelper.h"
 #include "ImGuiRendererDX.h"
 #include "GameInput.h"
+#include "OpenSimplexNoise.h"
 
 using namespace std;
 using namespace DXRFramework;
@@ -96,7 +97,7 @@ void DXRExperimentsApp::InitRaytracing()
         auto lightMeshTransform =
             DirectX::XMMatrixRotationX(XM_PIDIV2) *
             DirectX::XMMatrixScaling(2, 2, 2) *
-            DirectX::XMMatrixTranslation(0, 9.999, 0);
+            DirectX::XMMatrixTranslation(0, 9.999f, 0);
         std::vector<Vertex> squareVerts =
         {
             { { -1.0f, 1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f } },
@@ -105,35 +106,76 @@ void DXRExperimentsApp::InitRaytracing()
             { { 1.0f, 1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f } },
         };
         mRtScene->addModel(RtMesh::create(mRtContext, squareVerts, { 0, 1, 3, 1, 2, 3 }, 3), lightMeshTransform, MaterialSceneFlags::Emissive);
+
+        auto volumeTransform = XMMatrixScaling(20, 20, 20) * XMMatrixTranslation(-10., -10., -10.);
+        mRtScene->addModel(RtProcedural::create(mRtContext, PrimitiveType::AnalyticPrimitive_AABB, XMFLOAT3(), XMFLOAT3(1, 1, 1), 5), volumeTransform, MaterialSceneFlags::Volume);
     }
 
     // Create materials
     std::vector<RaytracingPipeline::Material> materials;
-    materials.resize(4);
+    auto material = std::back_inserter(materials);
     {
-        RaytracingPipeline::Material &white = materials[0];
+        material = {};
+        RaytracingPipeline::Material &white = materials.back();
         white.params.albedo = XMFLOAT4(0.72f, 0.75f, 0.65f, 1.0f);
         white.params.roughness = 1.0f;
-        white.params.type = 0;
+        white.params.type = MaterialType::Diffuse;
     }
     {
-        RaytracingPipeline::Material &green = materials[1];
+        material = {};
+        RaytracingPipeline::Material &green = materials.back();
         green.params.albedo = XMFLOAT4(0.15f, 0.45f, 0.10f, 1.0f);
         green.params.roughness = 1.0f;
-        green.params.type = 0;
+        green.params.type = MaterialType::Diffuse;
     }
     {
-        RaytracingPipeline::Material &red = materials[2];
+        material = {};
+        RaytracingPipeline::Material &red = materials.back();
         red.params.albedo = XMFLOAT4(0.60f, 0.07f, 0.05f, 1.0f);
         red.params.roughness = 1.0f;
-        red.params.type = 0;
+        red.params.type = MaterialType::Diffuse;
     }
     {
-        RaytracingPipeline::Material &light = materials[3];
+        material = {};
+        RaytracingPipeline::Material &light = materials.back();
         light.params.albedo = XMFLOAT4(0.78f, 0.78f, 0.78f, 1.0f);
         light.params.emissive = XMFLOAT4(16.8f, 14.5f, 8.0f, 1.0f);
         light.params.reflectivity = 0.7f;
-        light.params.type = 0;
+        light.params.type = MaterialType::Diffuse;
+    }
+    {
+        material = {};
+        RaytracingPipeline::Material &glass = materials.back();
+        glass.params.albedo = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
+        glass.params.reflectivity = 0.7f;
+        glass.params.type = MaterialType::Glass;
+        glass.params.IoR = 1.2;
+    }
+    {
+        material = {};
+        RaytracingPipeline::Material &texTest = materials.back();
+        texTest.params.type = MaterialType::ParticipatingMedia;
+        texTest.params.reflectivity = 0.6f;
+        RaytracingPipeline::MaterialTexture tex{ &MaterialParams::albedo };
+        tex.data = { // starts bottom-left
+        };
+        tex.depth = 50;
+        tex.height = 50;
+        tex.width = 50;
+        tex.data.resize(tex.depth * tex.height * tex.width);
+        OpenSimplexNoise::Noise noise;
+        for (UINT i = 0; i < tex.depth; i++) {
+            for (UINT j = 0; j < tex.height; j++) {
+                for (UINT k = 0; k < tex.width; k++) {
+                    float extinction = (noise.eval(i / (double)tex.depth, j/ (double)tex.height, k/ (double)tex.width) + 0.23) ;
+                    extinction = 0.02;//(j + k) % 2 ? 0.8 : 0.4;
+                    //extinction = min(max(extinction, 0.1), 0.8);
+                    tex.data[i*tex.height*tex.width + j*tex.width + k] = XMFLOAT4(extinction, extinction * 0.8, 0, 1);
+                }
+            }
+        }
+        tex.params.objectSpaceToTex = XMMatrixIdentity();
+        texTest.textures.push_back(tex);
     }
 
     // Create raytracing pipelines

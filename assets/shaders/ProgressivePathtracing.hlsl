@@ -1,5 +1,6 @@
 #include "RaytracingCommon.hlsli"
 #include "ProceduralPrimitives.hlsli"
+#include "ParticipatingMedia.hlsli"
 
 RWTexture2D<float4> gOutput : register(u0);
 
@@ -85,23 +86,33 @@ float3 shade(float3 position, float3 normal, uint currentDepth)
     uint2 numPix = DispatchRaysDimensions().xy;
     uint randSeed = initRand(pixIdx.x + pixIdx.y * numPix.x, perFrameConstants.cameraParams.frameCount);
 
-    float3 atten = materialParams.albedo.rgb;
+    MaterialParams mat = materialParams;
+    if (materialParams.type > MaterialType::__UniformMaterials) { // use texture
+        mat.albedo = sampleMaterial(materialParams.albedo);
+        mat.specular = sampleMaterial(materialParams.specular);
+        mat.emissive = sampleMaterial(materialParams.emissive);
+    }
+
+    float3 directAtten = mat.albedo.rgb;
+    float3 indirectAtten = mat.albedo.rgb;
+    float3 emission = mat.emissive.rgb * mat.emissive.a;
     float3 directContrib = 0.0;
     float3 indirectContrib = 0.0;
     float emissiveAtten = dot(-WorldRayDirection().xyz, normal.xyz) < 0. ? 0. : 1.;
 
     // indirect light - sample scattering direction to evaluate secondary ray
-    switch (materialParams.type)
+    switch (mat.type)
     {
-    case 0: { // lambertian
+    case MaterialType::Diffuse:
+    case MaterialType::DiffuseTexture: { // lambertian
         // Calculate indirect diffuse
         if (!perFrameConstants.options.noIndirectDiffuse) {
             indirectContrib = evaluateIndirectDiffuse(position, normal, randSeed, currentDepth) / M_PI;
         }
         break;
     }
-    case 1: { // metal
-        float exponent = exp((1.0 - materialParams.roughness) * 12.0);
+    case MaterialType::Glossy: { // metal
+        float exponent = exp((1.0 - mat.roughness) * 12.0);
         float pdf;
         float brdf;
         float3 mirrorDir = reflect(WorldRayDirection(), normal);
@@ -112,12 +123,12 @@ float3 shade(float3 position, float3 normal, uint currentDepth)
         }
         break;
     }
-    case 2: { // dielectric
+    case MaterialType::Glass: { // dielectric
         float3 refractDir;
         float3 reflectProb;
-        bool refracted = refract(refractDir, WorldRayDirection(), normal, materialParams.IoR);
+        bool refracted = refract(refractDir, WorldRayDirection(), normal, mat.IoR);
         if (refracted) {
-            float f0 = ((materialParams.IoR-1)*(materialParams.IoR-1) / (materialParams.IoR+1)*(materialParams.IoR+1));
+            float f0 = ((mat.IoR-1)*(mat.IoR-1) / (mat.IoR+1)*(mat.IoR+1));
             reflectProb = FresnelReflectanceSchlick(WorldRayDirection(), normal, f0);
         } else {
             reflectProb = 1.0;
@@ -132,9 +143,58 @@ float3 shade(float3 position, float3 normal, uint currentDepth)
         }
         break;
     }
+    case MaterialType::ParticipatingMedia: {
+        // the object represents the boundary
+        // we are somewhere inside the volume now
+
+        float throughput = 1.0;
+        uint numInteractions = 0;
+        float3 prevPosition = position;
+        float3 params; // x - extinction, y - scattering
+        float3 rayDir = WorldRayDirection();
+        while (evaluateVolumeInteraction(randSeed, position, rayDir, params, currentDepth))
+        {
+            if (numInteractions++ > MAX_VOLUME_INTERACTIONS) {
+                //throughput = 0.0;
+                break;
+            }
+
+            // attenuate by albedo = scattering / extinction
+            throughput *= params.y / params.x;
+
+            // Russian roulette absorption
+            if (throughput < 0.2) {
+                if (nextRand(randSeed) > throughput * 5.0) {
+                    throughput = 0.0;
+                    break;
+                }
+                throughput = 0.2;
+            }
+
+            // Sample lights
+
+            // Sample the phase function
+            { // isotropic
+                rayDir = getUniformSphereSample(randSeed);
+            }
+
+            prevPosition = position;
+        }
+
+        // a volume boundary happens between position and prevPosition
+        rayDir = normalize(position - prevPosition);
+
+        indirectAtten = throughput;
+
+        if (any(indirectAtten)) {
+            // exited volume, look up the environment
+            indirectContrib = shootSecondaryRay(prevPosition, rayDir, RAY_EPSILON, currentDepth);
+        }
+        break;
+    }
     }
 
-    return emissiveAtten * materialParams.emissive.rgb * materialParams.emissive.a + materialParams.albedo.rgb * directContrib + atten * indirectContrib;
+    return emissiveAtten * emission + directAtten * directContrib + indirectAtten * indirectContrib;
 }
 
 [shader("closesthit")]

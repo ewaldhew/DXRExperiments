@@ -48,6 +48,9 @@
     <Filter Include="Libs\DXRFramework\Helpers">
       <UniqueIdentifier>{b5d8250b-dc5f-4ec9-b78e-8eeaca3e39d7}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Libs\OpenSimplexNoise">
+      <UniqueIdentifier>{37ffc443-8611-43dd-8284-cb3f4eba19f0}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\include\utils\StepTimer.h">
@@ -419,6 +422,12 @@
     <ClInclude Include="..\libs\MiniEngine\Math\BoundingBox.h">
       <Filter>Libs\MiniEngine\Math</Filter>
     </ClInclude>
+    <ClInclude Include="..\include\utils\DirectXHelper.h">
+      <Filter>Header Files\Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libs\OpenSimplexNoise\OpenSimplexNoise.h">
+      <Filter>Libs\OpenSimplexNoise</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\Main.cpp">
@@ -526,6 +535,9 @@
     <ClCompile Include="..\src\HybridPipeline.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\libs\OpenSimplexNoise\OpenSimplexNoise.cpp">
+      <Filter>Libs\OpenSimplexNoise</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\assets\shaders\RaytracingUtils.hlsli">
@@ -568,6 +580,9 @@
       <Filter>Assets\Shaders</Filter>
     </None>
     <None Include="..\assets\shaders\PhotonSplatting.ps.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </None>
+    <None Include="..\assets\shaders\ParticipatingMedia.hlsli">
       <Filter>Assets\Shaders</Filter>
     </None>
   </ItemGroup>

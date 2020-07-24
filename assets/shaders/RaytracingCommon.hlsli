@@ -8,8 +8,8 @@
 #define RAY_MAX_T 1.0e+38f
 #define RAY_EPSILON 0.0001
 
-#define MAX_RADIANCE_RAY_DEPTH 3
-#define MAX_SHADOW_RAY_DEPTH 2
+#define MAX_RADIANCE_RAY_DEPTH 6
+#define MAX_SHADOW_RAY_DEPTH 7
 
 ////////////////////////////////////////////////////////////////////////////////
 // Global root signature
@@ -22,6 +22,10 @@ StructuredBuffer<DirectionalLightParams> directionalLights : register(t1);
 StructuredBuffer<PointLightParams> pointLights : register(t2);
 
 SamplerState defaultSampler : register(s0);
+SamplerState matTexSampler : register(s1);
+
+Texture3D<float4> materialParamsTex[] : register(t1, space9);
+StructuredBuffer<MaterialTextureParams> texParams : register(t0, space9);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Hit-group local root signature
@@ -174,6 +178,25 @@ float3 sampleEnvironment()
 float3 HitWorldPosition()
 {
     return WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
+}
+
+float4 sampleMaterialEx(float4 materialParam, float3 position)
+{
+    if (materialParam.w < 0.0) {
+        uint materialTexIndex = materialParam.x;
+        float3 objPos = mul(WorldToObject3x4(), float4(position, 1)).xyz;
+        float3 texPos = mul(float4(objPos, 1), (float4x4) texParams[materialTexIndex].objectSpaceToTex).xyz;
+        return materialParamsTex[materialTexIndex].SampleLevel(matTexSampler, texPos, 0.0);
+    }
+    else {
+        return materialParam;
+    }
+
+}
+
+float4 sampleMaterial(float4 materialParam)
+{
+    return sampleMaterialEx(materialParam, HitWorldPosition());
 }
 
 bool isInCameraFrustum(float3 position)
