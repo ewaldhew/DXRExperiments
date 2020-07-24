@@ -147,40 +147,48 @@ float3 shade(float3 position, float3 normal, uint currentDepth)
         // the object represents the boundary
         // we are somewhere inside the volume now
 
-        float w = 1.0;
+        float throughput = 1.0;
         uint numInteractions = 0;
+        float3 prevPosition = position;
         float3 params; // x - extinction, y - scattering
         float3 rayDir = WorldRayDirection();
         while (evaluateVolumeInteraction(randSeed, position, rayDir, params, currentDepth))
         {
             if (numInteractions++ > MAX_VOLUME_INTERACTIONS) {
-                w = 0.0;
+                //throughput = 0.0;
                 break;
             }
 
             // attenuate by albedo = scattering / extinction
-            w *= params.y / params.x;
+            throughput *= params.y / params.x;
 
             // Russian roulette absorption
-            if (w < 0.2) {
-                if (nextRand(randSeed) > w * 5.0) {
-                    w = 0.0;
+            if (throughput < 0.2) {
+                if (nextRand(randSeed) > throughput * 5.0) {
+                    throughput = 0.0;
                     break;
                 }
-                w = 0.2;
+                throughput = 0.2;
             }
+
+            // Sample lights
 
             // Sample the phase function
             { // isotropic
                 rayDir = getUniformSphereSample(randSeed);
             }
+
+            prevPosition = position;
         }
 
-        indirectAtten = w;
+        // a volume boundary happens between position and prevPosition
+        rayDir = normalize(position - prevPosition);
 
-        if (w > 0) {
+        indirectAtten = throughput;
+
+        if (any(indirectAtten)) {
             // exited volume, look up the environment
-            indirectContrib = shootSecondaryRay(position, rayDir, RAY_EPSILON, currentDepth);
+            indirectContrib = shootSecondaryRay(prevPosition, rayDir, RAY_EPSILON, currentDepth);
         }
         break;
     }

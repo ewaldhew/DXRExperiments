@@ -122,7 +122,7 @@ ProgressiveRaytracingPipeline::ProgressiveRaytracingPipeline(RtContext::SharedPt
     mRtProgram = RtProgram::create(context, programDesc);
     mRtState = RtState::create(context);
     mRtState->setProgram(mRtProgram);
-    mRtState->setMaxTraceRecursionDepth(4);
+    mRtState->setMaxTraceRecursionDepth(8);
     mRtState->setMaxAttributeSize(sizeof(ProceduralPrimitiveAttributes));
     mRtState->setMaxPayloadSize(20);
 

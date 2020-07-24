@@ -8,8 +8,8 @@
 #define RAY_MAX_T 1.0e+38f
 #define RAY_EPSILON 0.0001
 
-#define MAX_RADIANCE_RAY_DEPTH 3
-#define MAX_SHADOW_RAY_DEPTH 2
+#define MAX_RADIANCE_RAY_DEPTH 6
+#define MAX_SHADOW_RAY_DEPTH 7
 
 ////////////////////////////////////////////////////////////////////////////////
 // Global root signature
