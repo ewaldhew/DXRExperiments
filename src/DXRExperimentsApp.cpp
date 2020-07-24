@@ -6,6 +6,7 @@
 #include "Helpers/DirectXRaytracingHelper.h"
 #include "ImGuiRendererDX.h"
 #include "GameInput.h"
+#include "OpenSimplexNoise.h"
 
 using namespace std;
 using namespace DXRFramework;
@@ -91,8 +92,7 @@ void DXRExperimentsApp::InitRaytracing()
         // working directory is "vc2015"
         RtMesh::importMeshesFromFile([&](RtMesh::SharedPtr mesh) {
             mRtScene->addModel(mesh, DirectX::XMMatrixScaling(10, 10, 10), MaterialSceneFlags::None);
-        //}, mRtContext, "..\\assets\\models\\cornell.obj", { 2, 0, 0, 1, 0, 0, 0 });
-        }, mRtContext, "..\\assets\\models\\cornell.obj", { 5, 5, 5, 5, 5, 0, 0 });
+        }, mRtContext, "..\\assets\\models\\cornell.obj", { 2, 0, 0, 1, 0, 0, 0 });
 
         auto lightMeshTransform =
             DirectX::XMMatrixRotationX(XM_PIDIV2) *
@@ -107,7 +107,8 @@ void DXRExperimentsApp::InitRaytracing()
         };
         mRtScene->addModel(RtMesh::create(mRtContext, squareVerts, { 0, 1, 3, 1, 2, 3 }, 3), lightMeshTransform, MaterialSceneFlags::Emissive);
 
-        //mRtScene->addModel(RtProcedural::create(mRtContext, PrimitiveType::AnalyticPrimitive_AABB, XMFLOAT3(-3, -3, -3), XMFLOAT3(7, 7, 7), 4), identity);
+        auto volumeTransform = XMMatrixScaling(20, 20, 20) * XMMatrixTranslation(-10., -10., -10.);
+        mRtScene->addModel(RtProcedural::create(mRtContext, PrimitiveType::AnalyticPrimitive_AABB, XMFLOAT3(), XMFLOAT3(1, 1, 1), 5), volumeTransform, MaterialSceneFlags::Volume);
     }
 
     // Create materials
@@ -153,17 +154,26 @@ void DXRExperimentsApp::InitRaytracing()
     {
         material = {};
         RaytracingPipeline::Material &texTest = materials.back();
-        texTest.params.type = MaterialType::DiffuseTexture;
+        texTest.params.type = MaterialType::ParticipatingMedia;
+        texTest.params.reflectivity = 0.6f;
         RaytracingPipeline::MaterialTexture tex{ &MaterialParams::albedo };
         tex.data = { // starts bottom-left
-            {1,0,0,1},
-            {0,0,1,1},
-            {0,1,0,1},
-            {1,1,0,1},
         };
-        tex.depth = 1;
-        tex.height = 2;
-        tex.width = 2;
+        tex.depth = 50;
+        tex.height = 50;
+        tex.width = 50;
+        tex.data.resize(tex.depth * tex.height * tex.width);
+        OpenSimplexNoise::Noise noise;
+        for (UINT i = 0; i < tex.depth; i++) {
+            for (UINT j = 0; j < tex.height; j++) {
+                for (UINT k = 0; k < tex.width; k++) {
+                    float extinction = (noise.eval(i / (double)tex.depth, j/ (double)tex.height, k/ (double)tex.width) + 0.23) ;
+                    extinction = 0.02;//(j + k) % 2 ? 0.8 : 0.4;
+                    //extinction = min(max(extinction, 0.1), 0.8);
+                    tex.data[i*tex.height*tex.width + j*tex.width + k] = XMFLOAT4(extinction, extinction * 0.8, 0, 1);
+                }
+            }
+        }
         tex.params.objectSpaceToTex = XMMatrixIdentity();
         texTest.textures.push_back(tex);
     }
