@@ -145,6 +145,7 @@ namespace MaterialSceneFlags
 struct PhotonMappingConstants
 {
     XMUINT2 numTiles;
+    XMUINT2 vpSize;
 };
 
 // Number of metaballs to use within an AABB.

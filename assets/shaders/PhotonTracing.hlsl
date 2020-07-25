@@ -26,35 +26,43 @@ struct PhotonPayload
 // Global root signature
 StructuredBuffer<Photon> photonSeed : register(t3);
 
-//RWStructuredBuffer<Photon> gOutput : register(u0);
-RWTexture2D<float4> gOutput : register(u0);
+RWStructuredBuffer<Photon> gOutput : register(u0);
+RWTexture2D<float4> gDebug : register(u9);
 RWTexture2D<uint> gPhotonDensityMap : register(u1);
 
 ConstantBuffer<PhotonMappingConstants> photonMapConsts : register(b1);
 
 
-//void validate_and_add_photon(float3 normal, float3 position, float3 power, float3 in_direction, float t)
-//{
-//    if (isInCameraFrustum(position) && isInViewDirection(normal)) {
-//        float2 offsetFromBottomRight = (unproject(position) + 1.f) / 2.f;
-//        uint2 tile = uint2((offsetFromBottomRight * float2(photonMapConsts.numTiles.xy)).xy);
-//
-//        // Offset in the photon buffer and the indirect argument
-//        uint photon_index = gOutput.IncrementCounter();
-//
-//        // Photon is packed and stored with correct offset.
-//        Photon stored_photon;
-//        stored_photon.position = position;
-//        stored_photon.power = power;
-//        stored_photon.direction = unitvec_to_spherical(in_direction);
-//        stored_photon.normal = unitvec_to_spherical(normal);
-//        stored_photon.distTravelled = t;
-//        gOutput[photon_index] = stored_photon;
-//
-//        // Tile-based photon density estimation
-//        InterlockedAdd(gPhotonDensityMap[tile.xy], 1);
-//    }
-//}
+void validate_and_add_photon(float3 normal, float3 position, float3 power, float3 in_direction, float t)
+{
+    if (any(power) && isInCameraFrustum(position))
+    {
+        float2 offsetFromBottomRight = (unproject(position) + 1.f) / 2.f;
+        uint2 tile = uint2((offsetFromBottomRight * float2(photonMapConsts.numTiles.xy)).xy);
+
+        // Offset in the photon buffer and the indirect argument
+        uint photon_index = gOutput.IncrementCounter();
+
+        // Photon is packed and stored with correct offset.
+        Photon stored_photon;
+        stored_photon.position = position;
+        stored_photon.power = power;
+        stored_photon.direction = unitvec_to_spherical(in_direction);
+        stored_photon.normal = unitvec_to_spherical(normal);
+        stored_photon.distTravelled = t;
+        gOutput[photon_index] = stored_photon;
+
+        // Tile-based photon density estimation
+        InterlockedAdd(gPhotonDensityMap[tile.xy], 1);
+
+        //
+        offsetFromBottomRight = (unproject(position) + 1.f) / 2.f;
+        tile = uint2((offsetFromBottomRight * float2(photonMapConsts.vpSize.xy)).xy);
+        gDebug[tile] = float4(power * 0.01, 1.0);
+        //gDebug[tile] = float4(1,0,1, 1.0);
+        //
+    }
+}
 
 [shader("raygeneration")]
 void RayGen()
@@ -82,14 +90,7 @@ void RayGen()
         TraceRay(SceneBVH, RAY_FLAG_FORCE_OPAQUE, 0xFF, 0, 0, 0, ray, payload);
 
         float3 stored_power = payload.power.rgb;
-        //validate_and_add_photon(payload.normal, payload.position, stored_power, in_direction, payload.distTravelled);
-        //
-        float2 offsetFromBottomRight = (unproject(payload.position) + 1.f) / 2.f;
-        uint2 tile = uint2((offsetFromBottomRight * float2(1920, 1080)).xy);
-        if (payload.bounce > perFrameConstants.options.debug) {
-            gOutput[tile] = float4(stored_power * 0.005, 1.0);
-        }
-        //
+        validate_and_add_photon(payload.normal, payload.position, stored_power, in_direction, payload.distTravelled);
 
         if (payload.bounce == bounce) {
             // prevent infinite loop
