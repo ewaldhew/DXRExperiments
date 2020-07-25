@@ -50,6 +50,9 @@ namespace DXRFramework
             Desc& addMiss(uint32_t missIndex, const std::string& miss);
             Desc& addHitGroup(uint32_t hitIndex, uint32_t geomIndex, const std::string& closestHit, const std::string& anyHit, const std::string& intersection = "");
 
+            Desc& addDummyMiss(uint32_t missIndex);
+            Desc& addDummyHitGroup(uint32_t hitIndex, uint32_t geomIndex);
+
             using RootSignatureConfigurator = std::function<void(RootSignatureGenerator &config)>;
             Desc& configureGlobalRootSignature(RootSignatureConfigurator configure);
             Desc& configureRayGenRootSignature(RootSignatureConfigurator configure);

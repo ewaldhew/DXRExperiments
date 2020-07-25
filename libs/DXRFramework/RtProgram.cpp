@@ -99,6 +99,21 @@ namespace DXRFramework
         return *this;
     }
 
+    RtProgram::Desc& RtProgram::Desc::addDummyMiss(uint32_t missIndex)
+    {
+        if (missIndex == 0) {
+            throw std::invalid_argument("First entry of miss shader table cannot be padding!");
+        }
+
+        const auto miss = mMiss[0].entryPoint;
+        return addMiss(missIndex, miss);
+    }
+
+    RtProgram::Desc& RtProgram::Desc::addDummyHitGroup(uint32_t hitIndex, uint32_t geomIndex)
+    {
+        return addHitGroup(hitIndex, geomIndex, "", "");
+    }
+
     RtProgram::Desc& RtProgram::Desc::configureGlobalRootSignature(RootSignatureConfigurator configure)
     {
         configure(mGlobalRootSignatureConfig);
