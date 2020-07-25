@@ -199,25 +199,50 @@ float4 sampleMaterial(float4 materialParam)
     return sampleMaterialEx(materialParam, HitWorldPosition());
 }
 
-bool isInCameraFrustum(float3 position)
+void collectMaterialParams(inout MaterialParams mat)
 {
+    if (materialParams.type > MaterialType::__UniformMaterials) { // use texture
+        mat.albedo = sampleMaterial(materialParams.albedo);
+        mat.specular = sampleMaterial(materialParams.specular);
+        mat.emissive = sampleMaterial(materialParams.emissive);
+    }
+}
+
+bool isInCameraFrustum(float3 positionW)
+{
+/*
+float2 nearFar = float2(-1, -10000); //
+float2 NH = float2(0.981548727, -0.191212296);//perFrameConstants.cameraParams.frustumNH;
+float2 NV = float2(0.923879504, -0.382683456);//perFrameConstants.cameraParams.frustumNV;
+float3 pEye = positionW - float3(-0.106352657, -6.43664360, 6.74065351);
+float u = scalarProjection2(pEye, float3(0.880725801, 1.02530914e-10, -0.00380476611));
+float v = scalarProjection2(pEye, float3(-0.000194800508, 0.411751777, -0.0450923331));
+float w = scalarProjection2(pEye, float3(-0.00429431954, -0.108863547, -0.994047523));
+*/
+
     // for each plane of the frustum, check that dot(position, planeNormal) + planeDist is nonnegative
     float2 nearFar = perFrameConstants.cameraParams.frustumNearFar;
     float2 NH = perFrameConstants.cameraParams.frustumNH;
     float2 NV = perFrameConstants.cameraParams.frustumNV;
 
+    float3 pEye = positionW - perFrameConstants.cameraParams.worldEyePos.xyz;
+    float u = scalarProjection2(pEye, perFrameConstants.cameraParams.U.xyz);
+    float v = scalarProjection2(pEye, perFrameConstants.cameraParams.V.xyz);
+    float w = scalarProjection2(pEye, perFrameConstants.cameraParams.W.xyz);
+    float3 position = float3(u/w, v/w, -w);
+
     if (-position.z + nearFar.x < 0.0) { // near
         return false;
-    } else if (position.z + nearFar.y < 0.0) { // far
+    } else if (position.z - nearFar.y < 0.0) { // far
         return false;
-    } else if (NH.x * position.x + NH.y * position.z < 0.0) { // left
-        return false;
-    } else if (-NH.x * position.x + NH.y * position.z < 0.0) { // right
-        return false;
-    } else if (-NV.x * position.y + NV.y * position.z < 0.0) { // top
-        return false;
-    } else if (NV.x * position.y + NV.y * position.z < 0.0) { // bottom
-        return false;
+    //} else if (NH.x * position.x + NH.y * position.z < 0.0) { // left
+    //    return false;
+    //} else if (-NH.x * position.x + NH.y * position.z < 0.0) { // right
+    //    return false;
+    //} else if (-NV.x * position.y + NV.y * position.z < 0.0) { // top
+    //    return false;
+    //} else if (NV.x * position.y + NV.y * position.z < 0.0) { // bottom
+    //    return false;
     } else {
         return true;
     }

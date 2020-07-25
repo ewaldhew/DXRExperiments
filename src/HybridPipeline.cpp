@@ -5,6 +5,7 @@
 #include "WICTextureLoader.h"
 #include "DDSTextureLoader.h"
 #include "ResourceUploadBatch.h"
+#include "utils/DirectXHelper.h"
 #include "ImGuiRendererDX.h"
 #include <chrono>
 
@@ -25,6 +26,8 @@ namespace GlobalRootSignatureParams
         PhotonSourcesSRVSlot,
         PhotonDensityOutputViewSlot,
         PhotonMappingConstantsSlot,
+        MaterialTextureParamsSlot,
+        MaterialTextureSrvSlot,
         Count
     };
 }
@@ -61,7 +64,15 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context) :
         photonEmit.setRayGen("RayGen");
         photonEmit
             .addHitGroup(0, RtModel::GeometryType::Triangles, "ClosestHit", "")
-            .addMiss(0, "Miss");
+            .addMiss(0, "Miss")
+            .addDummyHitGroup(0, RtModel::GeometryType::AABB_Analytic)
+            .addDummyHitGroup(0, RtModel::GeometryType::AABB_Volumetric)
+            .addDummyHitGroup(0, RtModel::GeometryType::AABB_SignedDistance);
+        photonEmit
+            .addDummyHitGroup(1, RtModel::GeometryType::Triangles)
+            .addDummyHitGroup(1, RtModel::GeometryType::AABB_Analytic)
+            .addDummyHitGroup(1, RtModel::GeometryType::AABB_Volumetric)
+            .addDummyHitGroup(1, RtModel::GeometryType::AABB_SignedDistance);
 
         photonEmit.configureGlobalRootSignature([](RootSignatureGenerator &config) {
             // GlobalRootSignatureParams::AccelerationStructureSlot
@@ -94,6 +105,7 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context) :
             L"RayGen",
             L"ClosestHit", L"ClosestHit_AABB",
             L"Miss",
+            L"VolumeClosestHit", L"VolumeClosestHit_AABB", L"VolumeMiss",
             L"Intersection_AnalyticPrimitive", L"Intersection_VolumetricPrimitive", L"Intersection_SignedDistancePrimitive"
         };
         photonTrace.addShaderLibrary(g_pPhotonTracing, ARRAYSIZE(g_pPhotonTracing), libraryExports);
@@ -104,6 +116,12 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context) :
             .addHitGroup(0, RtModel::GeometryType::AABB_Volumetric, "ClosestHit_AABB", "", "Intersection_VolumetricPrimitive")
             .addHitGroup(0, RtModel::GeometryType::AABB_SignedDistance, "ClosestHit_AABB", "", "Intersection_SignedDistancePrimitive")
             .addMiss(0, "Miss");
+        photonTrace
+            .addHitGroup(1, RtModel::GeometryType::Triangles, "VolumeClosestHit", "")
+            .addHitGroup(1, RtModel::GeometryType::AABB_Analytic, "VolumeClosestHit_AABB", "", "Intersection_AnalyticPrimitive")
+            .addHitGroup(1, RtModel::GeometryType::AABB_Volumetric, "VolumeClosestHit_AABB", "", "Intersection_VolumetricPrimitive")
+            .addHitGroup(1, RtModel::GeometryType::AABB_SignedDistance, "VolumeClosestHit_AABB", "", "Intersection_SignedDistancePrimitive")
+            .addMiss(1, "VolumeMiss");
 
         photonTrace.configureGlobalRootSignature([](RootSignatureGenerator &config) {
             // GlobalRootSignatureParams::AccelerationStructureSlot
@@ -124,11 +142,25 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context) :
             cubeSampler.ShaderRegister = 0;
             config.AddStaticSampler(cubeSampler);
 
-            //photondensity
+            // GlobalRootSignatureParams::PhotonDensityOutputViewSlot
             config.AddHeapRangesParameter({{1 /* u1 */, 1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0}});
-            //photonmapconsts
+            // GlobalRootSignatureParams::PhotonMappingConstantsSlot
             config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_CBV, 1 /* b1 */);
             //config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS, 1 /* b1 */, 0, SizeOfInUint32(PhotonMappingConstants));
+
+            D3D12_STATIC_SAMPLER_DESC matTexSampler = {};
+            matTexSampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+            matTexSampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+            matTexSampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+            matTexSampler.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+            matTexSampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+            matTexSampler.ShaderRegister = 1;
+            config.AddStaticSampler(matTexSampler);
+
+            // GlobalRootSignatureParams::MaterialTextureParamsSlot
+            config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 0 /* t0 */, 9); // space9 t0
+            // GlobalRootSignatureParams::MaterialTextureSrvSlot
+            config.AddHeapRangesParameter({ {1 /* t1 */, -1 /* unbounded */, 9 /* space9 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0} });
         });
         photonTrace.configureHitGroupRootSignature([] (RootSignatureGenerator &config) {
             config = {};
@@ -193,22 +225,61 @@ void HybridPipeline::buildAccelerationStructures()
 
 void HybridPipeline::loadResources(ID3D12CommandQueue *uploadCommandQueue, UINT frameCount)
 {
+    auto device = mRtContext->getDevice();
+
     mTextureResources.resize(2);
-    mTextureSrvGpuHandles.resize(2);
+    mTextureSrvGpuHandles.resize(3);
+
+    mTextureParams.Create(device, mMaterials.size(), 1, L"MaterialTextureParams");
 
     // Create and upload global textures
-    auto device = mRtContext->getDevice();
     ResourceUploadBatch resourceUpload(device);
     resourceUpload.Begin();
     {
         ThrowIfFailed(CreateWICTextureFromFile(device, resourceUpload, L"..\\assets\\textures\\HdrStudioProductNightStyx001_JPG_8K.jpg", &mTextureResources[0], true));
         ThrowIfFailed(CreateDDSTextureFromFile(device, resourceUpload, L"..\\assets\\textures\\CathedralRadiance.dds", &mTextureResources[1]));
+
+        UINT textureIndex = 0;
+        UINT prevDescriptorHeapIndex = -1;
+        for (auto & material : mMaterials)
+        {
+            if (material.params.type <= MaterialType::__UniformMaterials) continue;
+
+            for (auto const& tex : material.textures)
+            {
+                ComPtr<ID3D12Resource> textureResource;
+                CreateTextureResource(
+                    device, resourceUpload,
+                    tex.width, tex.height, tex.depth, tex.width * sizeof(XMFLOAT4), tex.height,
+                    DXGI_FORMAT_R32G32B32A32_FLOAT, tex.data.data(), textureResource);
+                mTextureResources.push_back(textureResource);
+                mTextureParams[textureIndex] = tex.params;
+
+                D3D12_CPU_DESCRIPTOR_HANDLE srvCpuHandle;
+                auto descriptorIndex = mRtContext->allocateDescriptor(&srvCpuHandle);
+                auto texSrvGpuHandle = mRtContext->createTextureSRVHandle(textureResource.Get(), false, descriptorIndex);
+
+                if (prevDescriptorHeapIndex == -1) {
+                    mTextureSrvGpuHandles[2] = texSrvGpuHandle;
+                }
+                else {
+                    ThrowIfFalse(descriptorIndex == prevDescriptorHeapIndex + 1, L"Material texture descriptor indices not contiguous");
+                }
+
+                prevDescriptorHeapIndex = descriptorIndex;
+                material.params.*tex.targetParam = XMFLOAT4(static_cast<float>(textureIndex++), 0, 0, -1.0f);
+            }
+        }
     }
     auto uploadResourcesFinished = resourceUpload.End(uploadCommandQueue);
     uploadResourcesFinished.wait();
 
     mTextureSrvGpuHandles[0] = mRtContext->createTextureSRVHandle(mTextureResources[0].Get());
     mTextureSrvGpuHandles[1] = mRtContext->createTextureSRVHandle(mTextureResources[1].Get(), true);
+
+    if (!mTextureSrvGpuHandles[2].ptr) {
+        mTextureSrvGpuHandles[2] = mTextureSrvGpuHandles[1];
+    }
 
     // Create per-frame constant buffer
     mConstantBuffer.Create(device, frameCount, L"PerFrameConstantBuffer");
@@ -225,6 +296,8 @@ void HybridPipeline::loadResources(ID3D12CommandQueue *uploadCommandQueue, UINT 
 void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT height)
 {
     auto device = mRtContext->getDevice();
+
+    mClearableUavs.clear();
 
     // Final output resource
 
@@ -356,13 +429,15 @@ inline void calculateCameraVariables(Math::Camera &camera, float aspectRatio, XM
 
 inline void calculateCameraFrustum(Math::Camera &camera, XMFLOAT2 *NH, XMFLOAT2 *NV, XMFLOAT2 *clipZ)
 {
-    auto wsFrustum = camera.GetWorldSpaceFrustum();
-    auto nh = wsFrustum.GetFrustumPlane(wsFrustum.kLeftPlane).GetNormal();
-    auto nv = wsFrustum.GetFrustumPlane(wsFrustum.kBottomPlane).GetNormal();
-    *NH = XMFLOAT2(nh.GetX(), nh.GetZ());
-    *NV = XMFLOAT2(nv.GetY(), nv.GetZ());
-    float nearZ = wsFrustum.GetFrustumCorner(wsFrustum.kNearLowerLeft).GetZ();
-    float farZ = wsFrustum.GetFrustumCorner(wsFrustum.kFarLowerLeft).GetZ();
+    auto vsFrustum = camera.GetViewSpaceFrustum();
+    auto nh = vsFrustum.GetFrustumPlane(vsFrustum.kLeftPlane).GetNormal();
+    auto nv = vsFrustum.GetFrustumPlane(vsFrustum.kBottomPlane).GetNormal();
+    auto nhn = Math::Vector3(XMVector3Normalize(nh));
+    auto nvn = Math::Vector3(XMVector3Normalize(nv));
+    *NH = XMFLOAT2(nhn.GetX(), nhn.GetZ());
+    *NV = XMFLOAT2(nvn.GetY(), nvn.GetZ());
+    float nearZ = vsFrustum.GetFrustumCorner(vsFrustum.kNearLowerLeft).GetZ();
+    float farZ = vsFrustum.GetFrustumCorner(vsFrustum.kFarLowerLeft).GetZ();
     *clipZ = XMFLOAT2(nearZ, farZ);
 }
 
@@ -412,6 +487,8 @@ void HybridPipeline::update(float elapsedTime, UINT elapsedFrames, UINT prevFram
     XMStoreFloat4(&mPointLights[0].worldPos, pointLightPos);
     mPointLights[0].color = pointLightColor;
     mPointLights.CopyStagingToGpu(frameIndex);
+
+    mTextureParams.CopyStagingToGpu();
 }
 
 void HybridPipeline::createPipelineStateObjects()
@@ -464,7 +541,6 @@ void HybridPipeline::collectEmitters(UINT& numLights, UINT& maxSamples)
         XMStoreFloat3(&photon.power, power);
         XMStoreFloat3(&photon.position, position);
         XMStoreFloat3(&photon.direction, direction);
-        photon.distTravelled = 1.337;
 
         mPhotonUploadBuffer[mSamplesCpu++] = photon;
     };
@@ -619,6 +695,8 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
         commandList->SetComputeRootConstantBufferView(GlobalRootSignatureParams::PerFrameConstantsSlot, mConstantBuffer.GpuVirtualAddress(frameIndex));
         //commandList->SetComputeRootDescriptorTable(GlobalRootSignatureParams::OutputViewSlot, mPhotonMapUavGpuHandle);
         commandList->SetComputeRootDescriptorTable(GlobalRootSignatureParams::OutputViewSlot, mOutputUavGpuHandle);
+        commandList->SetComputeRootDescriptorTable(GlobalRootSignatureParams::MaterialTextureSrvSlot, mTextureSrvGpuHandles[2]);
+        commandList->SetComputeRootShaderResourceView(GlobalRootSignatureParams::MaterialTextureParamsSlot, mTextureParams.GpuVirtualAddress());
         commandList->SetComputeRootDescriptorTable(GlobalRootSignatureParams::PhotonSourcesSRVSlot, mPhotonSeedSrvGpuHandle);
         commandList->SetComputeRootDescriptorTable(GlobalRootSignatureParams::PhotonDensityOutputViewSlot, mPhotonDensityUavGpuHandle);
         commandList->SetComputeRootConstantBufferView(GlobalRootSignatureParams::PhotonMappingConstantsSlot, mPhotonMappingConstants.GpuVirtualAddress());

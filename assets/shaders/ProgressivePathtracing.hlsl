@@ -52,7 +52,7 @@ float3 shootSecondaryRay(float3 orig, float3 dir, float minT, uint currentDepth)
     payload.colorAndDistance = float4(0, 0, 0, 0);
     payload.depth = currentDepth + 1;
 
-    TraceRay(SceneBVH, 0, 0xFF, 0, 0, 0, ray, payload);
+    TraceRay(SceneBVH, RAY_FLAG_CULL_BACK_FACING_TRIANGLES, 0xFF, 0, 0, 0, ray, payload);
     return payload.colorAndDistance.rgb;
 }
 
@@ -87,11 +87,7 @@ float3 shade(float3 position, float3 normal, uint currentDepth)
     uint randSeed = initRand(pixIdx.x + pixIdx.y * numPix.x, perFrameConstants.cameraParams.frameCount);
 
     MaterialParams mat = materialParams;
-    if (materialParams.type > MaterialType::__UniformMaterials) { // use texture
-        mat.albedo = sampleMaterial(materialParams.albedo);
-        mat.specular = sampleMaterial(materialParams.specular);
-        mat.emissive = sampleMaterial(materialParams.emissive);
-    }
+    collectMaterialParams(mat);
 
     float3 directAtten = mat.albedo.rgb;
     float3 indirectAtten = mat.albedo.rgb;

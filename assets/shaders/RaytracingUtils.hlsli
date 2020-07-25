@@ -194,6 +194,11 @@ float scalarProjection(float3 a, float3 b)
     return dot(a, b) / dot(b, b);
 }
 
+float scalarProjection2(float3 a, float3 b)
+{
+    return dot(a, b) / length(b);
+}
+
 // Load three 16 bit indices from a byte addressed buffer.
 uint3 Load3x16BitIndices(uint offsetBytes, ByteAddressBuffer Indices)
 {

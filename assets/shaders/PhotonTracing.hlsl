@@ -1,7 +1,8 @@
 #include "RaytracingCommon.hlsli"
 #include "ProceduralPrimitives.hlsli"
+#include "ParticipatingMedia.hlsli"
 
-#define MAX_PHOTON_DEPTH 4
+#define MAX_PHOTON_DEPTH 8
 
 struct PhotonPayload
 {
@@ -101,15 +102,19 @@ void RayGen()
     }
 }
 
-bool russian_roulette(float3 in_power, float3 in_direction, float3 normal, inout uint randSeed,
+bool russian_roulette(float3 in_power, float3 in_direction, float3 normal, inout float3 position, inout uint randSeed,
                       inout float4 out_power, inout float3 out_direction)
 {
+    MaterialParams mat = materialParams;
+    collectMaterialParams(mat);
+
     float out_factor = 0.0;
 
     // sample brdf for outgoing direction and attenuation
-    switch (materialParams.type)
+    switch (mat.type)
     {
-    case 0: { // lambertian
+    case MaterialType::Diffuse:
+    case MaterialType::DiffuseTexture: { // lambertian
         if (!perFrameConstants.options.noIndirectDiffuse) {
             if (perFrameConstants.options.cosineHemisphereSampling) {
                 out_direction = getCosHemisphereSample1(randSeed, normal);
@@ -128,23 +133,24 @@ bool russian_roulette(float3 in_power, float3 in_direction, float3 normal, inout
         }
         break;
     }
-    case 1: { // metal
-        float exponent = exp((1.0 - materialParams.roughness) * 12.0);
+    case MaterialType::Glossy: { // metal
+        float exponent = exp((1.0 - mat.roughness) * 12.0);
         float pdf;
         float brdf;
         float3 mirrorDir = reflect(WorldRayDirection(), normal);
         float3 sampleDir = samplePhongLobe(randSeed, mirrorDir, exponent, pdf, brdf);
         if (dot(sampleDir, normal) > 0) {
             out_factor = brdf / pdf;
+            out_direction = sampleDir;
         }
         break;
     }
-    case 2: { // dielectric
+    case MaterialType::Glass: { // dielectric
         float3 refractDir;
         float3 reflectProb;
-        bool refracted = refract(refractDir, WorldRayDirection(), normal, materialParams.IoR);
+        bool refracted = refract(refractDir, WorldRayDirection(), normal, mat.IoR);
         if (refracted) {
-            float f0 = ((materialParams.IoR-1)*(materialParams.IoR-1) / (materialParams.IoR+1)*(materialParams.IoR+1));
+            float f0 = ((mat.IoR-1)*(mat.IoR-1) / (mat.IoR+1)*(mat.IoR+1));
             reflectProb = FresnelReflectanceSchlick(WorldRayDirection(), normal, f0);
         } else {
             reflectProb = 1.0;
@@ -160,9 +166,42 @@ bool russian_roulette(float3 in_power, float3 in_direction, float3 normal, inout
         out_factor = 1.0;
         break;
     }
+    case MaterialType::ParticipatingMedia: {
+        float throughput = 1.0;
+        float3 prevPosition = position;
+        float3 params; // x - extinction, y - scattering
+        float3 rayDir = WorldRayDirection();
+
+        bool inVolume = evaluateVolumeInteraction(randSeed, position, rayDir, params, 1);
+
+        // attenuate by albedo = scattering / extinction
+        throughput *= params.y / params.x;
+
+        // Russian roulette absorption
+        if (throughput < 0.2) {
+            if (nextRand(randSeed) > throughput * 5.0) {
+                throughput = 0.0;
+            }
+            throughput = 0.2;
+        }
+
+        if (inVolume) {
+            // Sample the phase function
+            { // isotropic
+                rayDir = getUniformSphereSample(randSeed);
+            }
+        } else {
+            rayDir = normalize(position - prevPosition);
+            position = prevPosition;
+        }
+
+        out_direction = rayDir;
+        out_factor = 0;// throughput;
+        break;
+    }
     }
 
-    float3 r = out_factor * materialParams.albedo.rgb * materialParams.albedo.a;
+    float3 r = out_factor * mat.albedo.rgb * mat.albedo.a;
     float3 rp = r * in_power;
     float3 p = in_power;
 
@@ -182,10 +221,11 @@ void handle_hit(float3 position, float3 normal, inout PhotonPayload payload)
     uint rand = payload.random;
     float4 outgoing_power = .0f;
     float3 outgoing_direction = .0f;
-    bool keep_going = russian_roulette(incoming_power, ray_direction, normal, rand,
+    float3 pos = position;
+    bool keep_going = russian_roulette(incoming_power, ray_direction, normal, pos, rand,
                                        outgoing_power, outgoing_direction);
 
-    payload.position = position;
+    payload.position = pos;
     payload.normal = normal;
     payload.direction = outgoing_direction;
     payload.random = rand;

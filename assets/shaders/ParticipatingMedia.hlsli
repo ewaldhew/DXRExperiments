@@ -12,7 +12,7 @@ struct VolumePayload
 bool shootVolumeRay(inout float3 pos, float3 dir, float minT, float maxT, uint currentDepth)
 {
     if (currentDepth >= MAX_RADIANCE_RAY_DEPTH) {
-        return true;
+        return false;
     }
 
     RayDesc ray = { pos, minT, dir, maxT };
