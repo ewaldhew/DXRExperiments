@@ -73,5 +73,6 @@ namespace DXRFramework
 
         // Pretty-print the shader records.
         void DebugPrint();
+        size_t mDebugLastShaderTableSize = 0;
     };
 }

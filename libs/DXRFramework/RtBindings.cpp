@@ -174,8 +174,7 @@ namespace DXRFramework
     // Pretty-print the shader records.
     void RtBindings::DebugPrint()
     {
-        static UINT lastSize = 0;
-        if (lastSize == mShaderTableData.size())
+        if (mDebugLastShaderTableSize == mShaderTableData.size())
             return;
 
         std::wstringstream wstr;
@@ -193,6 +192,6 @@ namespace DXRFramework
         wstr << L"\n";
         OutputDebugStringW(wstr.str().c_str());
 
-        lastSize = mShaderTableData.size();
+        mDebugLastShaderTableSize = mShaderTableData.size();
     }
 }
