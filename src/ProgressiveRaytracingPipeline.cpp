@@ -53,17 +53,17 @@ ProgressiveRaytracingPipeline::ProgressiveRaytracingPipeline(RtContext::SharedPt
             .addHitGroup(0, RtModel::GeometryType::AABB_SignedDistance, "PrimaryClosestHit_AABB", "", "Intersection_SignedDistancePrimitive")
             .addMiss(0, "PrimaryMiss");
         programDesc
-            .addHitGroup(1, RtModel::GeometryType::Triangles, "ShadowClosestHit", "ShadowAnyHit")
-            .addHitGroup(1, RtModel::GeometryType::AABB_Analytic, "", "", "Intersection_AnalyticPrimitive")
-            .addHitGroup(1, RtModel::GeometryType::AABB_Volumetric, "", "", "Intersection_VolumetricPrimitive")
-            .addHitGroup(1, RtModel::GeometryType::AABB_SignedDistance, "", "", "Intersection_SignedDistancePrimitive")
-            .addMiss(1, "ShadowMiss");
+            .addHitGroup(1, RtModel::GeometryType::Triangles, "VolumeClosestHit", "")
+            .addHitGroup(1, RtModel::GeometryType::AABB_Analytic, "VolumeClosestHit_AABB", "", "Intersection_AnalyticPrimitive")
+            .addHitGroup(1, RtModel::GeometryType::AABB_Volumetric, "VolumeClosestHit_AABB", "", "Intersection_VolumetricPrimitive")
+            .addHitGroup(1, RtModel::GeometryType::AABB_SignedDistance, "VolumeClosestHit_AABB", "", "Intersection_SignedDistancePrimitive")
+            .addMiss(1, "VolumeMiss");
         programDesc
-            .addHitGroup(2, RtModel::GeometryType::Triangles, "VolumeClosestHit", "")
-            .addHitGroup(2, RtModel::GeometryType::AABB_Analytic, "VolumeClosestHit_AABB", "", "Intersection_AnalyticPrimitive")
-            .addHitGroup(2, RtModel::GeometryType::AABB_Volumetric, "VolumeClosestHit_AABB", "", "Intersection_VolumetricPrimitive")
-            .addHitGroup(2, RtModel::GeometryType::AABB_SignedDistance, "VolumeClosestHit_AABB", "", "Intersection_SignedDistancePrimitive")
-            .addMiss(2, "VolumeMiss");
+            .addHitGroup(2, RtModel::GeometryType::Triangles, "ShadowClosestHit", "ShadowAnyHit")
+            .addHitGroup(2, RtModel::GeometryType::AABB_Analytic, "", "", "Intersection_AnalyticPrimitive")
+            .addHitGroup(2, RtModel::GeometryType::AABB_Volumetric, "", "", "Intersection_VolumetricPrimitive")
+            .addHitGroup(2, RtModel::GeometryType::AABB_SignedDistance, "", "", "Intersection_SignedDistancePrimitive")
+            .addMiss(2, "ShadowMiss");
 
         programDesc.configureGlobalRootSignature([] (RootSignatureGenerator &config) {
             // GlobalRootSignatureParams::AccelerationStructureSlot

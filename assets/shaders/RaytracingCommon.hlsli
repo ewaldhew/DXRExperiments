@@ -107,7 +107,7 @@ float shootShadowRay(float3 orig, float3 dir, float minT, float maxT, uint curre
 
     ShadowPayload payload = { 0.0 };
 
-    TraceRay(SceneBVH, RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER, 0xFF, 1, 0, 1, ray, payload);
+    TraceRay(SceneBVH, RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER, 0xFF, 2, 0, 2, ray, payload);
     return payload.lightVisibility;
 }
 

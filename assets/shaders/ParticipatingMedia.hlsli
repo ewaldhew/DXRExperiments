@@ -20,7 +20,7 @@ bool shootVolumeRay(inout float3 pos, float3 dir, float minT, float maxT, uint c
     VolumePayload payload;
     payload.originIndex = InstanceIndex();
 
-    TraceRay(SceneBVH, 0, MaterialSceneFlags::Volume, 2, 0, 2, ray, payload);
+    TraceRay(SceneBVH, 0, MaterialSceneFlags::Volume, 1, 0, 1, ray, payload);
 
     return payload.inVolume;
 }
