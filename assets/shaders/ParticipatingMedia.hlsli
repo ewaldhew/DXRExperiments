@@ -30,10 +30,10 @@ float getExtinction(float3 position)
     return sampleMaterialEx(materialParams.albedo, position).x;
 }
 
-bool evaluateVolumeInteraction(inout uint randSeed, inout float3 position, float3 direction, inout float3 params, uint currentDepth)
+bool evaluateVolumeInteraction(inout uint randSeed, inout float3 position, float3 direction, out float t, inout float3 params, uint currentDepth)
 {
     float extinctionMax = materialParams.reflectivity;
-    float t = 0.0f;
+    t = 0.0f;
     float3 pos;
     bool inVolume, passed;
 

@@ -10,13 +10,11 @@ struct PhotonPayload
     uint random;
     // Packed photon power
     //uint power;
-    float4 power; // last component is scaling factor
+    float3 power; // last component is scaling factor
     // Ray length
     float distTravelled;
     // Bounce count
     uint bounce;
-
-    float3 normal;
 
     // Outgoing payload
     float3 position;
@@ -72,7 +70,7 @@ void RayGen()
 
     PhotonPayload payload;
     payload.random = photonSeed[sampleIndex].randSeed;
-    payload.power = float4(photonSeed[sampleIndex].power, 1.0);
+    payload.power = photonSeed[sampleIndex].power;
     payload.distTravelled = photonSeed[sampleIndex].distTravelled;
     payload.bounce = 0;
 
@@ -84,27 +82,21 @@ void RayGen()
 
     while (payload.bounce < MAX_PHOTON_DEPTH - 1) {
         uint bounce = payload.bounce;
-        float3 in_power = payload.power.rgb;
-        float3 in_direction = ray.Direction;
 
-        TraceRay(SceneBVH, RAY_FLAG_FORCE_OPAQUE, 0xFF, 0, 0, 0, ray, payload);
-
-        float3 stored_power = payload.power.rgb;
-        validate_and_add_photon(payload.normal, payload.position, stored_power, in_direction, payload.distTravelled);
+        TraceRay(SceneBVH, RAY_FLAG_CULL_BACK_FACING_TRIANGLES, 0xFF, 0, 0, 0, ray, payload);
 
         if (payload.bounce == bounce) {
             // prevent infinite loop
             payload.bounce = MAX_PHOTON_DEPTH;
         }
-        payload.power /= payload.power.a;
 
         ray.Origin = payload.position;
         ray.Direction = payload.direction;
     }
 }
 
-bool russian_roulette(float3 in_power, float3 in_direction, float3 normal, inout float3 position, inout uint randSeed,
-                      inout float4 out_power, inout float3 out_direction)
+bool russian_roulette(float3 in_power, float3 in_direction, float3 normal, inout float3 position, inout float dist, inout uint randSeed,
+                      out float4 out_power, out float3 out_direction)
 {
     MaterialParams mat = materialParams;
     collectMaterialParams(mat);
@@ -167,52 +159,87 @@ bool russian_roulette(float3 in_power, float3 in_direction, float3 normal, inout
         out_factor = 1.0;
         break;
     }
-    case MaterialType::ParticipatingMedia: {
+    default:
+        break;
+    }
+
+    if (mat.type == MaterialType::ParticipatingMedia) {
         float throughput = 1.0;
+        uint numInteractions = 0;
         float3 prevPosition = position;
         float3 params; // x - extinction, y - scattering
         float3 rayDir = WorldRayDirection();
-
-        bool inVolume = evaluateVolumeInteraction(randSeed, position, rayDir, params, 1);
-
-        // attenuate by albedo = scattering / extinction
-        throughput *= params.y / params.x;
-
-        // Russian roulette absorption
-        if (throughput < 0.2) {
-            if (nextRand(randSeed) > throughput * 5.0) {
-                throughput = 0.0;
+        float t;
+        while (evaluateVolumeInteraction(randSeed, position, rayDir, t, params, 1))
+        {
+            if (numInteractions++ > MAX_VOLUME_INTERACTIONS) {
+                break;
             }
-            throughput = 0.2;
-        }
 
-        if (inVolume) {
+            // attenuate by albedo = scattering / extinction
+            throughput *= params.y / params.x;
+
+            // Russian roulette absorption
+            if (throughput < 0.2) {
+                if (nextRand(randSeed) > throughput * 5.0) {
+                    throughput = 0.0;
+                    break;
+                }
+                throughput = 0.2;
+            }
+
+            float3 rayDirPrev = rayDir;
+
             // Sample the phase function
             { // isotropic
                 rayDir = getUniformSphereSample(randSeed);
             }
-        } else {
-            rayDir = normalize(position - prevPosition);
-            position = prevPosition;
+
+            prevPosition = position;
+
+            dist += t;
+            float3 stored_power = in_power * throughput;
+            validate_and_add_photon(rayDir, position, stored_power, rayDirPrev, dist);
         }
 
+        if (!any(throughput)) {
+            return false;
+        }
+
+        rayDir = normalize(position - prevPosition);
+        position = prevPosition;
         out_direction = rayDir;
-        out_factor = 0;// throughput;
-        break;
+        out_factor = throughput;
+
+        float3 r = out_factor;
+        float3 rp = r * in_power;
+        float3 p = in_power;
+
+        float q = max(rp.r, max(rp.g, rp.b)) / max(p.r, max(p.g, p.b)); // termination probability
+
+        out_power = float4(rp, q);
+
+        bool keep_going = nextRand(randSeed) < q;
+
+        return keep_going;
+
+    } else {
+        float3 r = out_factor * mat.albedo.rgb * mat.albedo.a;
+        float3 rp = r * in_power;
+        float3 p = in_power;
+
+        float q = max(rp.r, max(rp.g, rp.b)) / max(p.r, max(p.g, p.b)); // termination probability
+
+        out_power = float4(rp, q);
+
+        float3 stored_power = out_power.rgb;
+        validate_and_add_photon(normal, position, stored_power, in_direction, dist);
+
+        bool keep_going = nextRand(randSeed) < q;
+
+        return keep_going;
     }
-    }
 
-    float3 r = out_factor * mat.albedo.rgb * mat.albedo.a;
-    float3 rp = r * in_power;
-    float3 p = in_power;
-
-    float q = max(rp.r, max(rp.g, rp.b)) / max(p.r, max(p.g, p.b)); // termination probability
-
-    out_power = float4(rp, q);
-
-    bool keep_going = nextRand(randSeed) < q;
-
-    return keep_going;
 }
 
 void handle_hit(float3 position, float3 normal, inout PhotonPayload payload)
@@ -223,15 +250,15 @@ void handle_hit(float3 position, float3 normal, inout PhotonPayload payload)
     float4 outgoing_power = .0f;
     float3 outgoing_direction = .0f;
     float3 pos = position;
-    bool keep_going = russian_roulette(incoming_power, ray_direction, normal, pos, rand,
+    float dist = payload.distTravelled + RayTCurrent();
+    bool keep_going = russian_roulette(incoming_power, ray_direction, normal, pos, dist, rand,
                                        outgoing_power, outgoing_direction);
 
     payload.position = pos;
-    payload.normal = normal;
     payload.direction = outgoing_direction;
     payload.random = rand;
-    payload.power = outgoing_power;
-    payload.distTravelled = payload.distTravelled + RayTCurrent();
+    payload.power = outgoing_power.rgb / outgoing_power.a;
+    payload.distTravelled = dist;
     payload.bounce = keep_going ? payload.bounce + 1 : MAX_PHOTON_DEPTH;
 }
 

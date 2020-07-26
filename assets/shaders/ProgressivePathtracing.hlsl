@@ -148,7 +148,8 @@ float3 shade(float3 position, float3 normal, uint currentDepth)
         float3 prevPosition = position;
         float3 params; // x - extinction, y - scattering
         float3 rayDir = WorldRayDirection();
-        while (evaluateVolumeInteraction(randSeed, position, rayDir, params, currentDepth))
+        float t;
+        while (evaluateVolumeInteraction(randSeed, position, rayDir, t, params, currentDepth))
         {
             if (numInteractions++ > MAX_VOLUME_INTERACTIONS) {
                 //throughput = 0.0;
