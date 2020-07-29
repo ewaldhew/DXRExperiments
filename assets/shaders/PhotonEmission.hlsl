@@ -47,10 +47,10 @@ void RayGen()
     }
 }
 
-void storePhoton(float3 position, float3 normal, inout Payload payload)
+void storePhoton(float3 position, float3 normal, inout Payload payload, inout uint randSeed)
 {
     float3 power = materialParams.emissive.rgb * materialParams.emissive.a;
-    float3 direction = normal;
+    float3 direction = getCosHemisphereSample1(randSeed, normal);
 
     payload.power = power;
     payload.position = position;
@@ -79,7 +79,7 @@ void ClosestHit(inout Payload payload, in Attributes attrib)
     float3 vertPosition, vertNormal;
     interpolateVertexAttributes1(triangleIndex, randBary, vertPosition, vertNormal);
 
-    storePhoton(vertPosition, normalize(vertNormal), payload);
+    storePhoton(vertPosition, normalize(vertNormal), payload, randSeed);
 }
 
 [shader("miss")]
