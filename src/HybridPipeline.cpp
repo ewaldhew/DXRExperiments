@@ -73,6 +73,11 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context) :
             .addDummyHitGroup(1, RtModel::GeometryType::AABB_Analytic)
             .addDummyHitGroup(1, RtModel::GeometryType::AABB_Volumetric)
             .addDummyHitGroup(1, RtModel::GeometryType::AABB_SignedDistance);
+        photonEmit
+            .addDummyHitGroup(2, RtModel::GeometryType::Triangles)
+            .addDummyHitGroup(2, RtModel::GeometryType::AABB_Analytic)
+            .addDummyHitGroup(2, RtModel::GeometryType::AABB_Volumetric)
+            .addDummyHitGroup(2, RtModel::GeometryType::AABB_SignedDistance);
 
         photonEmit.configureGlobalRootSignature([](RootSignatureGenerator &config) {
             // GlobalRootSignatureParams::AccelerationStructureSlot
@@ -106,6 +111,7 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context) :
             L"ClosestHit", L"ClosestHit_AABB",
             L"Miss",
             L"VolumeClosestHit", L"VolumeClosestHit_AABB", L"VolumeMiss",
+            L"StartingVolumeHit", L"StartingVolumeHit_AABB", L"StartingVolumeMiss",
             L"Intersection_AnalyticPrimitive", L"Intersection_VolumetricPrimitive", L"Intersection_SignedDistancePrimitive"
         };
         photonTrace.addShaderLibrary(g_pPhotonTracing, ARRAYSIZE(g_pPhotonTracing), libraryExports);
@@ -122,6 +128,12 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context) :
             .addHitGroup(1, RtModel::GeometryType::AABB_Volumetric, "VolumeClosestHit_AABB", "", "Intersection_VolumetricPrimitive")
             .addHitGroup(1, RtModel::GeometryType::AABB_SignedDistance, "VolumeClosestHit_AABB", "", "Intersection_SignedDistancePrimitive")
             .addMiss(1, "VolumeMiss");
+        photonTrace
+            .addHitGroup(2, RtModel::GeometryType::Triangles, "StartingVolumeHit", "")
+            .addHitGroup(2, RtModel::GeometryType::AABB_Analytic, "StartingVolumeHit_AABB", "", "Intersection_AnalyticPrimitive")
+            .addHitGroup(2, RtModel::GeometryType::AABB_Volumetric, "StartingVolumeHit_AABB", "", "Intersection_VolumetricPrimitive")
+            .addHitGroup(2, RtModel::GeometryType::AABB_SignedDistance, "StartingVolumeHit_AABB", "", "Intersection_SignedDistancePrimitive")
+            .addMiss(2, "StartingVolumeMiss");
 
         photonTrace.configureGlobalRootSignature([](RootSignatureGenerator &config) {
             // GlobalRootSignatureParams::AccelerationStructureSlot

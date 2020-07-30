@@ -73,12 +73,23 @@ void RayGen()
     payload.power = photonSeed[sampleIndex].power;
     payload.distTravelled = photonSeed[sampleIndex].distTravelled;
     payload.bounce = 0;
+    payload.position = photonSeed[sampleIndex].position;
+    payload.direction = photonSeed[sampleIndex].direction.xyz;
 
     RayDesc ray;
     ray.Origin = photonSeed[sampleIndex].position;
     ray.Direction = photonSeed[sampleIndex].direction.xyz;
     ray.TMin = RAY_EPSILON;
     ray.TMax = RAY_MAX_T;
+
+    // Before starting the trace, check if photon was
+    // spawned inside a volume and trace it to the edge first
+    {
+        TraceRay(SceneBVH, 0, MaterialSceneFlags::Volume, 2, 0, 2, ray, payload);
+
+        ray.Origin = payload.position;
+        ray.Direction = payload.direction;
+    }
 
     while (payload.bounce < MAX_PHOTON_DEPTH - 1) {
         uint bounce = payload.bounce;
@@ -260,6 +271,31 @@ void handle_hit(float3 position, float3 normal, inout PhotonPayload payload)
     payload.power = outgoing_power.rgb / outgoing_power.a;
     payload.distTravelled = dist;
     payload.bounce = keep_going ? payload.bounce + 1 : MAX_PHOTON_DEPTH;
+}
+
+[shader("closesthit")]
+void StartingVolumeHit(inout PhotonPayload payload, in Attributes attrib)
+{
+    float3 vertPosition, vertNormal;
+    interpolateVertexAttributes(attrib.bary, vertPosition, vertNormal);
+
+    if (exitingVolume(normalize(vertNormal), WorldRayDirection(), -1)) {
+        handle_hit(WorldRayOrigin(), WorldRayDirection(), payload);
+    }
+}
+
+[shader("closesthit")]
+void StartingVolumeHit_AABB(inout PhotonPayload payload, in ProceduralPrimitiveAttributes attr)
+{
+    if (exitingVolume(normalize(attr.normal), WorldRayDirection(), -1)) {
+        handle_hit(WorldRayOrigin(), WorldRayDirection(), payload);
+    }
+}
+
+[shader("miss")]
+void StartingVolumeMiss(inout PhotonPayload payload)
+{
+    // no-op
 }
 
 [shader("closesthit")]
