@@ -1,3 +1,17 @@
+struct VSInput
+{
+    float3 Position : POSITION;
+    uint instanceID : SV_InstanceID;
+};
+
+struct VSOutput
+{
+    float4 position : SV_Position;
+    float3 power : COLOR;
+    float3 direction : DIRECTION_WS;
+};
+
+/*
 float uniform_scaling(float3 pp_in_view, float ray_length)
 {
     // Tile-based culling as photon density estimation
@@ -52,22 +66,20 @@ kernel_output kernel_modification_for_vertex_position(float3 vertex,
 
     return o;
 }
-
-void VS(
-    float3 Position : SV_Position,
-    uint instanceID : SV_InstanceID,
-    out vs_to_ps Output)
+*/
+void main(in VSInput IN, out VSOutput OUT)
 {
-    unpacked_photon up = unpack_photon(PhotonBuffer[instanceID]);
-    float3 photon_position = up.position;
-    float3 photon_position_in_view = mul(WorldToViewMatrix,
-    float4(photon_position, 1)).xyz;
-    kernel_output o = kernel_modification_for_vertex_position(Position,
-    up.normal, -up.direction, photon_position_in_view, up.ray_length);
+    OUT.position = 0.;
+    //unpacked_photon up = unpack_photon(PhotonBuffer[instanceID]);
+    //float3 photon_position = up.position;
+    //float3 photon_position_in_view = mul(WorldToViewMatrix,
+    //float4(photon_position, 1)).xyz;
+    //kernel_output o = kernel_modification_for_vertex_position(Position,
+    //up.normal, -up.direction, photon_position_in_view, up.ray_length);
 
-    float3 p = pp + o.vertex_position;
+    //float3 p = pp + o.vertex_position;
 
-    Output.Position = mul(WorldToViewClipMatrix, float4(p, 1));
-    Output.Power = up.power / o.ellipse_area;
-    Output.Direction = -up.direction;
+    //Output.position = mul(WorldToViewClipMatrix, float4(p, 1));
+    //Output.power = up.power / o.ellipse_area;
+    //Output.direction = -up.direction;
 }

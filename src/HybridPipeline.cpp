@@ -2,6 +2,8 @@
 #include "HybridPipeline.h"
 #include "CompiledShaders/PhotonEmission.hlsl.h"
 #include "CompiledShaders/PhotonTracing.hlsl.h"
+#include "CompiledShaders/PhotonSplatting_vs.hlsl.h"
+#include "CompiledShaders/PhotonSplatting_ps.hlsl.h"
 #include "WICTextureLoader.h"
 #include "DDSTextureLoader.h"
 #include "ResourceUploadBatch.h"
@@ -55,6 +57,9 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context) :
     mActive(true)
 {
 
+    /*******************************
+     *  Photon Emission Pass
+     *******************************/
     RtProgram::Desc photonEmit;
     {
         std::vector<std::wstring> libraryExports = {
@@ -104,6 +109,9 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context) :
     mRtPhotonEmissionPass.mRtState->setMaxAttributeSize(8);
     mRtPhotonEmissionPass.mRtState->setMaxPayloadSize(36);
 
+    /*******************************
+     *  Photon Tracing Pass
+     *******************************/
     RtProgram::Desc photonTrace;
     {
         std::vector<std::wstring> libraryExports = {
@@ -198,6 +206,29 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context) :
     mRtPhotonMappingPass.mRtState->setMaxTraceRecursionDepth(4);
     mRtPhotonMappingPass.mRtState->setMaxAttributeSize(sizeof(ProceduralPrimitiveAttributes));
     mRtPhotonMappingPass.mRtState->setMaxPayloadSize(64);
+
+    /*******************************
+     *  Photon Splatting Pass
+     *******************************/
+    {
+        auto device = context->getDevice();
+
+        RootSignatureGenerator rsConfig;
+        rsConfig.AddHeapRangesParameter({{0 /* t0 */, 1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}});
+        rsConfig.AddHeapRangesParameter({{1 /* t1 */, 1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}});
+        rsConfig.AddHeapRangesParameter({{0 /* u0 */, 1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0}});
+        rsConfig.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_CBV, 0 /* b0 */, 0, 1);
+
+        mPhotonSplattingPass.rootSignature = rsConfig.Generate(device, false);
+
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC desc = {};
+        desc.pRootSignature = mPhotonSplattingPass.rootSignature.Get();
+        desc.VS = CD3DX12_SHADER_BYTECODE(g_pPhotonSplatting_vs, ARRAYSIZE(g_pPhotonSplatting_vs));
+        desc.PS = CD3DX12_SHADER_BYTECODE(g_pPhotonSplatting_ps, ARRAYSIZE(g_pPhotonSplatting_ps));
+
+        ThrowIfFailed(device->CreateGraphicsPipelineState(&desc, IID_PPV_ARGS(&mPhotonSplattingPass.stateObject)));
+        NAME_D3D12_OBJECT(mPhotonSplattingPass.stateObject);
+    }
 
     mShaderDebugOptions.maxIterations = 1024;
     mShaderDebugOptions.cosineHemisphereSampling = true;

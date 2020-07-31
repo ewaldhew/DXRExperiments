@@ -54,10 +54,16 @@ private:
         DXRFramework::RtBindings::SharedPtr mRtBindings;
         DXRFramework::RtState::SharedPtr mRtState;
     };
+    struct RasterPass
+    {
+        ComPtr<ID3D12RootSignature> rootSignature;
+        ComPtr<ID3D12PipelineState> stateObject;
+    };
 
     DXRFramework::RtContext::SharedPtr mRtContext;
     RtPass mRtPhotonEmissionPass;
     RtPass mRtPhotonMappingPass;
+    RasterPass mPhotonSplattingPass;
 
     // Scene description
     DXRFramework::RtScene::SharedPtrMut mRtScene;
