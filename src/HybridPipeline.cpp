@@ -390,6 +390,16 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
         mOutputSrvGpuHandle = mRtContext->createTextureSRVHandle(mOutputResource.Get(), false, mOutputSrvHeapIndex);
     }
 
+    {
+        D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
+        rtvDesc.Format = format;
+        rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+
+        size_t rtvHeapIndex = mRtvDescriptorHeap->Allocate();
+        mOutputRtvCpuHandle = mRtvDescriptorHeap->GetCpuHandle(rtvHeapIndex);
+        device->CreateRenderTargetView(mOutputResource.Get(), &rtvDesc, mOutputRtvCpuHandle);
+    }
+
     // Intermediate output resources
 
     mPhotonEmitters.Create(device, mRtScene->getNumInstances(), 1, L"PhotonEmitters");

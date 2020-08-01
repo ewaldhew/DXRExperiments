@@ -77,6 +77,7 @@ private:
     UINT mOutputSrvHeapIndex = UINT_MAX;
     D3D12_GPU_DESCRIPTOR_HANDLE mOutputUavGpuHandle;
     D3D12_GPU_DESCRIPTOR_HANDLE mOutputSrvGpuHandle;
+    D3D12_CPU_DESCRIPTOR_HANDLE mOutputRtvCpuHandle;
 
     ConstantBuffer<PerFrameConstants> mConstantBuffer;
     StructuredBuffer<DirectionalLightParams> mDirLights;
