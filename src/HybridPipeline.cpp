@@ -246,13 +246,19 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context) :
     auto msTime = std::chrono::time_point_cast<std::chrono::milliseconds>(now);
     mRng = std::mt19937(uint32_t(msTime.time_since_epoch().count()));
 
-    D3D12_DESCRIPTOR_HEAP_DESC descriptorHeapDesc = {};
-    descriptorHeapDesc.NumDescriptors = 4;
-    descriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-    context->getDevice()->CreateDescriptorHeap(&descriptorHeapDesc, IID_PPV_ARGS(&mCpuOnlyDescriptorHeap));
-    SetName(mCpuOnlyDescriptorHeap.Get(), L"CPU-only descriptor heap");
+    // Create descriptor heaps for UAV CPU descriptors and render target views
+    {
+        D3D12_DESCRIPTOR_HEAP_DESC descriptorHeapDesc = {};
+        descriptorHeapDesc.NumDescriptors = 4;
+        descriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+        mCpuOnlyDescriptorHeap = std::make_unique<DescriptorPile>(device, &descriptorHeapDesc);
+        SetName(mCpuOnlyDescriptorHeap->Heap(), L"CPU-only descriptor heap");
 
-    mDescriptorSize = context->getDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        D3D12_DESCRIPTOR_HEAP_DESC rtvDescriptorHeapDesc = {};
+        rtvDescriptorHeapDesc.NumDescriptors = 4;
+        rtvDescriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+        mRtvDescriptorHeap = std::make_unique<DescriptorPile>(device, &rtvDescriptorHeapDesc);
+    }
 }
 
 HybridPipeline::~HybridPipeline() = default;
@@ -437,8 +443,7 @@ void HybridPipeline::createClearableUav(ID3D12Resource* pResource, const D3D12_U
 {
     auto device = mRtContext->getDevice();
 
-    auto descriptorHeapCpuBase = mCpuOnlyDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
-    auto uavCpuHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(descriptorHeapCpuBase, mClearableUavs.size(), mDescriptorSize);
+    auto uavCpuHandle = mCpuOnlyDescriptorHeap->GetCpuHandle(mCpuOnlyDescriptorHeap->Allocate());
     device->CreateUnorderedAccessView(pResource, nullptr, uavDesc, uavCpuHandle);
 
     mClearableUavs.push_back({ uavHandle, uavCpuHandle, pResource });

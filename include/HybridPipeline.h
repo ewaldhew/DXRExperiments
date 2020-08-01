@@ -9,6 +9,7 @@
 #include "RtScene.h"
 #include "RtState.h"
 #include "Camera.h"
+#include "DescriptorHeap.h"
 #include <vector>
 #include <random>
 
@@ -109,10 +110,11 @@ private:
         D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle;
         ID3D12Resource* pResource;
     };
-    ComPtr<ID3D12DescriptorHeap> mCpuOnlyDescriptorHeap; // for clearing photon map resources
-    UINT mDescriptorSize;
     std::vector<ClearableUAV> mClearableUavs;
     ComPtr<ID3D12Resource> zeroResource;
+
+    std::unique_ptr<DirectX::DescriptorPile> mCpuOnlyDescriptorHeap; // for clearing photon map resources
+    std::unique_ptr<DirectX::DescriptorPile> mRtvDescriptorHeap;
 
     // Rendering states
     bool mActive;
