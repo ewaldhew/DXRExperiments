@@ -79,12 +79,12 @@ namespace DXRFramework
         return mFallbackDevice->GetWrappedPointerSimple(descriptorHeapIndex, resource->GetGPUVirtualAddress());
     }
 
-    D3D12_GPU_DESCRIPTOR_HANDLE RtContext::createBufferUAVHandle(ID3D12Resource* resource)
+    D3D12_GPU_DESCRIPTOR_HANDLE RtContext::createBufferUAVHandle(ID3D12Resource* resource, UINT descriptorHeapIndex)
     {
         D3D12_UNORDERED_ACCESS_VIEW_DESC rawBufferUavDesc = createUAVDesc(resource);
 
         D3D12_CPU_DESCRIPTOR_HANDLE cpuDescriptorHandle;
-        UINT descriptorHeapIndex = allocateDescriptor(&cpuDescriptorHandle);
+        descriptorHeapIndex = allocateDescriptor(&cpuDescriptorHandle, descriptorHeapIndex);
         mDevice->CreateUnorderedAccessView(resource, nullptr, &rawBufferUavDesc, cpuDescriptorHandle);
         return getDescriptorGPUHandle(descriptorHeapIndex);
     }
@@ -111,12 +111,12 @@ namespace DXRFramework
         return mFallbackDevice->GetWrappedPointerSimple(descriptorHeapIndex, resource->GetGPUVirtualAddress());
     }
 
-    D3D12_GPU_DESCRIPTOR_HANDLE RtContext::createBufferCBVHandle(ID3D12Resource* resource, UINT sizeInBytes)
+    D3D12_GPU_DESCRIPTOR_HANDLE RtContext::createBufferCBVHandle(ID3D12Resource* resource, UINT sizeInBytes, UINT descriptorHeapIndex)
     {
         D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = createCBVDesc(resource, sizeInBytes);
 
         D3D12_CPU_DESCRIPTOR_HANDLE cpuDescriptorHandle;
-        UINT descriptorHeapIndex = allocateDescriptor(&cpuDescriptorHandle);
+        descriptorHeapIndex = allocateDescriptor(&cpuDescriptorHandle, descriptorHeapIndex);
         mDevice->CreateConstantBufferView(&cbvDesc, cpuDescriptorHandle);
         return getDescriptorGPUHandle(descriptorHeapIndex);
     }
@@ -153,12 +153,12 @@ namespace DXRFramework
         return mFallbackDevice->GetWrappedPointerSimple(descriptorHeapIndex, resource->GetGPUVirtualAddress());
     }
 
-    D3D12_GPU_DESCRIPTOR_HANDLE RtContext::createBufferSRVHandle(ID3D12Resource* resource, bool rawBuffer, UINT structureStride)
+    D3D12_GPU_DESCRIPTOR_HANDLE RtContext::createBufferSRVHandle(ID3D12Resource* resource, bool rawBuffer, UINT structureStride, UINT descriptorHeapIndex)
     {
         D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = createBufferSRVDesc(resource, rawBuffer, structureStride);
 
         D3D12_CPU_DESCRIPTOR_HANDLE cpuDescriptorHandle;
-        UINT descriptorHeapIndex = allocateDescriptor(&cpuDescriptorHandle);
+        descriptorHeapIndex = allocateDescriptor(&cpuDescriptorHandle, descriptorHeapIndex);
         mDevice->CreateShaderResourceView(resource, &srvDesc, cpuDescriptorHandle);
         return getDescriptorGPUHandle(descriptorHeapIndex);
     }

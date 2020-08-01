@@ -37,9 +37,9 @@ namespace DXRFramework
         WRAPPED_GPU_POINTER createBufferSRVWrappedPointer(ID3D12Resource* resource, bool rawBuffer = true, UINT structureStride = 4);
         WRAPPED_GPU_POINTER createTextureSRVWrappedPointer(ID3D12Resource* resource, bool cubemap = false);
 
-        D3D12_GPU_DESCRIPTOR_HANDLE createBufferUAVHandle(ID3D12Resource* resource);
-        D3D12_GPU_DESCRIPTOR_HANDLE createBufferCBVHandle(ID3D12Resource* resource, UINT sizeInBytes);
-        D3D12_GPU_DESCRIPTOR_HANDLE createBufferSRVHandle(ID3D12Resource* resource, bool rawBuffer = true, UINT structureStride = 4);
+        D3D12_GPU_DESCRIPTOR_HANDLE createBufferUAVHandle(ID3D12Resource* resource, UINT descriptorHeapIndex = UINT_MAX);
+        D3D12_GPU_DESCRIPTOR_HANDLE createBufferCBVHandle(ID3D12Resource* resource, UINT sizeInBytes, UINT descriptorHeapIndex = UINT_MAX);
+        D3D12_GPU_DESCRIPTOR_HANDLE createBufferSRVHandle(ID3D12Resource* resource, bool rawBuffer = true, UINT structureStride = 4, UINT descriptorHeapIndex = UINT_MAX);
         D3D12_GPU_DESCRIPTOR_HANDLE createTextureSRVHandle(ID3D12Resource* resource, bool cubemap = false, UINT descriptorHeapIndex = UINT_MAX);
 
         void transitionResource(ID3D12Resource *resource, D3D12_RESOURCE_STATES fromState, D3D12_RESOURCE_STATES toState);

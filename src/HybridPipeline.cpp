@@ -390,7 +390,7 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
     {
         D3D12_CPU_DESCRIPTOR_HANDLE srvCpuHandle;
         mPhotonSeedSrvHeapIndex = mRtContext->allocateDescriptor(&srvCpuHandle, mPhotonSeedSrvHeapIndex);
-        mPhotonSeedSrvGpuHandle = mRtContext->createBufferSRVHandle(mPhotonSeedResource.Get(), false, sizeof(Photon));
+        mPhotonSeedSrvGpuHandle = mRtContext->createBufferSRVHandle(mPhotonSeedResource.Get(), false, sizeof(Photon), mPhotonSeedSrvHeapIndex);
     }
 
     // TODO: merge resources and use counterOffset
