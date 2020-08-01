@@ -98,11 +98,19 @@ private:
     ComPtr<ID3D12Resource> mPhotonMapResource;
     ComPtr<ID3D12Resource> mPhotonMapCounter;
     UINT mPhotonMapUavHeapIndex = UINT_MAX;
+    UINT mPhotonMapSrvHeapIndex = UINT_MAX;
     D3D12_GPU_DESCRIPTOR_HANDLE mPhotonMapUavGpuHandle;
+    D3D12_GPU_DESCRIPTOR_HANDLE mPhotonMapSrvGpuHandle;
 
     ComPtr<ID3D12Resource> mPhotonDensityResource;
     UINT mPhotonDensityUavHeapIndex = UINT_MAX;
+    UINT mPhotonDensitySrvHeapIndex = UINT_MAX;
     D3D12_GPU_DESCRIPTOR_HANDLE mPhotonDensityUavGpuHandle;
+    D3D12_GPU_DESCRIPTOR_HANDLE mPhotonDensitySrvGpuHandle;
+
+    std::unique_ptr<GeometricPrimitive> mPhotonSplatKernelShape;
+    ComPtr<ID3D12Resource> mPhotonSplatTargetResource[2];
+    D3D12_CPU_DESCRIPTOR_HANDLE mPhotonSplatRtvCpuHandle[2];
 
     struct ClearableUAV
     {

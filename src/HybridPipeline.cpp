@@ -273,6 +273,8 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context) :
         rtvDescriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
         mRtvDescriptorHeap = std::make_unique<DescriptorPile>(device, &rtvDescriptorHeapDesc);
     }
+
+    mPhotonSplatKernelShape = GeometricPrimitive::CreateIcosahedron();
 }
 
 HybridPipeline::~HybridPipeline() = default;
@@ -432,10 +434,17 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
         mPhotonMapUavGpuHandle = mRtContext->getDescriptorGPUHandle(mPhotonMapUavHeapIndex);
     }
 
+    {
+        D3D12_CPU_DESCRIPTOR_HANDLE srvCpuHandle;
+        mPhotonMapSrvHeapIndex = mRtContext->allocateDescriptor(&srvCpuHandle, mPhotonMapSrvHeapIndex);
+        mPhotonMapSrvGpuHandle = mRtContext->createBufferSRVHandle(mPhotonMapResource.Get(), false, sizeof(Photon), mPhotonMapSrvHeapIndex);
+    }
+
     const double preferredTileSizeInPixels = 8.0;
     UINT numTilesX = static_cast<UINT>(ceil(width / preferredTileSizeInPixels));
     UINT numTilesY = static_cast<UINT>(ceil(height / preferredTileSizeInPixels));
     mPhotonMappingConstants->numTiles = XMUINT2(numTilesX, numTilesY);
+    mPhotonMappingConstants.CopyStagingToGpu();
     AllocateUAVTexture(device, DXGI_FORMAT_R32_UINT, numTilesX, numTilesY, mPhotonDensityResource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
     {
@@ -450,7 +459,35 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
         createClearableUav(mPhotonDensityResource.Get(), &uavDesc, mPhotonDensityUavGpuHandle);
     }
 
-    mPhotonMappingConstants.CopyStagingToGpu();
+    {
+        D3D12_CPU_DESCRIPTOR_HANDLE srvCpuHandle;
+        mPhotonDensitySrvHeapIndex = mRtContext->allocateDescriptor(&srvCpuHandle, mPhotonDensitySrvHeapIndex);
+        mPhotonDensitySrvGpuHandle = mRtContext->createTextureSRVHandle(mPhotonDensityResource.Get(), false, mPhotonDensitySrvHeapIndex);
+    }
+
+    AllocateRTVTexture(device, DXGI_FORMAT_R32G32B32A32_FLOAT, width, height, mPhotonSplatTargetResource[0].ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_RENDER_TARGET, L"PhotonSplatResultColorDirX");
+
+    {
+        D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
+        rtvDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+        rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+
+        size_t rtvHeapIndex = mRtvDescriptorHeap->Allocate();
+        mPhotonSplatRtvCpuHandle[0] = mRtvDescriptorHeap->GetCpuHandle(rtvHeapIndex);
+        device->CreateRenderTargetView(mPhotonSplatTargetResource[0].Get(), &rtvDesc, mPhotonSplatRtvCpuHandle[0]);
+    }
+
+    AllocateRTVTexture(device, DXGI_FORMAT_R32G32_FLOAT, width, height, mPhotonSplatTargetResource[1].ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_RENDER_TARGET, L"PhotonSplatResultDirYZ");
+
+    {
+        D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
+        rtvDesc.Format = DXGI_FORMAT_R32G32_FLOAT;
+        rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+
+        size_t rtvHeapIndex = mRtvDescriptorHeap->Allocate();
+        mPhotonSplatRtvCpuHandle[1] = mRtvDescriptorHeap->GetCpuHandle(rtvHeapIndex);
+        device->CreateRenderTargetView(mPhotonSplatTargetResource[1].Get(), &rtvDesc, mPhotonSplatRtvCpuHandle[1]);
+    }
 }
 
 void HybridPipeline::createClearableUav(ID3D12Resource* pResource, const D3D12_UNORDERED_ACCESS_VIEW_DESC* uavDesc, D3D12_GPU_DESCRIPTOR_HANDLE uavHandle)
