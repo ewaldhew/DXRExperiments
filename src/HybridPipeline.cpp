@@ -56,6 +56,7 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context) :
     mNeedPhotonMap(true),
     mActive(true)
 {
+    auto device = context->getDevice();
 
     /*******************************
      *  Photon Emission Pass
@@ -211,22 +212,35 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context) :
      *  Photon Splatting Pass
      *******************************/
     {
-        auto device = context->getDevice();
-
         RootSignatureGenerator rsConfig;
-        rsConfig.AddHeapRangesParameter({{0 /* t0 */, 1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}});
-        rsConfig.AddHeapRangesParameter({{1 /* t1 */, 1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}});
-        rsConfig.AddHeapRangesParameter({{0 /* u0 */, 1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0}});
+        rsConfig.AddHeapRangesParameter({{0 /* t0 */, 1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // photons
+        rsConfig.AddHeapRangesParameter({{1 /* t1 */, 1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // density
         rsConfig.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_CBV, 0 /* b0 */, 0, 1);
 
         mPhotonSplattingPass.rootSignature = rsConfig.Generate(device, false);
 
-        D3D12_GRAPHICS_PIPELINE_STATE_DESC desc = {};
-        desc.pRootSignature = mPhotonSplattingPass.rootSignature.Get();
-        desc.VS = CD3DX12_SHADER_BYTECODE(g_pPhotonSplatting_vs, ARRAYSIZE(g_pPhotonSplatting_vs));
-        desc.PS = CD3DX12_SHADER_BYTECODE(g_pPhotonSplatting_ps, ARRAYSIZE(g_pPhotonSplatting_ps));
+      /*D3D12_INPUT_ELEMENT_DESC inputDescs[] =
+        {
+            { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        };*/
 
-        ThrowIfFailed(device->CreateGraphicsPipelineState(&desc, IID_PPV_ARGS(&mPhotonSplattingPass.stateObject)));
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
+        psoDesc.pRootSignature = mPhotonSplattingPass.rootSignature.Get();
+        psoDesc.VS = CD3DX12_SHADER_BYTECODE(g_pPhotonSplatting_vs, ARRAYSIZE(g_pPhotonSplatting_vs));
+        psoDesc.PS = CD3DX12_SHADER_BYTECODE(g_pPhotonSplatting_ps, ARRAYSIZE(g_pPhotonSplatting_ps));
+        psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+        psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+        psoDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+        psoDesc.InputLayout = GeometricPrimitive::VertexType::InputLayout; //{ inputDescs, ARRAYSIZE(inputDescs) };
+        psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+        psoDesc.NumRenderTargets = 2;
+        psoDesc.RTVFormats[0] = DXGI_FORMAT_R32G32B32A32_FLOAT;
+        psoDesc.RTVFormats[1] = DXGI_FORMAT_R32G32_FLOAT;
+        psoDesc.DSVFormat = DXGI_FORMAT_UNKNOWN;
+        psoDesc.SampleMask = 1;
+        psoDesc.SampleDesc = { 1, 0 };
+
+        ThrowIfFailed(device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&mPhotonSplattingPass.stateObject)));
         NAME_D3D12_OBJECT(mPhotonSplattingPass.stateObject);
     }
 
@@ -543,11 +557,6 @@ void HybridPipeline::update(float elapsedTime, UINT elapsedFrames, UINT prevFram
 
     mPhotonMappingConstants->vpSize = XMUINT2(width, height);
     mPhotonMappingConstants.CopyStagingToGpu();
-}
-
-void HybridPipeline::createPipelineStateObjects()
-{
-
 }
 
 void HybridPipeline::collectEmitters(UINT& numLights, UINT& maxSamples)

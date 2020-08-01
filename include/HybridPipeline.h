@@ -10,6 +10,7 @@
 #include "RtState.h"
 #include "Camera.h"
 #include "DescriptorHeap.h"
+#include "GeometricPrimitive.h"
 #include <vector>
 #include <random>
 
@@ -45,7 +46,6 @@ private:
 
     void createClearableUav(ID3D12Resource* pResource, const D3D12_UNORDERED_ACCESS_VIEW_DESC * uavDesc, D3D12_GPU_DESCRIPTOR_HANDLE uavHandle);
     void clearUavs();
-    void createPipelineStateObjects();
     void collectEmitters(UINT& numLights, UINT& maxSamples);
 
     // Pipeline components
