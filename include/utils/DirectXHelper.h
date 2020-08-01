@@ -4,6 +4,23 @@
 #include "Helpers/DirectXRaytracingHelper.h"
 
 namespace DirectX {
+    inline void AllocateRTVTexture(ID3D12Device* pDevice, DXGI_FORMAT textureFormat, UINT64 textureWidth, UINT64 textureHeight, ID3D12Resource **ppResource, D3D12_RESOURCE_STATES initialResourceState = D3D12_RESOURCE_STATE_COMMON, const wchar_t* resourceName = nullptr)
+    {
+        auto texDesc = CD3DX12_RESOURCE_DESC::Tex2D(textureFormat, textureWidth, static_cast<UINT>(textureHeight), 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET);
+
+        ThrowIfFailed(pDevice->CreateCommittedResource(
+            &kDefaultHeapProps,
+            D3D12_HEAP_FLAG_NONE,
+            &texDesc,
+            initialResourceState,
+            nullptr,
+            IID_PPV_ARGS(ppResource)));
+        if (resourceName)
+        {
+            (*ppResource)->SetName(resourceName);
+        }
+    }
+
     inline void CreateTextureResource(
         ID3D12Device* pDevice, ResourceUploadBatch& upload,
         uint32_t width, uint32_t height, uint32_t depth,
