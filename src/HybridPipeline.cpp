@@ -8,6 +8,7 @@
 #include "DDSTextureLoader.h"
 #include "ResourceUploadBatch.h"
 #include "utils/DirectXHelper.h"
+#include "DirectXHelpers.h"
 #include "ImGuiRendererDX.h"
 #include <chrono>
 
@@ -510,6 +511,12 @@ void HybridPipeline::clearUavs()
     }
 }
 
+inline void clearRtv(ID3D12GraphicsCommandList* commandList, D3D12_CPU_DESCRIPTOR_HANDLE handle)
+{
+    const float clearZero[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+    commandList->ClearRenderTargetView(handle, clearZero, 0, nullptr);
+}
+
 inline void calculateCameraVariables(Math::Camera &camera, float aspectRatio, XMFLOAT4 *U, XMFLOAT4 *V, XMFLOAT4 *W)
 {
     float ulen, vlen, wlen;
@@ -794,11 +801,11 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
         commandList->SetComputeRootSignature(program->getGlobalRootSignature());
         commandList->SetComputeRootConstantBufferView(GlobalRootSignatureParams::PerFrameConstantsSlot, mConstantBuffer.GpuVirtualAddress(frameIndex));
         commandList->SetComputeRootDescriptorTable(GlobalRootSignatureParams::OutputViewSlot, mPhotonMapUavGpuHandle);
+        commandList->SetComputeRootDescriptorTable(GlobalRootSignatureParams::PhotonDensityOutputViewSlot, mPhotonDensityUavGpuHandle);
         commandList->SetComputeRootDescriptorTable(GlobalRootSignatureParams::MaterialTextureSrvSlot + 1, mOutputUavGpuHandle);
         commandList->SetComputeRootDescriptorTable(GlobalRootSignatureParams::MaterialTextureSrvSlot, mTextureSrvGpuHandles[2]);
         commandList->SetComputeRootShaderResourceView(GlobalRootSignatureParams::MaterialTextureParamsSlot, mTextureParams.GpuVirtualAddress());
         commandList->SetComputeRootDescriptorTable(GlobalRootSignatureParams::PhotonSourcesSRVSlot, mPhotonSeedSrvGpuHandle);
-        commandList->SetComputeRootDescriptorTable(GlobalRootSignatureParams::PhotonDensityOutputViewSlot, mPhotonDensityUavGpuHandle);
         commandList->SetComputeRootConstantBufferView(GlobalRootSignatureParams::PhotonMappingConstantsSlot, mPhotonMappingConstants.GpuVirtualAddress());
         mRtContext->getFallbackCommandList()->SetTopLevelAccelerationStructure(GlobalRootSignatureParams::AccelerationStructureSlot, mRtScene->getTlasWrappedPtr());
 
@@ -819,6 +826,35 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
 
     if (pass == Pass::PhotonSplatting)
     {
+        auto viewport = CD3DX12_VIEWPORT(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height));
+        auto scissorRect = CD3DX12_RECT(0, 0, (width), static_cast<LONG>(height));
+
+        std::initializer_list<D3D12_RESOURCE_BARRIER> barriers =
+        {
+            CD3DX12_RESOURCE_BARRIER::Transition(mPhotonMapResource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+            CD3DX12_RESOURCE_BARRIER::Transition(mPhotonDensityResource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+            CD3DX12_RESOURCE_BARRIER::Transition(mPhotonSplatTargetResource[0].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET),
+            CD3DX12_RESOURCE_BARRIER::Transition(mPhotonSplatTargetResource[1].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET),
+        };
+        auto transitions = ScopedBarrier(commandList, barriers);
+
+        // Set necessary state.
+        mRtContext->bindDescriptorHeap();
+        commandList->RSSetViewports(1, &viewport);
+        commandList->RSSetScissorRects(1, &scissorRect);
+        commandList->SetGraphicsRootSignature(mPhotonSplattingPass.rootSignature.Get());
+        commandList->SetGraphicsRootDescriptorTable(0, mPhotonMapSrvGpuHandle);
+        commandList->SetGraphicsRootDescriptorTable(1, mPhotonDensitySrvGpuHandle);
+        //commandList->SetGraphicsRootConstantBufferView(2, gBufferPerObjectBuffer->GetGPUVirtualAddress());
+        commandList->OMSetRenderTargets(ARRAYSIZE(mPhotonSplatRtvCpuHandle), mPhotonSplatRtvCpuHandle, FALSE, nullptr);
+
+        clearRtv(commandList, mPhotonSplatRtvCpuHandle[0]);
+        clearRtv(commandList, mPhotonSplatRtvCpuHandle[1]);
+
+        commandList->SetPipelineState(mPhotonSplattingPass.stateObject.Get());
+
+        mPhotonSplatKernelShape->Draw(commandList);
+
         pass = Pass::Combine;
     }
 
