@@ -62,7 +62,7 @@
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(IntDir);$(SolutionDir)assets\shaders;$(SolutionDir)include;$(SolutionDir)include\utils;$(SolutionDir)libs\DXRFramework;$(SolutionDir)libs\OpenSimplexNoise;$(SolutionDir)libs\MiniEngine;$(SolutionDir)libs\imgui;$(SolutionDir)libs\assimp\include;$(SolutionDir)externals\DirectXTK12\Inc;$(SolutionDir)externals\D3D12RaytracingFallback\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(IntDir);$(SolutionDir)assets\shaders;$(SolutionDir)include;$(SolutionDir)include\utils;$(SolutionDir)libs\DXRFramework;$(SolutionDir)libs\DXTKExtend;$(SolutionDir)libs\OpenSimplexNoise;$(SolutionDir)libs\MiniEngine;$(SolutionDir)libs\imgui;$(SolutionDir)libs\assimp\include;$(SolutionDir)externals\DirectXTK12\Inc;$(SolutionDir)externals\D3D12RaytracingFallback\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <CompileAsWinRT>false</CompileAsWinRT>
     </ClCompile>
     <Link>
@@ -104,7 +104,7 @@ PostbuildCopy.bat "$(SolutionDir)vc2015\build\bin\$(Configuration)\"
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(IntDir);$(SolutionDir)assets\shaders;$(SolutionDir)include;$(SolutionDir)include\utils;$(SolutionDir)libs\DXRFramework;$(SolutionDir)libs\OpenSimplexNoise;$(SolutionDir)libs\MiniEngine;$(SolutionDir)libs\imgui;$(SolutionDir)libs\assimp\include;$(SolutionDir)externals\DirectXTK12\Inc;$(SolutionDir)externals\D3D12RaytracingFallback\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(IntDir);$(SolutionDir)assets\shaders;$(SolutionDir)include;$(SolutionDir)include\utils;$(SolutionDir)libs\DXRFramework;$(SolutionDir)libs\DXTKExtend;$(SolutionDir)libs\OpenSimplexNoise;$(SolutionDir)libs\MiniEngine;$(SolutionDir)libs\imgui;$(SolutionDir)libs\assimp\include;$(SolutionDir)externals\DirectXTK12\Inc;$(SolutionDir)externals\D3D12RaytracingFallback\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <CompileAsWinRT>false</CompileAsWinRT>
     </ClCompile>
     <Link>
@@ -312,6 +312,10 @@ PostbuildCopy.bat "$(SolutionDir)vc2015\build\bin\$(Configuration)\"
       <PrecompiledHeaderOutputFile>
       </PrecompiledHeaderOutputFile>
     </ClCompile>
+    <ClCompile Include="..\libs\DXTKExtend\GeometricModel.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="..\libs\imgui\imgui.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
@@ -339,6 +343,9 @@ PostbuildCopy.bat "$(SolutionDir)vc2015\build\bin\$(Configuration)\"
     <ClCompile Include="..\libs\MiniEngine\GameInput.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
+    <ClInclude Include="..\libs\DXTKExtend\CommonInclude.h" />
+    <ClInclude Include="..\libs\DXTKExtend\GeometricModel.h" />
+    <ClInclude Include="..\libs\DXTKExtend\Util\DirectXHelper.h" />
     <ClInclude Include="..\libs\MiniEngine\Math\BoundingBox.h" />
     <ClCompile Include="..\libs\MiniEngine\Math\Frustum.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>

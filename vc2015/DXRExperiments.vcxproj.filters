@@ -51,6 +51,12 @@
     <Filter Include="Libs\OpenSimplexNoise">
       <UniqueIdentifier>{37ffc443-8611-43dd-8284-cb3f4eba19f0}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Libs\DXTKExtend">
+      <UniqueIdentifier>{bf638312-e976-44c2-8a1b-83735943dfc9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Libs\DXTKExtend\Util">
+      <UniqueIdentifier>{5aa80caf-6103-4b78-9bc4-0d787a535804}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\include\utils\StepTimer.h">
@@ -428,6 +434,15 @@
     <ClInclude Include="..\libs\OpenSimplexNoise\OpenSimplexNoise.h">
       <Filter>Libs\OpenSimplexNoise</Filter>
     </ClInclude>
+    <ClInclude Include="..\libs\DXTKExtend\GeometricModel.h">
+      <Filter>Libs\DXTKExtend</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libs\DXTKExtend\CommonInclude.h">
+      <Filter>Libs\DXTKExtend</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libs\DXTKExtend\Util\DirectXHelper.h">
+      <Filter>Libs\DXTKExtend\Util</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\Main.cpp">
@@ -537,6 +552,9 @@
     </ClCompile>
     <ClCompile Include="..\libs\OpenSimplexNoise\OpenSimplexNoise.cpp">
       <Filter>Libs\OpenSimplexNoise</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libs\DXTKExtend\GeometricModel.cpp">
+      <Filter>Libs\DXTKExtend</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
