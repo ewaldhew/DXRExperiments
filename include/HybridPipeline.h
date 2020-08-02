@@ -10,7 +10,7 @@
 #include "RtState.h"
 #include "Camera.h"
 #include "DescriptorHeap.h"
-#include "GeometricPrimitive.h"
+#include "GeometricModel.h"
 #include <vector>
 #include <random>
 
@@ -109,7 +109,7 @@ private:
     D3D12_GPU_DESCRIPTOR_HANDLE mPhotonDensityUavGpuHandle;
     D3D12_GPU_DESCRIPTOR_HANDLE mPhotonDensitySrvGpuHandle;
 
-    std::unique_ptr<GeometricPrimitive> mPhotonSplatKernelShape;
+    DXTKExtend::GeometricModel::SharedPtr mPhotonSplatKernelShape;
     ComPtr<ID3D12Resource> mPhotonSplatTargetResource[2];
     D3D12_CPU_DESCRIPTOR_HANDLE mPhotonSplatRtvCpuHandle[2];
 

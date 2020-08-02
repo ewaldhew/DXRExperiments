@@ -275,7 +275,9 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context) :
         mRtvDescriptorHeap = std::make_unique<DescriptorPile>(device, &rtvDescriptorHeapDesc);
     }
 
-    mPhotonSplatKernelShape = GeometricPrimitive::CreateIcosahedron();
+    mPhotonSplatKernelShape = std::make_shared<DXTKExtend::GeometricModel>(device, [](auto& vertices, auto& indices) {
+        GeometricPrimitive::CreateIcosahedron(vertices, indices, 0.1f);
+    });
 }
 
 HybridPipeline::~HybridPipeline() = default;
