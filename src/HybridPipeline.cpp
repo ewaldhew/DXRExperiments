@@ -218,7 +218,7 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context) :
         rsConfig.AddHeapRangesParameter({{1 /* t1 */, 1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // density
         rsConfig.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_CBV, 0 /* b0 */, 0, 1);
 
-        mPhotonSplattingPass.rootSignature = rsConfig.Generate(device, false);
+        mPhotonSplattingPass.rootSignature = rsConfig.Generate(device, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
       /*D3D12_INPUT_ELEMENT_DESC inputDescs[] =
         {

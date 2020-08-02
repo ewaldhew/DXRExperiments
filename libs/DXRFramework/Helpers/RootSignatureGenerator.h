@@ -107,6 +107,9 @@ public:
   /// Create the root signature from the set of parameters, in the order of the addition calls
   ID3D12RootSignature* Generate(ID3D12Device* device, bool isLocal);
 
+  /// Create the root signature from the set of parameters, in the order of the addition calls
+  ID3D12RootSignature* Generate(ID3D12Device* device, D3D12_ROOT_SIGNATURE_FLAGS flags = D3D12_ROOT_SIGNATURE_FLAG_NONE);
+
   /// Fallback layer implementation
   ID3D12RootSignature* Generate(ID3D12RaytracingFallbackDevice* fallbackDevice, bool isLocal);
 
