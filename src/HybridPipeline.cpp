@@ -183,9 +183,6 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context) :
             config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 0 /* t0 */, 9); // space9 t0
             // GlobalRootSignatureParams::MaterialTextureSrvSlot
             config.AddHeapRangesParameter({ {1 /* t1 */, -1 /* unbounded */, 9 /* space9 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0} });
-
-
-            config.AddHeapRangesParameter({ {9 /* u9 */, 1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0} });
         });
         photonTrace.configureHitGroupRootSignature([] (RootSignatureGenerator &config) {
             config = {};
@@ -814,7 +811,6 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
         commandList->SetComputeRootConstantBufferView(GlobalRootSignatureParams::PerFrameConstantsSlot, mConstantBuffer.GpuVirtualAddress(frameIndex));
         commandList->SetComputeRootDescriptorTable(GlobalRootSignatureParams::OutputViewSlot, mPhotonMapUavGpuHandle);
         commandList->SetComputeRootDescriptorTable(GlobalRootSignatureParams::PhotonDensityOutputViewSlot, mPhotonDensityUavGpuHandle);
-        commandList->SetComputeRootDescriptorTable(GlobalRootSignatureParams::MaterialTextureSrvSlot + 1, mOutputUavGpuHandle);
         commandList->SetComputeRootDescriptorTable(GlobalRootSignatureParams::MaterialTextureSrvSlot, mTextureSrvGpuHandles[2]);
         commandList->SetComputeRootShaderResourceView(GlobalRootSignatureParams::MaterialTextureParamsSlot, mTextureParams.GpuVirtualAddress());
         commandList->SetComputeRootDescriptorTable(GlobalRootSignatureParams::PhotonSourcesSRVSlot, mPhotonSeedSrvGpuHandle);
@@ -823,7 +819,6 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
 
         mRtContext->raytrace(mRtBindings, mRtState, mSamplesCpu + mSamplesGpu, 1, 1);
 
-        mRtContext->insertUAVBarrier(mOutputResource.Get());
         mRtContext->insertUAVBarrier(mPhotonMapResource.Get());
         mRtContext->transitionResource(mPhotonSeedResource.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
