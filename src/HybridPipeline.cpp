@@ -366,6 +366,8 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
     auto device = mRtContext->getDevice();
 
     mClearableUavs.clear();
+    mCpuOnlyDescriptorHeap = std::make_unique<DescriptorPile>(mCpuOnlyDescriptorHeap->Heap());
+    mRtvDescriptorHeap = std::make_unique<DescriptorPile>(mRtvDescriptorHeap->Heap());
 
     // Final output resource
 
