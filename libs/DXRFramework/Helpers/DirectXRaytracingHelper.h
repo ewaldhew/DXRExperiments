@@ -51,6 +51,23 @@ inline void AllocateUAVBuffer(ID3D12Device* pDevice, UINT64 bufferSize, ID3D12Re
     }
 }
 
+inline void AllocateReadbackBuffer(ID3D12Device* pDevice, UINT64 bufferSize, ID3D12Resource **ppResource, const wchar_t* resourceName = nullptr)
+{
+    auto readbackHeapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_READBACK);
+    auto readbackBufferDesc = CD3DX12_RESOURCE_DESC::Buffer(bufferSize);
+    ThrowIfFailed(pDevice->CreateCommittedResource(
+        &readbackHeapProperties,
+        D3D12_HEAP_FLAG_NONE,
+        &readbackBufferDesc,
+        D3D12_RESOURCE_STATE_COPY_DEST,
+        nullptr,
+        IID_PPV_ARGS(ppResource)));
+    if (resourceName)
+    {
+        (*ppResource)->SetName(resourceName);
+    }
+}
+
 inline void AllocateUploadBuffer(ID3D12Device* pDevice, void *pData, UINT64 datasize, ID3D12Resource **ppResource, const wchar_t* resourceName = nullptr)
 {
     auto uploadHeapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);

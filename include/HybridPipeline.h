@@ -98,6 +98,7 @@ private:
 
     ComPtr<ID3D12Resource> mPhotonMapResource;
     ComPtr<ID3D12Resource> mPhotonMapCounter;
+    ComPtr<ID3D12Resource> mPhotonMapCounterReadback;
     UINT mPhotonMapUavHeapIndex = UINT_MAX;
     UINT mPhotonMapSrvHeapIndex = UINT_MAX;
     D3D12_GPU_DESCRIPTOR_HANDLE mPhotonMapUavGpuHandle;
@@ -131,6 +132,7 @@ private:
     bool mNeedPhotonMap;
     UINT mSamplesCpu;
     UINT mSamplesGpu;
+    UINT mNumPhotons; // after tracing
     bool mFrameAccumulationEnabled;
     bool mAnimationPaused;
     DebugOptions mShaderDebugOptions;

@@ -429,6 +429,7 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
     // TODO: merge resources and use counterOffset
     AllocateUAVBuffer(device, MAX_PHOTONS * sizeof(Photon), mPhotonMapResource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     AllocateUAVBuffer(device, 4, mPhotonMapCounter.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    AllocateReadbackBuffer(device, 4, mPhotonMapCounterReadback.ReleaseAndGetAddressOf(), L"photon map counter readback");
 
     {
         D3D12_CPU_DESCRIPTOR_HANDLE uavCpuHandle;
@@ -821,10 +822,13 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
         mRtContext->insertUAVBarrier(mPhotonMapResource.Get());
         mRtContext->transitionResource(mPhotonSeedResource.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-        mRtContext->transitionResource(mPhotonMapCounter.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_DEST);
+        mRtContext->transitionResource(mPhotonMapCounter.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
+        commandList->CopyResource(mPhotonMapCounterReadback.Get(), mPhotonMapCounter.Get());
+        mRtContext->transitionResource(mPhotonMapCounter.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_COPY_DEST);
         commandList->CopyResource(mPhotonMapCounter.Get(), zeroResource.Get());
         mRtContext->transitionResource(mPhotonMapCounter.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
+        mNumPhotons = 0;
         mNeedPhotonMap = false;
         pass = Pass::PhotonSplatting;
         return;
@@ -834,6 +838,13 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
     {
         auto viewport = CD3DX12_VIEWPORT(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height));
         auto scissorRect = CD3DX12_RECT(0, 0, (width), static_cast<LONG>(height));
+
+        if (mNumPhotons == 0) {
+            UINT* pReadbackBufferData;
+            ThrowIfFailed(mPhotonMapCounterReadback->Map(0, nullptr, reinterpret_cast<void**>(&pReadbackBufferData)));
+            mNumPhotons = pReadbackBufferData[0];
+            mPhotonMapCounterReadback->Unmap(0, &CD3DX12_RANGE(0, 0));
+        }
 
         std::initializer_list<D3D12_RESOURCE_BARRIER> barriers =
         {
