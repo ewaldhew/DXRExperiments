@@ -4,16 +4,16 @@
 #include "Helpers/DirectXRaytracingHelper.h"
 
 namespace DirectX {
-    inline void AllocateRTVTexture(ID3D12Device* pDevice, DXGI_FORMAT textureFormat, UINT64 textureWidth, UINT64 textureHeight, ID3D12Resource **ppResource, D3D12_RESOURCE_STATES initialResourceState = D3D12_RESOURCE_STATE_COMMON, const wchar_t* resourceName = nullptr)
+    inline void AllocateRTVTexture(ID3D12Device* pDevice, DXGI_FORMAT textureFormat, UINT64 textureWidth, UINT64 textureHeight, ID3D12Resource **ppResource, D3D12_RESOURCE_STATES initialResourceState = D3D12_RESOURCE_STATE_COMMON, const wchar_t* resourceName = nullptr, D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET, std::array<FLOAT, 4> clearValue = {})
     {
-        auto texDesc = CD3DX12_RESOURCE_DESC::Tex2D(textureFormat, textureWidth, static_cast<UINT>(textureHeight), 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET);
+        auto texDesc = CD3DX12_RESOURCE_DESC::Tex2D(textureFormat, textureWidth, static_cast<UINT>(textureHeight), 1, 1, 1, 0, flags | D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET);
 
         ThrowIfFailed(pDevice->CreateCommittedResource(
             &kDefaultHeapProps,
             D3D12_HEAP_FLAG_NONE,
             &texDesc,
             initialResourceState,
-            nullptr,
+            &CD3DX12_CLEAR_VALUE(textureFormat, clearValue.data()),
             IID_PPV_ARGS(ppResource)));
         if (resourceName)
         {

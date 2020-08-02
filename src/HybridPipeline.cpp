@@ -369,7 +369,7 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
 
     // Final output resource
 
-    AllocateUAVTexture(device, format, width, height, mOutputResource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    AllocateRTVTexture(device, format, width, height, mOutputResource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, L"Final output resource", D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
 
     {
         D3D12_CPU_DESCRIPTOR_HANDLE uavCpuHandle;
@@ -391,7 +391,6 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
 
     {
         D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
-        rtvDesc.Format = format;
         rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
 
         size_t rtvHeapIndex = mRtvDescriptorHeap->Allocate();
@@ -475,11 +474,10 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
         mPhotonDensitySrvGpuHandle = mRtContext->createTextureSRVHandle(mPhotonDensityResource.Get(), false, mPhotonDensitySrvHeapIndex);
     }
 
-    AllocateRTVTexture(device, DXGI_FORMAT_R32G32B32A32_FLOAT, width, height, mPhotonSplatTargetResource[0].ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_RENDER_TARGET, L"PhotonSplatResultColorDirX");
+    AllocateRTVTexture(device, DXGI_FORMAT_R32G32B32A32_FLOAT, width, height, mPhotonSplatTargetResource[0].ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, L"PhotonSplatResultColorDirX");
 
     {
         D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
-        rtvDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
         rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
 
         size_t rtvHeapIndex = mRtvDescriptorHeap->Allocate();
@@ -487,11 +485,10 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
         device->CreateRenderTargetView(mPhotonSplatTargetResource[0].Get(), &rtvDesc, mPhotonSplatRtvCpuHandle[0]);
     }
 
-    AllocateRTVTexture(device, DXGI_FORMAT_R32G32_FLOAT, width, height, mPhotonSplatTargetResource[1].ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_RENDER_TARGET, L"PhotonSplatResultDirYZ");
+    AllocateRTVTexture(device, DXGI_FORMAT_R32G32_FLOAT, width, height, mPhotonSplatTargetResource[1].ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, L"PhotonSplatResultDirYZ");
 
     {
         D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
-        rtvDesc.Format = DXGI_FORMAT_R32G32_FLOAT;
         rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
 
         size_t rtvHeapIndex = mRtvDescriptorHeap->Allocate();
