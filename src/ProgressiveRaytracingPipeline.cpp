@@ -255,7 +255,7 @@ inline void calculateCameraVariables(Math::Camera &camera, float aspectRatio, XM
     XMVECTOR v = XMVector3Normalize(XMVector3Cross(u, w));
 
     vlen = wlen * tanf(0.5f * camera.GetFOV());
-    ulen = vlen * aspectRatio;
+    ulen = vlen / aspectRatio;
     u = XMVectorScale(u, ulen);
     v = XMVectorScale(v, vlen);
 

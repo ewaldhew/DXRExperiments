@@ -60,7 +60,7 @@ void DXRExperimentsApp::OnInit()
 
     // Setup camera states
     mCamera.reset(new Math::Camera());
-    mCamera->SetAspectRatio(m_aspectRatio);
+    mCamera->SetAspectRatio(1.0f / m_aspectRatio);
     mCamera->SetEyeAtUp(Math::Vector3(0.0, 0.0, 35.5), Math::Vector3(0.0, 0.0, 1.0), Math::Vector3(Math::kYUnitVector));
     mCamera->SetZRange(1.0f, 10000.0f);
     mCamController.reset(new GameCore::CameraController(*mCamera, mCamera->GetUpVec()));
@@ -343,7 +343,7 @@ void DXRExperimentsApp::OnSizeChanged(UINT width, UINT height, bool minimized)
 
     UpdateForSizeChange(width, height);
 
-    mCamera->SetAspectRatio(m_aspectRatio);
+    mCamera->SetAspectRatio(1.0f / m_aspectRatio);
 
     for (auto pipeline : mRaytracingPipelines) {
         pipeline->createOutputResource(m_deviceResources->GetBackBufferFormat(), GetWidth(), GetHeight());
