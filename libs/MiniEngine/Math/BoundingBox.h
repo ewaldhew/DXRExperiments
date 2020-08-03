@@ -1,6 +1,7 @@
 #pragma once
 
 #include <numeric>
+#include <algorithm>
 #include "Frustum.h"
 
 namespace Math
@@ -29,6 +30,8 @@ namespace Math
         friend BoundingBox  operator* (const OrthogonalTransform& xform, const BoundingBox& frustum);	// Fast
         friend BoundingBox  operator* (const AffineTransform& xform, const BoundingBox& frustum);		// Slow
         friend BoundingBox  operator* (const Matrix4& xform, const BoundingBox& frustum);				// Slowest (and most general)
+
+        friend BoundingBox  operator+ (const BoundingBox& lhs, const BoundingBox& rhs);
 
     private:
         Vector3 m_PrimaryVector;
@@ -92,5 +95,24 @@ namespace Math
             result.m_FrustumPlanes[i] = BoundingPlane(XForm * Vector4(frustum.m_FrustumPlanes[i]));
 
         return result;
+    }
+
+    inline BoundingBox operator+ (const BoundingBox& lhs, const BoundingBox& rhs)
+    {
+        Vector3 lMin = lhs.GetFrustumCorner(Frustum::CornerID::kNearLowerLeft);
+        Vector3 rMin = rhs.GetFrustumCorner(Frustum::CornerID::kNearLowerLeft);
+        Vector3 lMax = lhs.GetFrustumCorner(Frustum::CornerID::kFarUpperRight);
+        Vector3 rMax = rhs.GetFrustumCorner(Frustum::CornerID::kFarUpperRight);
+
+        float minX = std::min<float>(lMin.GetX(), rMin.GetX());
+        float minY = std::min<float>(lMin.GetY(), rMin.GetY());
+        float minZ = std::min<float>(lMin.GetZ(), rMin.GetZ());
+        float maxX = std::max<float>(lMax.GetX(), rMax.GetX());
+        float maxY = std::max<float>(lMax.GetY(), rMax.GetY());
+        float maxZ = std::max<float>(lMax.GetZ(), rMax.GetZ());
+
+        Vector3 pvec = 0.5 * (lhs.m_PrimaryVector + rhs.m_PrimaryVector);
+
+        return BoundingBox(Vector3(minX, minY, minZ), Vector3(maxX, maxY, maxZ), pvec);
     }
 }

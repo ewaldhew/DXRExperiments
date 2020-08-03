@@ -15,6 +15,17 @@ namespace DXRFramework
 
     RtScene::~RtScene() = default;
 
+    void RtScene::addModel(RtModel::SharedPtr model, DirectX::XMMATRIX transform, UCHAR instanceMask)
+    {
+        mInstances.emplace_back(Node::create(model, transform, instanceMask));
+
+        if (mInstances.size() > 1) {
+            mBoundingBox = mBoundingBox + Math::Matrix4(transform) * model->getBoundingBox();
+        } else {
+            mBoundingBox = Math::Matrix4(transform) * model->getBoundingBox();
+        }
+    }
+
     void RtScene::build(RtContext::SharedPtr context, UINT hitGroupCount)
     {
         auto device = context->getDevice();

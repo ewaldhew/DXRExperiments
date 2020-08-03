@@ -4,6 +4,7 @@
 #include "RtPrefix.h"
 #include "RtContext.h"
 #include "RtModel.h"
+#include "Math/BoundingBox.h"
 
 namespace DXRFramework
 {
@@ -31,9 +32,10 @@ namespace DXRFramework
             UCHAR mMask;
         };
 
-        void addModel(RtModel::SharedPtr model, DirectX::XMMATRIX transform, UCHAR instanceMask) { mInstances.emplace_back(Node::create(model, transform, instanceMask)); }
+        void addModel(RtModel::SharedPtr model, DirectX::XMMATRIX transform, UCHAR instanceMask);
         RtModel::SharedPtr getModel(UINT index) const { return mInstances[index]->mModel; }
         DirectX::XMMATRIX getTransform(UINT index) const { return mInstances[index]->mTransform; }
+        Math::BoundingBox getBoundingBox() const { return mBoundingBox; }
         UINT getNumInstances() const { return static_cast<UINT>(mInstances.size()); }
 
         ID3D12Resource *getTlasResource() const { return mTlasBuffer.Get(); }
@@ -42,6 +44,8 @@ namespace DXRFramework
         void build(RtContext::SharedPtr context, UINT hitGroupCount);
     private:
         RtScene();
+
+        Math::BoundingBox mBoundingBox;
 
         std::vector<Node::SharedPtr> mInstances;
 
