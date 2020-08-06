@@ -5,7 +5,7 @@ namespace DXTKExtend
 {
     GeometricModel::GeometricModel(ID3D12Device* pDevice, CreatePrimitive modelFunc)
     {
-        std::vector<GeometricPrimitive::VertexType> vertices;
+        std::vector<VertexType> vertices;
         std::vector<uint16_t> indices;
 
         modelFunc(vertices, indices);
@@ -31,12 +31,29 @@ namespace DXTKExtend
 
         // Create views
         mVertexBufferView.BufferLocation = mVertexBuffer->GetGPUVirtualAddress();
-        mVertexBufferView.StrideInBytes = static_cast<UINT>(sizeof(GeometricPrimitive::VertexType));
+        mVertexBufferView.StrideInBytes = static_cast<UINT>(sizeof(VertexType));
         mVertexBufferView.SizeInBytes = static_cast<UINT>(mVertexBuffer->GetDesc().Width);
 
         mIndexBufferView.BufferLocation = mIndexBuffer->GetGPUVirtualAddress();
         mIndexBufferView.SizeInBytes = static_cast<UINT>(mIndexBuffer->GetDesc().Width);
         mIndexBufferView.Format = DXGI_FORMAT_R16_UINT;
+    }
+
+    GeometricModel::GeometricModel(ComPtr<ID3D12Resource> vertexBuffer, size_t vertexStride, ComPtr<ID3D12Resource> indexBuffer, DXGI_FORMAT indexFormat)
+        : mVertexBuffer(vertexBuffer), mIndexBuffer(indexBuffer)
+    {
+        auto vertSizeBytes = mVertexBuffer->GetDesc().Width;
+        auto indSizeBytes = mIndexBuffer->GetDesc().Width;
+        mNumVertices = vertSizeBytes / vertexStride;
+        mIndexCount = indSizeBytes / SizeOfInBytes(indexFormat);
+
+        mVertexBufferView.BufferLocation = mVertexBuffer->GetGPUVirtualAddress();
+        mVertexBufferView.StrideInBytes = vertexStride;
+        mVertexBufferView.SizeInBytes = static_cast<UINT>(vertSizeBytes);
+
+        mIndexBufferView.BufferLocation = mIndexBuffer->GetGPUVirtualAddress();
+        mIndexBufferView.SizeInBytes = static_cast<UINT>(indSizeBytes);
+        mIndexBufferView.Format = indexFormat;
     }
 
     void GeometricModel::Draw(ID3D12GraphicsCommandList* commandList, UINT instanceCount) const
