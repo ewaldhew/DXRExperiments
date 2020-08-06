@@ -24,6 +24,8 @@ namespace Math
         }
 
         Vector3 GetPrimaryVector() const { return m_PrimaryVector; }
+        Vector3 GetBoxMin() const { return GetFrustumCorner(Frustum::CornerID::kNearLowerLeft); }
+        Vector3 GetBoxMax() const { return GetFrustumCorner(Frustum::CornerID::kFarUpperRight); }
 
         BoundingSphere toBoundingSphere() const;
 
@@ -99,10 +101,10 @@ namespace Math
 
     inline BoundingBox operator+ (const BoundingBox& lhs, const BoundingBox& rhs)
     {
-        Vector3 lMin = lhs.GetFrustumCorner(Frustum::CornerID::kNearLowerLeft);
-        Vector3 rMin = rhs.GetFrustumCorner(Frustum::CornerID::kNearLowerLeft);
-        Vector3 lMax = lhs.GetFrustumCorner(Frustum::CornerID::kFarUpperRight);
-        Vector3 rMax = rhs.GetFrustumCorner(Frustum::CornerID::kFarUpperRight);
+        Vector3 lMin = lhs.GetBoxMin();
+        Vector3 rMin = rhs.GetBoxMin();
+        Vector3 lMax = lhs.GetBoxMax();
+        Vector3 rMax = rhs.GetBoxMax();
 
         float minX = std::min<float>(lMin.GetX(), rMin.GetX());
         float minY = std::min<float>(lMin.GetY(), rMin.GetY());

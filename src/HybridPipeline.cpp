@@ -285,6 +285,38 @@ void HybridPipeline::setScene(RtScene::SharedPtr scene)
     mRtScene = scene->copy();
     mRtPhotonEmissionPass.mRtBindings = RtBindings::create(mRtContext, mRtPhotonEmissionPass.mRtProgram, scene);
     mRtPhotonMappingPass.mRtBindings = RtBindings::create(mRtContext, mRtPhotonMappingPass.mRtProgram, scene);
+
+    mRasterScene.resize(mRtScene->getNumInstances());
+    for (UINT i = 0; i < mRtScene->getNumInstances(); i++) {
+        auto model = mRtScene->getModel(i);
+        switch (model->getGeometryType())
+        {
+        case RtModel::GeometryType::Triangles: {
+            auto obj = toRtMesh(model);
+            mRasterScene[i] = std::make_shared<DXTKExtend::GeometricModel>(
+                obj->getVertexBuffer(), sizeof(Vertex),
+                obj->getIndexBuffer(), DXGI_FORMAT_R32_UINT);
+            break;
+        }
+        default: {
+            auto obj = toRtProcedural(model);
+            auto bb = obj->getBoundingBox();
+            XMVECTOR size = bb.GetBoxMax() - bb.GetBoxMin();
+            XMFLOAT3 boxSize;
+            XMStoreFloat3(&boxSize, size);
+            mRasterScene[i] = std::make_shared<DXTKExtend::GeometricModel>(mRtContext->getDevice(), [&](auto& vertices, auto& indices) {
+                GeometricPrimitive::CreateBox(vertices, indices, boxSize);
+                auto halfSize = size * 0.5;
+                for (DXTKExtend::GeometricModel::VertexType vtx : vertices) {
+                    XMVECTOR position = XMLoadFloat3(&vtx.position);
+                    position = position + halfSize + bb.GetBoxMin();
+                    XMStoreFloat3(&vtx.position, position);
+                }
+            });
+            break;
+        }
+        }
+    }
 }
 
 void HybridPipeline::buildAccelerationStructures()

@@ -71,6 +71,7 @@ private:
     DXRFramework::RtScene::SharedPtrMut mRtScene;
     std::vector<Material> mMaterials;
     std::shared_ptr<Math::Camera> mCamera;
+    std::vector<DXTKExtend::GeometricModel::SharedPtr> mRasterScene;
 
     // Resources
     ComPtr<ID3D12Resource> mOutputResource;
