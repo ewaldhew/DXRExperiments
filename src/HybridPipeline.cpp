@@ -214,6 +214,7 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context) :
         rsConfig.AddHeapRangesParameter({{0 /* t0 */, 1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // photons
         rsConfig.AddHeapRangesParameter({{1 /* t1 */, 1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // density
         rsConfig.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_CBV, 0 /* b0 */, 0, 1);
+        rsConfig.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_CBV, 1 /* b1 */, 0, 1);
 
         mPhotonSplattingPass.rootSignature = rsConfig.Generate(device, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
@@ -273,7 +274,7 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context) :
     }
 
     mPhotonSplatKernelShape = std::make_shared<DXTKExtend::GeometricModel>(device, [](auto& vertices, auto& indices) {
-        GeometricPrimitive::CreateIcosahedron(vertices, indices, 0.1f);
+        GeometricPrimitive::CreateIcosahedron(vertices, indices);
     });
 }
 
@@ -351,6 +352,7 @@ void HybridPipeline::loadResources(ID3D12CommandQueue *uploadCommandQueue, UINT 
 
     // Create per-frame constant buffer
     mConstantBuffer.Create(device, frameCount, L"PerFrameConstantBuffer");
+    mRasterConstantsBuffer.Create(device, frameCount, L"PerFrameConstantBufferR");
 
     mDirLights.Create(device, NUM_DIR_LIGHTS, frameCount, L"DirectionalLightBuffer");
     mPointLights.Create(device, NUM_POINT_LIGHTS, frameCount, L"PointLightBuffer");
@@ -608,8 +610,16 @@ void HybridPipeline::update(float elapsedTime, UINT elapsedFrames, UINT prevFram
 
     mTextureParams.CopyStagingToGpu();
 
-    mPhotonMappingConstants->vpSize = XMUINT2(width, height);
+    float tileAreaFactor = 1.0f / (mPhotonMappingConstants->numTiles.x * mPhotonMappingConstants->numTiles.y);
+    float vsHeight = tanf(0.5f * mCamera->GetFOV());
+    float vsArea = vsHeight * vsHeight / mCamera->GetAspectRatio();
+    mPhotonMappingConstants->tileAreaConstant = tileAreaFactor * vsArea;
+    mPhotonMappingConstants->maxRayLength = 2.0f * float(mRtScene->getBoundingBox().toBoundingSphere().GetRadius());
     mPhotonMappingConstants.CopyStagingToGpu();
+
+    mRasterConstantsBuffer->WorldToViewMatrix = mCamera->GetViewMatrix();
+    mRasterConstantsBuffer->WorldToViewClipMatrix = mCamera->GetViewProjMatrix();
+    mRasterConstantsBuffer.CopyStagingToGpu(frameIndex);
 }
 
 void HybridPipeline::collectEmitters(UINT& numLights, UINT& maxSamples)
@@ -862,7 +872,8 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
         commandList->SetGraphicsRootSignature(mPhotonSplattingPass.rootSignature.Get());
         commandList->SetGraphicsRootDescriptorTable(0, mPhotonMapSrvGpuHandle);
         commandList->SetGraphicsRootDescriptorTable(1, mPhotonDensitySrvGpuHandle);
-        //commandList->SetGraphicsRootConstantBufferView(2, gBufferPerObjectBuffer->GetGPUVirtualAddress());
+        commandList->SetGraphicsRootConstantBufferView(2, mRasterConstantsBuffer.GpuVirtualAddress(frameIndex));
+        commandList->SetGraphicsRootConstantBufferView(3, mPhotonMappingConstants.GpuVirtualAddress());
         commandList->OMSetRenderTargets(ARRAYSIZE(mPhotonSplatRtvCpuHandle), mPhotonSplatRtvCpuHandle, FALSE, nullptr);
 
         clearRtv(commandList, mPhotonSplatRtvCpuHandle[0]);
@@ -870,7 +881,7 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
 
         commandList->SetPipelineState(mPhotonSplattingPass.stateObject.Get());
 
-        mPhotonSplatKernelShape->Draw(commandList);
+        mPhotonSplatKernelShape->Draw(commandList, mNumPhotons);
 
         pass = Pass::Combine;
     }

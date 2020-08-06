@@ -1,6 +1,16 @@
+#define HLSL
+#include "RasterHlslCompat.h"
+#include "RaytracingUtils.hlsli"
+
+StructuredBuffer<Photon> photonBuffer : register(t0);
+Texture2D<uint> photonDensity : register(t1);
+
+ConstantBuffer<PerFrameConstantsRaster> perFrameConstants : register(b0);
+ConstantBuffer<PhotonMappingConstants> photonMapConsts : register(b1);
+
 struct VSInput
 {
-    float3 Position : POSITION;
+    float3 Position : SV_Position;
     uint instanceID : SV_InstanceID;
 };
 
@@ -11,33 +21,54 @@ struct VSOutput
     float3 direction : DIRECTION_WS;
 };
 
-/*
-float uniform_scaling(float3 pp_in_view, float ray_length)
+struct unpacked_photon
+{
+    float3 position;
+    float3 power;
+    float3 direction;
+    float3 normal;
+    float distTravelled;
+};
+
+struct kernel_output
+{
+    float3 vertex_position;
+    float ellipse_area;
+    float scaling_uniform;
+    float light_shaping_scale;
+};
+
+#define DYNAMIC_KERNEL_SCALE_MIN .1f
+#define DYNAMIC_KERNEL_SCALE_MAX 1.f
+#define MAX_SCALING_CONSTANT 100.f
+#define KERNEL_COMPRESS_FACTOR 0.8f
+
+// E. Haines, T. Akenine-Möller (eds.), Ray Tracing Gems, https://doi.org/10.1007/978-1-4842-4427-2_24
+float uniform_scaling(float3 pos, float ray_length)
 {
     // Tile-based culling as photon density estimation
-    int n_p = load_number_of_photons_in_tile(pp_in_view);
-    float r = .1f;
+    float4 posClip = mul(perFrameConstants.WorldToViewClipMatrix, float4(pos, 1));
+    float2 posScreen = ((posClip / posClip.w).xy + 1.f) * 0.5f;
+    uint2 tile = uint2((posScreen * float2(photonMapConsts.numTiles.xy)).xy);
+    int n_p = photonDensity.Load(int3(tile, 0));
+    const int n_tile = 1;
 
-    if (layers > .0f)
-    {
-        // Equation 24.5
-        float a_view = pp_in_view.z * pp_in_view.z * TileAreaConstant;
-        r = sqrt(a_view / (PI * n_p));
-    }
+    // Equation 24.5
+    float a_view = pos.z * pos.z * photonMapConsts.tileAreaConstant;
+    float r = sqrt(a_view / (M_PI * n_p));
+
     // Equation 24.6
-    float s_d = clamp(r, DYNAMIC_KERNEL_SCALE_MIN,
-        DYNAMIC_KERNEL_SCALE_MAX) * n_tile;
+    float s_d = clamp(r, DYNAMIC_KERNEL_SCALE_MIN, DYNAMIC_KERNEL_SCALE_MAX) * n_tile;
 
     // Equation 24.2
-    float s_l = clamp(ray_length / MAX_RAY_LENGTH, .1f, 1.0f);
+    float s_l = clamp(ray_length / photonMapConsts.maxRayLength, .1f, 1.0f);
     return s_d * s_l;
 }
-
-kernel_output kernel_modification_for_vertex_position(float3 vertex,
-    float3 n, float3 light, float3 pp_in_view, float ray_length)
+//
+kernel_output kernel_modification_for_vertex_position(float3 vertex, float3 n, float3 light, float3 pp, float ray_length)
 {
     kernel_output o;
-    float scaling_uniform =  uniform_scaling(pp_in_view,  ray_length);
+    o.scaling_uniform = uniform_scaling(pp, ray_length);
 
     float3 l = normalize(light);
     float3 cos_alpha = dot(n, vertex);
@@ -55,31 +86,40 @@ kernel_output kernel_modification_for_vertex_position(float3 vertex,
     projected_v_to_t -= dot(projected_v_to_t, n) * n;
 
     // Equation 24.8
-    float3 scaled_u = projected_v_to_u * light_shaping_scale *
-        scaling_Uniform;
-    float3 scaled_t = projected_v_to_t * scaling_uniform;
-    o.vertex_position = scaled_u + scaled_t +
-        (KernelCompress * projected_v_to_n);
+    float3 scaled_u = projected_v_to_u * o.light_shaping_scale * o.scaling_uniform;
+    float3 scaled_t = projected_v_to_t * o.scaling_uniform;
+    float3 scaled_n = projected_v_to_n * KERNEL_COMPRESS_FACTOR * o.scaling_uniform;
+    o.vertex_position = scaled_u + scaled_t + scaled_n;
 
-    o.ellipse_area = PI * o.scaling_uniform  * o.scaling_uniform *
-        o.light_shaping_scale;
+    o.ellipse_area = M_PI * o.scaling_uniform  * o.scaling_uniform * o.light_shaping_scale;
 
     return o;
 }
-*/
+
+
+unpacked_photon get_photon(uint index)
+{
+    Photon photon = photonBuffer[index];
+
+    unpacked_photon result;
+    result.position = photon.position;
+    result.power = photon.power;
+    result.direction = spherical_to_unitvec(photon.direction);
+    result.normal = spherical_to_unitvec(photon.normal);
+    result.distTravelled = photon.distTravelled;
+
+    return result;
+}
+
 void main(in VSInput IN, out VSOutput OUT)
 {
-    OUT.position = 0.;
-    //unpacked_photon up = unpack_photon(PhotonBuffer[instanceID]);
-    //float3 photon_position = up.position;
-    //float3 photon_position_in_view = mul(WorldToViewMatrix,
-    //float4(photon_position, 1)).xyz;
-    //kernel_output o = kernel_modification_for_vertex_position(Position,
-    //up.normal, -up.direction, photon_position_in_view, up.ray_length);
+    unpacked_photon up = get_photon(IN.instanceID);
+    float3 photon_position = up.position;
+    kernel_output o = kernel_modification_for_vertex_position(IN.Position, up.normal, -up.direction, up.position, up.distTravelled);
 
-    //float3 p = pp + o.vertex_position;
+    float3 position = photon_position + o.vertex_position;
 
-    //Output.position = mul(WorldToViewClipMatrix, float4(p, 1));
-    //Output.power = up.power / o.ellipse_area;
-    //Output.direction = -up.direction;
+    OUT.position = mul(perFrameConstants.WorldToViewClipMatrix, float4(position, 1));
+    OUT.power = up.power / o.ellipse_area;
+    OUT.direction = -up.direction;
 }

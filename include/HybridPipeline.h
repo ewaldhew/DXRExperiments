@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Helpers/DirectXRaytracingHelper.h"
+#include "RasterHlslCompat.h"
 #include "RaytracingHlslCompat.h"
 #include "RaytracingPipeline.h"
 #include "RtBindings.h"
@@ -83,6 +84,7 @@ private:
     StructuredBuffer<DirectionalLightParams> mDirLights;
     StructuredBuffer<PointLightParams> mPointLights;
     ConstantBuffer<PhotonMappingConstants> mPhotonMappingConstants;
+    ConstantBuffer<PerFrameConstantsRaster> mRasterConstantsBuffer;
 
     StructuredBuffer<MaterialTextureParams> mTextureParams;
     std::vector<ComPtr<ID3D12Resource>> mTextureResources;

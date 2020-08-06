@@ -7,8 +7,8 @@ struct VSOutput
 
 struct PSOutput
 {
-    float4 OutputColorXYZAndDirectionX : SV_Target0;
-    float2 OutputDirectionYZ : SV_Target1;
+    float4 ColorXYZAndDirectionX : SV_Target0;
+    float2 DirectionYZ : SV_Target1;
 };
 
 [earlydepthstencil]
@@ -21,10 +21,11 @@ void main(VSOutput IN, out PSOutput OUT)
 
     //clip(d > (KernelCompress * MAX_DEPTH) ? -1 : 1);
 
-    //float3 power = Input.Power;
-    //float total_power = dot(power.xyz, float3(1.0f, 1.0f, 1.0f));
-    //float3 weighted_direction = total_power * Input.Direction;
+    float3 power = IN.power;
+    power /= max(power.x, max(power.y, power.z));
+    float total_power = dot(power.xyz, float3(1.0f, 1.0f, 1.0f));
+    float3 weighted_direction = total_power * IN.direction;
 
-    //OutputColorXYZAndDirectionX = float4(power, weighted_direction.x);
-    //OutputDirectionYZ = weighted_direction.yz;
+    OUT.ColorXYZAndDirectionX = float4(power, weighted_direction.x);
+    OUT.DirectionYZ = weighted_direction.yz;
 }
