@@ -134,7 +134,9 @@ PostbuildCopy.bat "$(SolutionDir)vc2015\build\bin\$(Configuration)\"
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="..\assets\shaders\CommonHlslCompat.h" />
     <ClInclude Include="..\assets\shaders\HlslCompat.h" />
+    <ClInclude Include="..\assets\shaders\RasterHlslCompat.h" />
     <ClInclude Include="..\assets\shaders\RaytracingHlslCompat.h" />
     <ClInclude Include="..\include\DenoiseCompositor.h" />
     <ClInclude Include="..\include\DXRExperimentsApp.h" />

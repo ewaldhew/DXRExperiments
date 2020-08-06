@@ -21,6 +21,7 @@ using namespace DirectX;
 typedef UINT16 Index;
 #endif
 
+#include "CommonHlslCompat.h"
 
 struct ShadowPayload
 {
@@ -142,12 +143,6 @@ namespace MaterialSceneFlags
     };
 }
 
-struct PhotonMappingConstants
-{
-    XMUINT2 numTiles;
-    XMUINT2 vpSize;
-};
-
 // Number of metaballs to use within an AABB.
 #define N_METABALLS 3    // = {3, 5}
 
@@ -194,17 +189,6 @@ struct PhotonEmitter
     UINT samplesToTake;
     UINT sampleStartIndex;
     XMFLOAT3 pad;
-};
-
-struct Photon
-{
-    XMFLOAT3 position;
-    XMFLOAT3 power;
-    XMFLOAT3 direction;
-    XMFLOAT3 normal;
-    float distTravelled;
-    UINT randSeed;
-    XMUINT2 padding;
 };
 
 #endif // RAYTRACINGHLSLCOMPAT_H

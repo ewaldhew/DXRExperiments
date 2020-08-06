@@ -443,6 +443,12 @@
     <ClInclude Include="..\libs\DXTKExtend\Util\DirectXHelper.h">
       <Filter>Libs\DXTKExtend\Util</Filter>
     </ClInclude>
+    <ClInclude Include="..\assets\shaders\RasterHlslCompat.h">
+      <Filter>Assets\Shaders</Filter>
+    </ClInclude>
+    <ClInclude Include="..\assets\shaders\CommonHlslCompat.h">
+      <Filter>Assets\Shaders</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\Main.cpp">
