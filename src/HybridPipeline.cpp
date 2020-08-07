@@ -451,6 +451,16 @@ void HybridPipeline::loadResources(ID3D12CommandQueue *uploadCommandQueue, UINT 
     AllocateUploadBuffer(device, &zero, 4, zeroResource.GetAddressOf());
 }
 
+inline void CreateRenderTargetView(ID3D12Device* device, ID3D12Resource* resource, DescriptorPile* heap, D3D12_CPU_DESCRIPTOR_HANDLE& handle)
+{
+    D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
+    rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+
+    size_t rtvHeapIndex = heap->Allocate();
+    handle = heap->GetCpuHandle(rtvHeapIndex);
+    device->CreateRenderTargetView(resource, &rtvDesc, handle);
+}
+
 void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT height)
 {
     auto device = mRtContext->getDevice();
@@ -462,6 +472,7 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
     // Final output resource
 
     AllocateRTVTexture(device, format, width, height, mOutputResource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, L"Final output resource", D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+    CreateRenderTargetView(device, mOutputResource.Get(), mRtvDescriptorHeap.get(), mOutputRtvCpuHandle);
 
     {
         D3D12_CPU_DESCRIPTOR_HANDLE uavCpuHandle;
@@ -479,15 +490,6 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
         D3D12_CPU_DESCRIPTOR_HANDLE srvCpuHandle;
         mOutputSrvHeapIndex = mRtContext->allocateDescriptor(&srvCpuHandle, mOutputSrvHeapIndex);
         mOutputSrvGpuHandle = mRtContext->createTextureSRVHandle(mOutputResource.Get(), false, mOutputSrvHeapIndex);
-    }
-
-    {
-        D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
-        rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
-
-        size_t rtvHeapIndex = mRtvDescriptorHeap->Allocate();
-        mOutputRtvCpuHandle = mRtvDescriptorHeap->GetCpuHandle(rtvHeapIndex);
-        device->CreateRenderTargetView(mOutputResource.Get(), &rtvDesc, mOutputRtvCpuHandle);
     }
 
     // Intermediate output resources
@@ -568,25 +570,13 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
     }
 
     AllocateRTVTexture(device, DXGI_FORMAT_R32G32B32A32_FLOAT, width, height, mPhotonSplatTargetResource[0].ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, L"PhotonSplatResultColorDirX");
-
-    {
-        D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
-        rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
-
-        size_t rtvHeapIndex = mRtvDescriptorHeap->Allocate();
-        mPhotonSplatRtvCpuHandle[0] = mRtvDescriptorHeap->GetCpuHandle(rtvHeapIndex);
-        device->CreateRenderTargetView(mPhotonSplatTargetResource[0].Get(), &rtvDesc, mPhotonSplatRtvCpuHandle[0]);
-    }
+    CreateRenderTargetView(device, mPhotonSplatTargetResource[0].Get(), mRtvDescriptorHeap.get(), mPhotonSplatRtvCpuHandle[0]);
 
     AllocateRTVTexture(device, DXGI_FORMAT_R32G32_FLOAT, width, height, mPhotonSplatTargetResource[1].ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, L"PhotonSplatResultDirYZ");
+    CreateRenderTargetView(device, mPhotonSplatTargetResource[1].Get(), mRtvDescriptorHeap.get(), mPhotonSplatRtvCpuHandle[1]);
 
     {
-        D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
-        rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
 
-        size_t rtvHeapIndex = mRtvDescriptorHeap->Allocate();
-        mPhotonSplatRtvCpuHandle[1] = mRtvDescriptorHeap->GetCpuHandle(rtvHeapIndex);
-        device->CreateRenderTargetView(mPhotonSplatTargetResource[1].Get(), &rtvDesc, mPhotonSplatRtvCpuHandle[1]);
     }
 }
 
