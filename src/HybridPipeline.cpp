@@ -324,9 +324,14 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context) :
         SetName(mCpuOnlyDescriptorHeap->Heap(), L"CPU-only descriptor heap");
 
         D3D12_DESCRIPTOR_HEAP_DESC rtvDescriptorHeapDesc = {};
-        rtvDescriptorHeapDesc.NumDescriptors = 4;
+        rtvDescriptorHeapDesc.NumDescriptors = 8;
         rtvDescriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
         mRtvDescriptorHeap = std::make_unique<DescriptorPile>(device, &rtvDescriptorHeapDesc);
+
+        D3D12_DESCRIPTOR_HEAP_DESC dsvDescriptorHeapDesc = {};
+        dsvDescriptorHeapDesc.NumDescriptors = 1;
+        dsvDescriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
+        mDsvDescriptorHeap = std::make_unique<DescriptorHeap>(device, &dsvDescriptorHeapDesc);
     }
 
     mPhotonSplatKernelShape = std::make_shared<DXTKExtend::GeometricModel>(device, [](auto& vertices, auto& indices) {
@@ -575,8 +580,46 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
     AllocateRTVTexture(device, DXGI_FORMAT_R32G32_FLOAT, width, height, mPhotonSplatTargetResource[1].ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, L"PhotonSplatResultDirYZ");
     CreateRenderTargetView(device, mPhotonSplatTargetResource[1].Get(), mRtvDescriptorHeap.get(), mPhotonSplatRtvCpuHandle[1]);
 
-    {
+    AllocateRTVTexture(device, mGBufferFormats.at(GBufferID::Normal), width, height, mGBufferResource[GBufferID::Normal].ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, L"G buffer normals");
+    CreateRenderTargetView(device, mGBufferResource[GBufferID::Normal].Get(), mRtvDescriptorHeap.get(), mGBufferTargetCpuHandle[GBufferID::Normal]);
 
+    {
+        D3D12_CPU_DESCRIPTOR_HANDLE srvCpuHandle;
+        mGBufferSrvHeapIndex[GBufferID::Normal] = mRtContext->allocateDescriptor(&srvCpuHandle, mGBufferSrvHeapIndex[GBufferID::Normal]);
+        mGBufferSrvGpuHandle[GBufferID::Normal] = mRtContext->createTextureSRVHandle(mGBufferResource[GBufferID::Normal].Get(), false, mGBufferSrvHeapIndex[GBufferID::Normal]);
+    }
+
+    AllocateRTVTexture(device, mGBufferFormats.at(GBufferID::Albedo), width, height, mGBufferResource[GBufferID::Albedo].ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, L"G buffer flux");
+    CreateRenderTargetView(device, mGBufferResource[GBufferID::Albedo].Get(), mRtvDescriptorHeap.get(), mGBufferTargetCpuHandle[GBufferID::Albedo]);
+
+    {
+        D3D12_CPU_DESCRIPTOR_HANDLE srvCpuHandle;
+        mGBufferSrvHeapIndex[GBufferID::Albedo] = mRtContext->allocateDescriptor(&srvCpuHandle, mGBufferSrvHeapIndex[GBufferID::Albedo]);
+        mGBufferSrvGpuHandle[GBufferID::Albedo] = mRtContext->createTextureSRVHandle(mGBufferResource[GBufferID::Albedo].Get(), false, mGBufferSrvHeapIndex[GBufferID::Albedo]);
+    }
+
+    AllocateDepthTexture(device, width, height, mGBufferResource[GBufferID::Depth].ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, L"G buffer depth");
+
+    {
+        D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
+        dsvDesc.Format = DXGI_FORMAT_D32_FLOAT;
+        dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+
+        mGBufferTargetCpuHandle[GBufferID::Depth] = mDsvDescriptorHeap->GetCpuHandle(0);
+        device->CreateDepthStencilView(mGBufferResource[GBufferID::Depth].Get(), &dsvDesc, mGBufferTargetCpuHandle[GBufferID::Depth]);
+    }
+
+    {
+        D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+        srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        srvDesc.Format = DXGI_FORMAT_R32_FLOAT;
+        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+        srvDesc.Texture2D.MipLevels = -1;
+
+        D3D12_CPU_DESCRIPTOR_HANDLE srvCpuHandle;
+        mGBufferSrvHeapIndex[GBufferID::Depth] = mRtContext->allocateDescriptor(&srvCpuHandle, mGBufferSrvHeapIndex[GBufferID::Depth]);
+        mGBufferSrvGpuHandle[GBufferID::Depth] = mRtContext->getDescriptorGPUHandle(mGBufferSrvHeapIndex[GBufferID::Depth]);
+        device->CreateShaderResourceView(mGBufferResource[GBufferID::Depth].Get(), &srvDesc, srvCpuHandle);
     }
 }
 

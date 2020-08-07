@@ -124,6 +124,10 @@ private:
         { GBufferID::Normal, DXGI_FORMAT_R32G32B32A32_FLOAT },
         { GBufferID::Albedo, DXGI_FORMAT_R32G32B32A32_FLOAT },
     };
+    ComPtr<ID3D12Resource> mGBufferResource[GBufferID::Count];
+    UINT mGBufferSrvHeapIndex[GBufferID::Count] = { UINT_MAX };
+    D3D12_GPU_DESCRIPTOR_HANDLE mGBufferSrvGpuHandle[GBufferID::Count];
+    D3D12_CPU_DESCRIPTOR_HANDLE mGBufferTargetCpuHandle[GBufferID::Count];
 
     struct ClearableUAV
     {
@@ -136,6 +140,7 @@ private:
 
     std::unique_ptr<DirectX::DescriptorPile> mCpuOnlyDescriptorHeap; // for clearing photon map resources
     std::unique_ptr<DirectX::DescriptorPile> mRtvDescriptorHeap;
+    std::unique_ptr<DirectX::DescriptorHeap> mDsvDescriptorHeap;
 
     // Rendering states
     bool mActive;
