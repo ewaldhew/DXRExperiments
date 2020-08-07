@@ -66,6 +66,7 @@ private:
     RtPass mRtPhotonEmissionPass;
     RtPass mRtPhotonMappingPass;
     RasterPass mPhotonSplattingPass;
+    RasterPass mGBufferPass;
 
     // Scene description
     DXRFramework::RtScene::SharedPtrMut mRtScene;
@@ -116,6 +117,13 @@ private:
     DXTKExtend::GeometricModel::SharedPtr mPhotonSplatKernelShape;
     ComPtr<ID3D12Resource> mPhotonSplatTargetResource[2];
     D3D12_CPU_DESCRIPTOR_HANDLE mPhotonSplatRtvCpuHandle[2];
+
+    enum GBufferID { Normal = 0, Albedo, Depth, Count };
+    const std::unordered_map<HybridPipeline::GBufferID, DXGI_FORMAT> mGBufferFormats =
+    {
+        { GBufferID::Normal, DXGI_FORMAT_R32G32B32A32_FLOAT },
+        { GBufferID::Albedo, DXGI_FORMAT_R32G32B32A32_FLOAT },
+    };
 
     struct ClearableUAV
     {

@@ -4,6 +4,8 @@
 #include "CompiledShaders/PhotonTracing.hlsl.h"
 #include "CompiledShaders/PhotonSplatting_vs.hlsl.h"
 #include "CompiledShaders/PhotonSplatting_ps.hlsl.h"
+#include "CompiledShaders/GBuffer_ps.hlsl.h"
+#include "CompiledShaders/GBuffer_vs.hlsl.h"
 #include "WICTextureLoader.h"
 #include "DDSTextureLoader.h"
 #include "ResourceUploadBatch.h"
@@ -27,6 +29,14 @@ static const D3D12_STATIC_SAMPLER_DESC pointClampSampler = CD3DX12_STATIC_SAMPLE
     D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
     D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
     D3D12_TEXTURE_ADDRESS_MODE_CLAMP
+);
+static const D3D12_STATIC_SAMPLER_DESC anisotropicSampler = CD3DX12_STATIC_SAMPLER_DESC(2,
+    D3D12_FILTER_ANISOTROPIC,
+    D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+    D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+    D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+    0.0f, 16U,
+    D3D12_COMPARISON_FUNC_NEVER
 );
 
 namespace GlobalRootSignatureParams
@@ -241,6 +251,52 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context) :
 
         ThrowIfFailed(device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&mPhotonSplattingPass.stateObject)));
         NAME_D3D12_OBJECT(mPhotonSplattingPass.stateObject);
+    }
+
+    /*******************************
+     *  G-Buffer Pass
+     *******************************/
+    {
+        D3D12_STATIC_SAMPLER_DESC albedoSampler = pointClampSampler;
+        albedoSampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+        albedoSampler.ShaderRegister = 1;
+        albedoSampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+        RootSignatureGenerator rsConfig;
+        rsConfig.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_CBV, 0 /* b0 */); // per frame constants
+        rsConfig.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS, 1 /* b1 */, 0, SizeOfInUint32(XMMATRIX)); // object-to-world matrix
+        rsConfig.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS, 0 /* b0 */, 1 /* space1 */, SizeOfInUint32(MaterialParams)); // material
+        rsConfig.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 0 /* t0 */, 9 /* space9 */); // material texture params
+        rsConfig.AddHeapRangesParameter({{1 /* t1 */, -1 /* unbounded */, 9 /* space9 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // material textures
+        rsConfig.AddStaticSampler(albedoSampler);
+
+        mGBufferPass.rootSignature = rsConfig.Generate(device, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+
+        // DirectX::VertexPositionNormal::InputLayout
+        D3D12_INPUT_ELEMENT_DESC inputDescs[] =
+        {
+            { "SV_POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+            { "NORMAL",      0, DXGI_FORMAT_R32G32B32_FLOAT,    0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        };
+
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
+        psoDesc.pRootSignature = mGBufferPass.rootSignature.Get();
+        psoDesc.VS = CD3DX12_SHADER_BYTECODE(g_pGBuffer_vs, ARRAYSIZE(g_pGBuffer_vs));
+        psoDesc.PS = CD3DX12_SHADER_BYTECODE(g_pGBuffer_ps, ARRAYSIZE(g_pGBuffer_ps));
+        psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+        psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+        psoDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+        psoDesc.InputLayout = { inputDescs, ARRAYSIZE(inputDescs) };
+        psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+        psoDesc.NumRenderTargets = 1; //GBufferID::Count - 1; // exclude depth buffer from count
+        psoDesc.RTVFormats[0] = mGBufferFormats.at(GBufferID::Normal);
+        //psoDesc.RTVFormats[1] = mGBufferFormats.at(GBufferID::Albedo);
+        psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
+        psoDesc.SampleMask = 1;
+        psoDesc.SampleDesc = { 1, 0 };
+
+        ThrowIfFailed(device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&mGBufferPass.stateObject)));
+        NAME_D3D12_OBJECT(mGBufferPass.stateObject);
     }
 
     mShaderDebugOptions.maxIterations = 1024;
