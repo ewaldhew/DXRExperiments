@@ -541,6 +541,7 @@ PostbuildCopy.bat "$(SolutionDir)vc2015\build\bin\$(Configuration)\"
     <None Include="..\assets\shaders\AnalyticPrimitives.hlsli" />
     <None Include="..\assets\shaders\ProceduralPrimitives.hlsli" />
     <None Include="..\assets\shaders\ProceduralPrimitivesLibrary.hlsli" />
+    <None Include="..\assets\shaders\RasterCommon.hlsli" />
     <None Include="..\assets\shaders\RaytracingCommon.hlsli" />
     <None Include="..\assets\shaders\RaytracingShaderHelper.hlsli" />
     <None Include="..\assets\shaders\RaytracingUtils.hlsli" />
