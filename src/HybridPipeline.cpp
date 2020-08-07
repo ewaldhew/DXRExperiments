@@ -19,6 +19,16 @@ using namespace DXRFramework;
 static XMFLOAT4 pointLightColor = XMFLOAT4(0.2f, 0.8f, 0.6f, 2.0f);
 static XMFLOAT4 dirLightColor = XMFLOAT4(0.9f, 0.9f, 0.9f, 1.0f);
 
+static const D3D12_STATIC_SAMPLER_DESC linearMipPointSampler = CD3DX12_STATIC_SAMPLER_DESC(0,
+    D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT
+);
+static const D3D12_STATIC_SAMPLER_DESC pointClampSampler = CD3DX12_STATIC_SAMPLER_DESC(1,
+    D3D12_FILTER_MIN_MAG_MIP_POINT,
+    D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+    D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+    D3D12_TEXTURE_ADDRESS_MODE_CLAMP
+);
+
 namespace GlobalRootSignatureParams
 {
     enum Value
@@ -155,12 +165,7 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context) :
             // GlobalRootSignatureParams::PhotonSourcesSRVSlot
             config.AddHeapRangesParameter({{3 /* t3 */, 1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}});
 
-            D3D12_STATIC_SAMPLER_DESC cubeSampler = {};
-            cubeSampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-            cubeSampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-            cubeSampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-            cubeSampler.Filter = D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
-            cubeSampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+            D3D12_STATIC_SAMPLER_DESC cubeSampler = linearMipPointSampler;
             cubeSampler.ShaderRegister = 0;
             config.AddStaticSampler(cubeSampler);
 
@@ -170,12 +175,7 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context) :
             config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_CBV, 1 /* b1 */);
             //config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS, 1 /* b1 */, 0, SizeOfInUint32(PhotonMappingConstants));
 
-            D3D12_STATIC_SAMPLER_DESC matTexSampler = {};
-            matTexSampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-            matTexSampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-            matTexSampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-            matTexSampler.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
-            matTexSampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+            D3D12_STATIC_SAMPLER_DESC matTexSampler = pointClampSampler;
             matTexSampler.ShaderRegister = 1;
             config.AddStaticSampler(matTexSampler);
 
