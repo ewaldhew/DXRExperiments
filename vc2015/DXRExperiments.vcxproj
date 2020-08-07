@@ -481,6 +481,18 @@ PostbuildCopy.bat "$(SolutionDir)vc2015\build\bin\$(Configuration)\"
       <VariableName>g_p%(Filename)</VariableName>
       <HeaderFileOutput>$(IntDir)\CompiledShaders\%(Filename).hlsl.h</HeaderFileOutput>
     </FxCompile>
+    <FxCompile Include="..\assets\shaders\GBuffer_ps.hlsl">
+      <ShaderType>Pixel</ShaderType>
+      <ShaderModel>5.1</ShaderModel>
+      <VariableName>g_p%(Filename)</VariableName>
+      <HeaderFileOutput>$(IntDir)\CompiledShaders\%(Filename).hlsl.h</HeaderFileOutput>
+    </FxCompile>
+    <FxCompile Include="..\assets\shaders\GBuffer_vs.hlsl">
+      <ShaderType>Vertex</ShaderType>
+      <ShaderModel>5.1</ShaderModel>
+      <VariableName>g_p%(Filename)</VariableName>
+      <HeaderFileOutput>$(IntDir)\CompiledShaders\%(Filename).hlsl.h</HeaderFileOutput>
+    </FxCompile>
     <FxCompile Include="..\assets\shaders\PhotonSplatting_ps.hlsl">
       <ShaderType>Pixel</ShaderType>
       <ShaderModel>5.1</ShaderModel>

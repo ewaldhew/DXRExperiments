@@ -635,5 +635,11 @@
     <FxCompile Include="..\assets\shaders\PhotonSplatting_vs.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
+    <FxCompile Include="..\assets\shaders\GBuffer_ps.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="..\assets\shaders\GBuffer_vs.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
   </ItemGroup>
 </Project>
