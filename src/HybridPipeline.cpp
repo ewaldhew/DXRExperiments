@@ -61,7 +61,8 @@ namespace Pass
     {
         Begin = 0,
 
-        PhotonEmission = Begin,
+        GBuffer,
+        PhotonEmission,
         PhotonTracing,
         PhotonSplatting,
         Combine,
@@ -841,16 +842,63 @@ void HybridPipeline::collectEmitters(UINT& numLights, UINT& maxSamples)
 
 void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIndex, UINT width, UINT height, UINT& pass)
 {
-    if (!mNeedPhotonMap && pass < Pass::PhotonSplatting)
+    if (pass == Pass::Begin)
     {
-        pass = Pass::PhotonSplatting;
+        clearUavs();
+
+        pass = Pass::GBuffer;
+    }
+
+    if (pass == Pass::GBuffer)
+    {
+        auto viewport = CD3DX12_VIEWPORT(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height));
+        auto scissorRect = CD3DX12_RECT(0, 0, (width), static_cast<LONG>(height));
+
+        std::initializer_list<D3D12_RESOURCE_BARRIER> barriers =
+        {
+            CD3DX12_RESOURCE_BARRIER::Transition(mGBufferResource[GBufferID::Normal].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET),
+            //CD3DX12_RESOURCE_BARRIER::Transition(mGBufferResource[GBufferID::Albedo].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET),
+            CD3DX12_RESOURCE_BARRIER::Transition(mGBufferResource[GBufferID::Depth].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE),
+        };
+        auto transitions = ScopedBarrier(commandList, barriers);
+
+        commandList->SetPipelineState(mGBufferPass.stateObject.Get());
+
+        clearRtv(commandList, mGBufferTargetCpuHandle[GBufferID::Normal]);
+        //clearRtv(commandList, mGBufferTargetCpuHandle[GBufferID::Albedo]);
+        commandList->ClearDepthStencilView(mGBufferTargetCpuHandle[GBufferID::Depth], D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+        commandList->OMSetRenderTargets(1, &mGBufferTargetCpuHandle[GBufferID::Normal], FALSE, &mGBufferTargetCpuHandle[GBufferID::Depth]);
+
+        // Set necessary state.
+        mRtContext->bindDescriptorHeap();
+        commandList->RSSetViewports(1, &viewport);
+        commandList->RSSetScissorRects(1, &scissorRect);
+
+        commandList->SetGraphicsRootSignature(mGBufferPass.rootSignature.Get());
+        commandList->SetGraphicsRootConstantBufferView(0, mRasterConstantsBuffer.GpuVirtualAddress(frameIndex));
+        commandList->SetGraphicsRootShaderResourceView(3, mTextureParams.GpuVirtualAddress());
+        commandList->SetGraphicsRootDescriptorTable(4, mTextureSrvGpuHandles[2]);
+
+        for (UINT instance = 0; instance < mRtScene->getNumInstances(); ++instance) {
+            auto model = mRtScene->getModel(instance);
+            commandList->SetGraphicsRoot32BitConstants(1, SizeOfInUint32(XMMATRIX), &mRtScene->getTransform(instance), 0);
+            commandList->SetGraphicsRoot32BitConstants(2, SizeOfInUint32(MaterialParams), &mMaterials[model->mMaterialIndex].params, 0);
+            mRasterScene[instance]->Draw(commandList);
+        }
+
+        if (!mNeedPhotonMap && pass < Pass::PhotonSplatting)
+        {
+            pass = Pass::PhotonSplatting;
+            return;
+        }
+        else {
+            pass = Pass::PhotonEmission;
+        }
     }
 
     // generate photon seed
     if (pass == Pass::PhotonEmission)
     {
-        clearUavs();
-
         UINT numLights, maxSamples;
         collectEmitters(numLights, maxSamples);
 
