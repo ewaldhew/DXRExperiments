@@ -3,6 +3,7 @@
 
 #ifdef HLSL
 #include "HlslCompat.h"
+#define RASTER_PIPELINE
 #else
 using namespace DirectX;
 #endif
