@@ -38,9 +38,9 @@ struct kernel_output
     float light_shaping_scale;
 };
 
-#define DYNAMIC_KERNEL_SCALE_MIN .1f
-#define DYNAMIC_KERNEL_SCALE_MAX 1.f
-#define MAX_SCALING_CONSTANT 100.f
+#define DYNAMIC_KERNEL_SCALE_MIN .01f
+#define DYNAMIC_KERNEL_SCALE_MAX 1.0f
+#define MAX_SCALING_CONSTANT 5.f
 #define KERNEL_COMPRESS_FACTOR 0.8f
 
 // E. Haines, T. Akenine-Möller (eds.), Ray Tracing Gems, https://doi.org/10.1007/978-1-4842-4427-2_24
@@ -49,9 +49,9 @@ float uniform_scaling(float3 pos, float ray_length)
     // Tile-based culling as photon density estimation
     float4 posClip = mul(perFrameConstants.WorldToViewClipMatrix, float4(pos, 1));
     float2 posScreen = ((posClip / posClip.w).xy + 1.f) * 0.5f;
-    uint2 tile = uint2((posScreen * float2(photonMapConsts.numTiles.xy)).xy);
-    int n_p = photonDensity.Load(int3(tile, 0));
-    const int n_tile = 1;
+    uint2 tile = uint2(posScreen.x * photonMapConsts.numTiles.x, (1.0 - posScreen.y) * photonMapConsts.numTiles.y);
+    int n_p = max(1, photonDensity.Load(int3(tile, 0)));
+    const float n_tile = 1.2f;
 
     // Equation 24.5
     float a_view = pos.z * pos.z * photonMapConsts.tileAreaConstant;
