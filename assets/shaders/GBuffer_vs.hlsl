@@ -26,7 +26,7 @@ VertexShaderOutput main(Input IN)
     float4x4 mvp = mul(perFrameConstants.WorldToViewClipMatrix,  worldMatrix);
     OUT.position = mul(mvp, float4(IN.position, 1.0f));
     OUT.positionObj = IN.position;
-    OUT.normal = mul(worldMatrix, float4(IN.normal, 0.0f)).xyz;
+    OUT.normal = normalize(mul(worldMatrix, float4(IN.normal, 0.0f)).xyz);
 
     return OUT;
 }

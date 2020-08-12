@@ -9,8 +9,8 @@ cbuffer PerObjectConstants : register(b1)
 struct PixelShaderInput
 {
     float4 position : SV_POSITION;
-    float3 normal : NORMAL;
     float3 positionObjSpace : POSITION_OBJ;
+    float3 normal : NORMAL;
 };
 
 struct PixelShaderOutput

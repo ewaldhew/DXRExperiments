@@ -286,7 +286,9 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context) :
         psoDesc.PS = CD3DX12_SHADER_BYTECODE(g_pGBuffer_ps, ARRAYSIZE(g_pGBuffer_ps));
         psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
         psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+        psoDesc.RasterizerState.FrontCounterClockwise = TRUE;
         psoDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+        psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_GREATER;
         psoDesc.InputLayout = { inputDescs, ARRAYSIZE(inputDescs) };
         psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
         psoDesc.NumRenderTargets = 1; //GBufferID::Count - 1; // exclude depth buffer from count
@@ -367,9 +369,9 @@ void HybridPipeline::setScene(RtScene::SharedPtr scene)
             XMFLOAT3 boxSize;
             XMStoreFloat3(&boxSize, size);
             mRasterScene[i] = std::make_shared<DXTKExtend::GeometricModel>(mRtContext->getDevice(), [&](auto& vertices, auto& indices) {
-                GeometricPrimitive::CreateBox(vertices, indices, boxSize);
+                GeometricPrimitive::CreateBox(vertices, indices, boxSize, false);
                 auto halfSize = size * 0.5;
-                for (DXTKExtend::GeometricModel::VertexType vtx : vertices) {
+                for (DXTKExtend::GeometricModel::VertexType &vtx : vertices) {
                     XMVECTOR position = XMLoadFloat3(&vtx.position);
                     position = position + halfSize + bb.GetBoxMin();
                     XMStoreFloat3(&vtx.position, position);
@@ -866,7 +868,7 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
 
         clearRtv(commandList, mGBufferTargetCpuHandle[GBufferID::Normal]);
         //clearRtv(commandList, mGBufferTargetCpuHandle[GBufferID::Albedo]);
-        commandList->ClearDepthStencilView(mGBufferTargetCpuHandle[GBufferID::Depth], D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+        commandList->ClearDepthStencilView(mGBufferTargetCpuHandle[GBufferID::Depth], D3D12_CLEAR_FLAG_DEPTH, 0.0f, 0, 0, nullptr);
         commandList->OMSetRenderTargets(1, &mGBufferTargetCpuHandle[GBufferID::Normal], FALSE, &mGBufferTargetCpuHandle[GBufferID::Depth]);
 
         // Set necessary state.
