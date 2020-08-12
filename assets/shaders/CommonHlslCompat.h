@@ -13,6 +13,21 @@ struct PointLightParams
     XMFLOAT4 color;
 };
 
+struct CameraParams
+{
+    XMFLOAT4 worldEyePos;
+    XMFLOAT4 U;
+    XMFLOAT4 V;
+    XMFLOAT4 W;
+    XMFLOAT2 frustumNH;
+    XMFLOAT2 frustumNV;
+    XMFLOAT2 frustumNearFar;
+    XMFLOAT2 jitters;
+    UINT frameCount;
+    UINT accumCount;
+    XMFLOAT2 padding;
+};
+
 struct DebugOptions
 {
     UINT maxIterations;

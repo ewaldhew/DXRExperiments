@@ -1,10 +1,7 @@
 #define HLSL
 #include "RasterCommon.hlsli"
 
-cbuffer PerObjectConstants : register(b1)
-{
-    float4x4 worldMatrix;
-}
+ConstantBuffer<PerObjectConstants> obj : register(b1);
 
 struct Input
 {
@@ -23,10 +20,10 @@ VertexShaderOutput main(Input IN)
 {
     VertexShaderOutput OUT;
 
-    float4x4 mvp = mul(perFrameConstants.WorldToViewClipMatrix,  worldMatrix);
+    float4x4 mvp = mul(perFrameConstants.WorldToViewClipMatrix, (float4x4) obj.worldMatrix);
     OUT.position = mul(mvp, float4(IN.position, 1.0f));
     OUT.positionObj = IN.position;
-    OUT.normal = normalize(mul(worldMatrix, float4(IN.normal, 0.0f)).xyz);
+    OUT.normal = normalize(mul(obj.worldMatrix, float4(IN.normal, 0.0f)).xyz);
 
     return OUT;
 }

@@ -1,10 +1,8 @@
 #define HLSL
 #include "RasterCommon.hlsli"
 
-cbuffer PerObjectConstants : register(b1)
-{
-    float4x4 worldMatrix;
-}
+ConstantBuffer<PrimitiveInstanceConstants> aabbCB : register(b1, space1);
+ConstantBuffer<PerObjectConstants> obj : register(b1);
 
 struct PixelShaderInput
 {

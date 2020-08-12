@@ -265,10 +265,11 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context) :
 
         RootSignatureGenerator rsConfig;
         rsConfig.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_CBV, 0 /* b0 */); // per frame constants
-        rsConfig.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS, 1 /* b1 */, 0, SizeOfInUint32(XMMATRIX)); // object-to-world matrix
+        rsConfig.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS, 1 /* b1 */, 0, SizeOfInUint32(PerObjectConstants)); // object constants
         rsConfig.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS, 0 /* b0 */, 1 /* space1 */, SizeOfInUint32(MaterialParams)); // material
         rsConfig.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 0 /* t0 */, 9 /* space9 */); // material texture params
         rsConfig.AddHeapRangesParameter({{1 /* t1 */, -1 /* unbounded */, 9 /* space9 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // material textures
+        rsConfig.AddHeapRangesParameter({{1 /* b1 */, 1, 1 /* space1 */, D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 0}}); // procedural aabb attrs
         rsConfig.AddStaticSampler(albedoSampler);
 
         mGBufferPass.rootSignature = rsConfig.Generate(device, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
@@ -704,7 +705,7 @@ void HybridPipeline::update(float elapsedTime, UINT elapsedFrames, UINT prevFram
         mNeedPhotonMap = true;
     }
 
-    CameraParams &cameraParams = mConstantBuffer->cameraParams;
+    CameraParams cameraParams = {};
     XMStoreFloat4(&cameraParams.worldEyePos, mCamera->GetPosition());
     calculateCameraVariables(*mCamera, mCamera->GetAspectRatio(), &cameraParams.U, &cameraParams.V, &cameraParams.W);
     calculateCameraFrustum(*mCamera, &cameraParams.frustumNH, &cameraParams.frustumNV, &cameraParams.frustumNearFar);
@@ -714,6 +715,7 @@ void HybridPipeline::update(float elapsedTime, UINT elapsedFrames, UINT prevFram
     cameraParams.frameCount = elapsedFrames;
     cameraParams.accumCount = mAccumCount++;
 
+    mConstantBuffer->cameraParams = cameraParams;
     mConstantBuffer->options = mShaderDebugOptions;
     mConstantBuffer.CopyStagingToGpu(frameIndex);
 
@@ -741,6 +743,7 @@ void HybridPipeline::update(float elapsedTime, UINT elapsedFrames, UINT prevFram
     mPhotonMappingConstants->maxRayLength = 2.0f * float(mRtScene->getBoundingBox().toBoundingSphere().GetRadius());
     mPhotonMappingConstants.CopyStagingToGpu();
 
+    mRasterConstantsBuffer->cameraParams = cameraParams;
     mRasterConstantsBuffer->WorldToViewMatrix = mCamera->GetViewMatrix();
     mRasterConstantsBuffer->WorldToViewClipMatrix = mCamera->GetViewProjMatrix();
     mRasterConstantsBuffer.CopyStagingToGpu(frameIndex);
@@ -883,7 +886,16 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
 
         for (UINT instance = 0; instance < mRtScene->getNumInstances(); ++instance) {
             auto model = mRtScene->getModel(instance);
-            commandList->SetGraphicsRoot32BitConstants(1, SizeOfInUint32(XMMATRIX), &mRtScene->getTransform(instance), 0);
+            PerObjectConstants constants = {};
+            constants.worldMatrix = mRtScene->getTransform(instance);
+            constants.invWorldMatrix = XMMatrixInverse(nullptr, constants.worldMatrix);
+            if (model->getGeometryType() != RtModel::GeometryType::Triangles) {
+                constants.isProcedural = TRUE;
+                commandList->SetGraphicsRootDescriptorTable(5, toRtProcedural(model)->getPrimitiveConstantsCbvHandle());
+            } else {
+                constants.isProcedural = FALSE;
+            }
+            commandList->SetGraphicsRoot32BitConstants(1, SizeOfInUint32(PerObjectConstants), &constants, 0);
             commandList->SetGraphicsRoot32BitConstants(2, SizeOfInUint32(MaterialParams), &mMaterials[model->mMaterialIndex].params, 0);
             mRasterScene[instance]->Draw(commandList);
         }
