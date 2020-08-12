@@ -4,6 +4,8 @@
 #include "CompiledShaders/PhotonTracing.hlsl.h"
 #include "CompiledShaders/PhotonSplatting_vs.hlsl.h"
 #include "CompiledShaders/PhotonSplatting_ps.hlsl.h"
+#include "CompiledShaders/GBuffer_ps.hlsl.h"
+#include "CompiledShaders/GBuffer_vs.hlsl.h"
 #include "WICTextureLoader.h"
 #include "DDSTextureLoader.h"
 #include "ResourceUploadBatch.h"
@@ -18,6 +20,24 @@ using namespace DXRFramework;
 #define NUM_DIR_LIGHTS 1
 static XMFLOAT4 pointLightColor = XMFLOAT4(0.2f, 0.8f, 0.6f, 2.0f);
 static XMFLOAT4 dirLightColor = XMFLOAT4(0.9f, 0.9f, 0.9f, 1.0f);
+
+static const D3D12_STATIC_SAMPLER_DESC linearMipPointSampler = CD3DX12_STATIC_SAMPLER_DESC(0,
+    D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT
+);
+static const D3D12_STATIC_SAMPLER_DESC pointClampSampler = CD3DX12_STATIC_SAMPLER_DESC(1,
+    D3D12_FILTER_MIN_MAG_MIP_POINT,
+    D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+    D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+    D3D12_TEXTURE_ADDRESS_MODE_CLAMP
+);
+static const D3D12_STATIC_SAMPLER_DESC anisotropicSampler = CD3DX12_STATIC_SAMPLER_DESC(2,
+    D3D12_FILTER_ANISOTROPIC,
+    D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+    D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+    D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+    0.0f, 16U,
+    D3D12_COMPARISON_FUNC_NEVER
+);
 
 namespace GlobalRootSignatureParams
 {
@@ -41,7 +61,8 @@ namespace Pass
     {
         Begin = 0,
 
-        PhotonEmission = Begin,
+        GBuffer,
+        PhotonEmission,
         PhotonTracing,
         PhotonSplatting,
         Combine,
@@ -155,12 +176,7 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context) :
             // GlobalRootSignatureParams::PhotonSourcesSRVSlot
             config.AddHeapRangesParameter({{3 /* t3 */, 1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}});
 
-            D3D12_STATIC_SAMPLER_DESC cubeSampler = {};
-            cubeSampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-            cubeSampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-            cubeSampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-            cubeSampler.Filter = D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
-            cubeSampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+            D3D12_STATIC_SAMPLER_DESC cubeSampler = linearMipPointSampler;
             cubeSampler.ShaderRegister = 0;
             config.AddStaticSampler(cubeSampler);
 
@@ -170,12 +186,7 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context) :
             config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_CBV, 1 /* b1 */);
             //config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS, 1 /* b1 */, 0, SizeOfInUint32(PhotonMappingConstants));
 
-            D3D12_STATIC_SAMPLER_DESC matTexSampler = {};
-            matTexSampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-            matTexSampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-            matTexSampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-            matTexSampler.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
-            matTexSampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+            D3D12_STATIC_SAMPLER_DESC matTexSampler = pointClampSampler;
             matTexSampler.ShaderRegister = 1;
             config.AddStaticSampler(matTexSampler);
 
@@ -243,6 +254,55 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context) :
         NAME_D3D12_OBJECT(mPhotonSplattingPass.stateObject);
     }
 
+    /*******************************
+     *  G-Buffer Pass
+     *******************************/
+    {
+        D3D12_STATIC_SAMPLER_DESC albedoSampler = pointClampSampler;
+        albedoSampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+        albedoSampler.ShaderRegister = 1;
+        albedoSampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+        RootSignatureGenerator rsConfig;
+        rsConfig.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_CBV, 0 /* b0 */); // per frame constants
+        rsConfig.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS, 1 /* b1 */, 0, SizeOfInUint32(PerObjectConstants)); // object constants
+        rsConfig.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS, 0 /* b0 */, 1 /* space1 */, SizeOfInUint32(MaterialParams)); // material
+        rsConfig.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 0 /* t0 */, 9 /* space9 */); // material texture params
+        rsConfig.AddHeapRangesParameter({{1 /* t1 */, -1 /* unbounded */, 9 /* space9 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // material textures
+        rsConfig.AddHeapRangesParameter({{1 /* b1 */, 1, 1 /* space1 */, D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 0}}); // procedural aabb attrs
+        rsConfig.AddStaticSampler(albedoSampler);
+
+        mGBufferPass.rootSignature = rsConfig.Generate(device, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+
+        // DirectX::VertexPositionNormal::InputLayout
+        D3D12_INPUT_ELEMENT_DESC inputDescs[] =
+        {
+            { "SV_POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+            { "NORMAL",      0, DXGI_FORMAT_R32G32B32_FLOAT,    0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        };
+
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
+        psoDesc.pRootSignature = mGBufferPass.rootSignature.Get();
+        psoDesc.VS = CD3DX12_SHADER_BYTECODE(g_pGBuffer_vs, ARRAYSIZE(g_pGBuffer_vs));
+        psoDesc.PS = CD3DX12_SHADER_BYTECODE(g_pGBuffer_ps, ARRAYSIZE(g_pGBuffer_ps));
+        psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+        psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+        psoDesc.RasterizerState.FrontCounterClockwise = TRUE;
+        psoDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+        psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_GREATER;
+        psoDesc.InputLayout = { inputDescs, ARRAYSIZE(inputDescs) };
+        psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+        psoDesc.NumRenderTargets = 1; //GBufferID::Count - 1; // exclude depth buffer from count
+        psoDesc.RTVFormats[0] = mGBufferFormats.at(GBufferID::Normal);
+        //psoDesc.RTVFormats[1] = mGBufferFormats.at(GBufferID::Albedo);
+        psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
+        psoDesc.SampleMask = 1;
+        psoDesc.SampleDesc = { 1, 0 };
+
+        ThrowIfFailed(device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&mGBufferPass.stateObject)));
+        NAME_D3D12_OBJECT(mGBufferPass.stateObject);
+    }
+
     mShaderDebugOptions.maxIterations = 1024;
     mShaderDebugOptions.cosineHemisphereSampling = true;
     mShaderDebugOptions.showIndirectDiffuseOnly = false;
@@ -268,9 +328,14 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context) :
         SetName(mCpuOnlyDescriptorHeap->Heap(), L"CPU-only descriptor heap");
 
         D3D12_DESCRIPTOR_HEAP_DESC rtvDescriptorHeapDesc = {};
-        rtvDescriptorHeapDesc.NumDescriptors = 4;
+        rtvDescriptorHeapDesc.NumDescriptors = 8;
         rtvDescriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
         mRtvDescriptorHeap = std::make_unique<DescriptorPile>(device, &rtvDescriptorHeapDesc);
+
+        D3D12_DESCRIPTOR_HEAP_DESC dsvDescriptorHeapDesc = {};
+        dsvDescriptorHeapDesc.NumDescriptors = 1;
+        dsvDescriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
+        mDsvDescriptorHeap = std::make_unique<DescriptorHeap>(device, &dsvDescriptorHeapDesc);
     }
 
     mPhotonSplatKernelShape = std::make_shared<DXTKExtend::GeometricModel>(device, [](auto& vertices, auto& indices) {
@@ -285,6 +350,38 @@ void HybridPipeline::setScene(RtScene::SharedPtr scene)
     mRtScene = scene->copy();
     mRtPhotonEmissionPass.mRtBindings = RtBindings::create(mRtContext, mRtPhotonEmissionPass.mRtProgram, scene);
     mRtPhotonMappingPass.mRtBindings = RtBindings::create(mRtContext, mRtPhotonMappingPass.mRtProgram, scene);
+
+    mRasterScene.resize(mRtScene->getNumInstances());
+    for (UINT i = 0; i < mRtScene->getNumInstances(); i++) {
+        auto model = mRtScene->getModel(i);
+        switch (model->getGeometryType())
+        {
+        case RtModel::GeometryType::Triangles: {
+            auto obj = toRtMesh(model);
+            mRasterScene[i] = std::make_shared<DXTKExtend::GeometricModel>(
+                obj->getVertexBuffer(), sizeof(Vertex),
+                obj->getIndexBuffer(), DXGI_FORMAT_R32_UINT);
+            break;
+        }
+        default: {
+            auto obj = toRtProcedural(model);
+            auto bb = obj->getBoundingBox();
+            XMVECTOR size = bb.GetBoxMax() - bb.GetBoxMin();
+            XMFLOAT3 boxSize;
+            XMStoreFloat3(&boxSize, size);
+            mRasterScene[i] = std::make_shared<DXTKExtend::GeometricModel>(mRtContext->getDevice(), [&](auto& vertices, auto& indices) {
+                GeometricPrimitive::CreateBox(vertices, indices, boxSize, false);
+                auto halfSize = size * 0.5;
+                for (DXTKExtend::GeometricModel::VertexType &vtx : vertices) {
+                    XMVECTOR position = XMLoadFloat3(&vtx.position);
+                    position = position + halfSize + bb.GetBoxMin();
+                    XMStoreFloat3(&vtx.position, position);
+                }
+            });
+            break;
+        }
+        }
+    }
 }
 
 void HybridPipeline::buildAccelerationStructures()
@@ -363,6 +460,16 @@ void HybridPipeline::loadResources(ID3D12CommandQueue *uploadCommandQueue, UINT 
     AllocateUploadBuffer(device, &zero, 4, zeroResource.GetAddressOf());
 }
 
+inline void CreateRenderTargetView(ID3D12Device* device, ID3D12Resource* resource, DescriptorPile* heap, D3D12_CPU_DESCRIPTOR_HANDLE& handle)
+{
+    D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
+    rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+
+    size_t rtvHeapIndex = heap->Allocate();
+    handle = heap->GetCpuHandle(rtvHeapIndex);
+    device->CreateRenderTargetView(resource, &rtvDesc, handle);
+}
+
 void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT height)
 {
     auto device = mRtContext->getDevice();
@@ -374,6 +481,7 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
     // Final output resource
 
     AllocateRTVTexture(device, format, width, height, mOutputResource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, L"Final output resource", D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+    CreateRenderTargetView(device, mOutputResource.Get(), mRtvDescriptorHeap.get(), mOutputRtvCpuHandle);
 
     {
         D3D12_CPU_DESCRIPTOR_HANDLE uavCpuHandle;
@@ -391,15 +499,6 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
         D3D12_CPU_DESCRIPTOR_HANDLE srvCpuHandle;
         mOutputSrvHeapIndex = mRtContext->allocateDescriptor(&srvCpuHandle, mOutputSrvHeapIndex);
         mOutputSrvGpuHandle = mRtContext->createTextureSRVHandle(mOutputResource.Get(), false, mOutputSrvHeapIndex);
-    }
-
-    {
-        D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
-        rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
-
-        size_t rtvHeapIndex = mRtvDescriptorHeap->Allocate();
-        mOutputRtvCpuHandle = mRtvDescriptorHeap->GetCpuHandle(rtvHeapIndex);
-        device->CreateRenderTargetView(mOutputResource.Get(), &rtvDesc, mOutputRtvCpuHandle);
     }
 
     // Intermediate output resources
@@ -480,25 +579,51 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
     }
 
     AllocateRTVTexture(device, DXGI_FORMAT_R32G32B32A32_FLOAT, width, height, mPhotonSplatTargetResource[0].ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, L"PhotonSplatResultColorDirX");
-
-    {
-        D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
-        rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
-
-        size_t rtvHeapIndex = mRtvDescriptorHeap->Allocate();
-        mPhotonSplatRtvCpuHandle[0] = mRtvDescriptorHeap->GetCpuHandle(rtvHeapIndex);
-        device->CreateRenderTargetView(mPhotonSplatTargetResource[0].Get(), &rtvDesc, mPhotonSplatRtvCpuHandle[0]);
-    }
+    CreateRenderTargetView(device, mPhotonSplatTargetResource[0].Get(), mRtvDescriptorHeap.get(), mPhotonSplatRtvCpuHandle[0]);
 
     AllocateRTVTexture(device, DXGI_FORMAT_R32G32_FLOAT, width, height, mPhotonSplatTargetResource[1].ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, L"PhotonSplatResultDirYZ");
+    CreateRenderTargetView(device, mPhotonSplatTargetResource[1].Get(), mRtvDescriptorHeap.get(), mPhotonSplatRtvCpuHandle[1]);
+
+    AllocateRTVTexture(device, mGBufferFormats.at(GBufferID::Normal), width, height, mGBufferResource[GBufferID::Normal].ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, L"G buffer normals");
+    CreateRenderTargetView(device, mGBufferResource[GBufferID::Normal].Get(), mRtvDescriptorHeap.get(), mGBufferTargetCpuHandle[GBufferID::Normal]);
 
     {
-        D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
-        rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+        D3D12_CPU_DESCRIPTOR_HANDLE srvCpuHandle;
+        mGBufferSrvHeapIndex[GBufferID::Normal] = mRtContext->allocateDescriptor(&srvCpuHandle, mGBufferSrvHeapIndex[GBufferID::Normal]);
+        mGBufferSrvGpuHandle[GBufferID::Normal] = mRtContext->createTextureSRVHandle(mGBufferResource[GBufferID::Normal].Get(), false, mGBufferSrvHeapIndex[GBufferID::Normal]);
+    }
 
-        size_t rtvHeapIndex = mRtvDescriptorHeap->Allocate();
-        mPhotonSplatRtvCpuHandle[1] = mRtvDescriptorHeap->GetCpuHandle(rtvHeapIndex);
-        device->CreateRenderTargetView(mPhotonSplatTargetResource[1].Get(), &rtvDesc, mPhotonSplatRtvCpuHandle[1]);
+    AllocateRTVTexture(device, mGBufferFormats.at(GBufferID::Albedo), width, height, mGBufferResource[GBufferID::Albedo].ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, L"G buffer flux");
+    CreateRenderTargetView(device, mGBufferResource[GBufferID::Albedo].Get(), mRtvDescriptorHeap.get(), mGBufferTargetCpuHandle[GBufferID::Albedo]);
+
+    {
+        D3D12_CPU_DESCRIPTOR_HANDLE srvCpuHandle;
+        mGBufferSrvHeapIndex[GBufferID::Albedo] = mRtContext->allocateDescriptor(&srvCpuHandle, mGBufferSrvHeapIndex[GBufferID::Albedo]);
+        mGBufferSrvGpuHandle[GBufferID::Albedo] = mRtContext->createTextureSRVHandle(mGBufferResource[GBufferID::Albedo].Get(), false, mGBufferSrvHeapIndex[GBufferID::Albedo]);
+    }
+
+    AllocateDepthTexture(device, width, height, mGBufferResource[GBufferID::Depth].ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, L"G buffer depth");
+
+    {
+        D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
+        dsvDesc.Format = DXGI_FORMAT_D32_FLOAT;
+        dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+
+        mGBufferTargetCpuHandle[GBufferID::Depth] = mDsvDescriptorHeap->GetCpuHandle(0);
+        device->CreateDepthStencilView(mGBufferResource[GBufferID::Depth].Get(), &dsvDesc, mGBufferTargetCpuHandle[GBufferID::Depth]);
+    }
+
+    {
+        D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+        srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        srvDesc.Format = DXGI_FORMAT_R32_FLOAT;
+        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+        srvDesc.Texture2D.MipLevels = -1;
+
+        D3D12_CPU_DESCRIPTOR_HANDLE srvCpuHandle;
+        mGBufferSrvHeapIndex[GBufferID::Depth] = mRtContext->allocateDescriptor(&srvCpuHandle, mGBufferSrvHeapIndex[GBufferID::Depth]);
+        mGBufferSrvGpuHandle[GBufferID::Depth] = mRtContext->getDescriptorGPUHandle(mGBufferSrvHeapIndex[GBufferID::Depth]);
+        device->CreateShaderResourceView(mGBufferResource[GBufferID::Depth].Get(), &srvDesc, srvCpuHandle);
     }
 }
 
@@ -580,7 +705,7 @@ void HybridPipeline::update(float elapsedTime, UINT elapsedFrames, UINT prevFram
         mNeedPhotonMap = true;
     }
 
-    CameraParams &cameraParams = mConstantBuffer->cameraParams;
+    CameraParams cameraParams = {};
     XMStoreFloat4(&cameraParams.worldEyePos, mCamera->GetPosition());
     calculateCameraVariables(*mCamera, mCamera->GetAspectRatio(), &cameraParams.U, &cameraParams.V, &cameraParams.W);
     calculateCameraFrustum(*mCamera, &cameraParams.frustumNH, &cameraParams.frustumNV, &cameraParams.frustumNearFar);
@@ -590,6 +715,7 @@ void HybridPipeline::update(float elapsedTime, UINT elapsedFrames, UINT prevFram
     cameraParams.frameCount = elapsedFrames;
     cameraParams.accumCount = mAccumCount++;
 
+    mConstantBuffer->cameraParams = cameraParams;
     mConstantBuffer->options = mShaderDebugOptions;
     mConstantBuffer.CopyStagingToGpu(frameIndex);
 
@@ -617,6 +743,7 @@ void HybridPipeline::update(float elapsedTime, UINT elapsedFrames, UINT prevFram
     mPhotonMappingConstants->maxRayLength = 2.0f * float(mRtScene->getBoundingBox().toBoundingSphere().GetRadius());
     mPhotonMappingConstants.CopyStagingToGpu();
 
+    mRasterConstantsBuffer->cameraParams = cameraParams;
     mRasterConstantsBuffer->WorldToViewMatrix = mCamera->GetViewMatrix();
     mRasterConstantsBuffer->WorldToViewClipMatrix = mCamera->GetViewProjMatrix();
     mRasterConstantsBuffer.CopyStagingToGpu(frameIndex);
@@ -720,16 +847,72 @@ void HybridPipeline::collectEmitters(UINT& numLights, UINT& maxSamples)
 
 void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIndex, UINT width, UINT height, UINT& pass)
 {
-    if (!mNeedPhotonMap && pass < Pass::PhotonSplatting)
+    if (pass == Pass::Begin)
     {
-        pass = Pass::PhotonSplatting;
+        clearUavs();
+
+        pass = Pass::GBuffer;
+    }
+
+    if (pass == Pass::GBuffer)
+    {
+        auto viewport = CD3DX12_VIEWPORT(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height));
+        auto scissorRect = CD3DX12_RECT(0, 0, (width), static_cast<LONG>(height));
+
+        std::initializer_list<D3D12_RESOURCE_BARRIER> barriers =
+        {
+            CD3DX12_RESOURCE_BARRIER::Transition(mGBufferResource[GBufferID::Normal].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET),
+            //CD3DX12_RESOURCE_BARRIER::Transition(mGBufferResource[GBufferID::Albedo].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET),
+            CD3DX12_RESOURCE_BARRIER::Transition(mGBufferResource[GBufferID::Depth].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE),
+        };
+        auto transitions = ScopedBarrier(commandList, barriers);
+
+        commandList->SetPipelineState(mGBufferPass.stateObject.Get());
+
+        clearRtv(commandList, mGBufferTargetCpuHandle[GBufferID::Normal]);
+        //clearRtv(commandList, mGBufferTargetCpuHandle[GBufferID::Albedo]);
+        commandList->ClearDepthStencilView(mGBufferTargetCpuHandle[GBufferID::Depth], D3D12_CLEAR_FLAG_DEPTH, 0.0f, 0, 0, nullptr);
+        commandList->OMSetRenderTargets(1, &mGBufferTargetCpuHandle[GBufferID::Normal], FALSE, &mGBufferTargetCpuHandle[GBufferID::Depth]);
+
+        // Set necessary state.
+        mRtContext->bindDescriptorHeap();
+        commandList->RSSetViewports(1, &viewport);
+        commandList->RSSetScissorRects(1, &scissorRect);
+
+        commandList->SetGraphicsRootSignature(mGBufferPass.rootSignature.Get());
+        commandList->SetGraphicsRootConstantBufferView(0, mRasterConstantsBuffer.GpuVirtualAddress(frameIndex));
+        commandList->SetGraphicsRootShaderResourceView(3, mTextureParams.GpuVirtualAddress());
+        commandList->SetGraphicsRootDescriptorTable(4, mTextureSrvGpuHandles[2]);
+
+        for (UINT instance = 0; instance < mRtScene->getNumInstances(); ++instance) {
+            auto model = mRtScene->getModel(instance);
+            PerObjectConstants constants = {};
+            constants.worldMatrix = mRtScene->getTransform(instance);
+            constants.invWorldMatrix = XMMatrixInverse(nullptr, constants.worldMatrix);
+            if (model->getGeometryType() != RtModel::GeometryType::Triangles) {
+                constants.isProcedural = TRUE;
+                commandList->SetGraphicsRootDescriptorTable(5, toRtProcedural(model)->getPrimitiveConstantsCbvHandle());
+            } else {
+                constants.isProcedural = FALSE;
+            }
+            commandList->SetGraphicsRoot32BitConstants(1, SizeOfInUint32(PerObjectConstants), &constants, 0);
+            commandList->SetGraphicsRoot32BitConstants(2, SizeOfInUint32(MaterialParams), &mMaterials[model->mMaterialIndex].params, 0);
+            mRasterScene[instance]->Draw(commandList);
+        }
+
+        if (!mNeedPhotonMap && pass < Pass::PhotonSplatting)
+        {
+            pass = Pass::PhotonSplatting;
+            return;
+        }
+        else {
+            pass = Pass::PhotonEmission;
+        }
     }
 
     // generate photon seed
     if (pass == Pass::PhotonEmission)
     {
-        clearUavs();
-
         UINT numLights, maxSamples;
         collectEmitters(numLights, maxSamples);
 

@@ -3,6 +3,7 @@
 
 #ifdef HLSL
 #include "HlslCompat.h"
+#define RASTER_PIPELINE
 #else
 using namespace DirectX;
 #endif
@@ -11,8 +12,17 @@ using namespace DirectX;
 
 struct PerFrameConstantsRaster
 {
+    CameraParams cameraParams;
     XMMATRIX WorldToViewMatrix;
     XMMATRIX WorldToViewClipMatrix;
+};
+
+struct PerObjectConstants
+{
+    XMMATRIX worldMatrix;
+    XMMATRIX invWorldMatrix;
+    UINT isProcedural;
+    XMFLOAT3 padding;
 };
 
 #endif // RASTERHLSLCOMPAT_H

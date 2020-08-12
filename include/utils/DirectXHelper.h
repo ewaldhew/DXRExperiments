@@ -4,6 +4,23 @@
 #include "Helpers/DirectXRaytracingHelper.h"
 
 namespace DirectX {
+    inline void AllocateDepthTexture(ID3D12Device* pDevice, UINT64 textureWidth, UINT64 textureHeight, ID3D12Resource **ppResource, D3D12_RESOURCE_STATES initialResourceState = D3D12_RESOURCE_STATE_COMMON, const wchar_t* resourceName = nullptr, std::array<FLOAT, 4> clearValue = {})
+    {
+        auto texDesc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32_TYPELESS, textureWidth, static_cast<UINT>(textureHeight), 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
+
+        ThrowIfFailed(pDevice->CreateCommittedResource(
+            &kDefaultHeapProps,
+            D3D12_HEAP_FLAG_NONE,
+            &texDesc,
+            initialResourceState,
+            &CD3DX12_CLEAR_VALUE(DXGI_FORMAT_D32_FLOAT, clearValue.data()),
+            IID_PPV_ARGS(ppResource)));
+        if (resourceName)
+        {
+            (*ppResource)->SetName(resourceName);
+        }
+    }
+
     inline void AllocateRTVTexture(ID3D12Device* pDevice, DXGI_FORMAT textureFormat, UINT64 textureWidth, UINT64 textureHeight, ID3D12Resource **ppResource, D3D12_RESOURCE_STATES initialResourceState = D3D12_RESOURCE_STATE_COMMON, const wchar_t* resourceName = nullptr, D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET, std::array<FLOAT, 4> clearValue = {})
     {
         auto texDesc = CD3DX12_RESOURCE_DESC::Tex2D(textureFormat, textureWidth, static_cast<UINT>(textureHeight), 1, 1, 1, 0, flags | D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET);
