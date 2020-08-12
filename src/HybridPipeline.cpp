@@ -810,6 +810,7 @@ void HybridPipeline::collectEmitters(UINT& numLights, UINT& maxSamples)
 
 void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIndex, UINT width, UINT height, UINT& pass)
 {
+    mNeedPhotonMap=false;
     if (pass == Pass::Begin)
     {
 
@@ -1037,7 +1038,7 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
 
         commandList->SetPipelineState(mPhotonSplattingPass.stateObject.Get());
 
-        mPhotonSplatKernelShape->Draw(commandList, mNumPhotons);
+        mPhotonSplatKernelShape->Draw(commandList, 1);
 
         pass = Pass::Combine;
     }

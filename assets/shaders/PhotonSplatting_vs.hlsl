@@ -117,7 +117,7 @@ void main(in VSInput IN, out VSOutput OUT)
     float3 photon_position = up.position;
     kernel_output o = kernel_modification_for_vertex_position(IN.Position, up.normal, -up.direction, up.position, up.distTravelled);
 
-    float3 position = photon_position + o.vertex_position;
+    float3 position = IN.Position;//photon_position + o.vertex_position;
 
     OUT.position = mul(perFrameConstants.WorldToViewClipMatrix, float4(position, 1));
     OUT.power = up.power / o.ellipse_area;

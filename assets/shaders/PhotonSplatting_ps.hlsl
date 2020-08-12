@@ -49,6 +49,6 @@ void main(VSOutput IN, out PSOutput OUT)
     float total_power = dot(power.xyz, float3(1.0f, 1.0f, 1.0f));
     float3 weighted_direction = total_power * IN.direction;
 
-    OUT.ColorXYZAndDirectionX = float4(power, weighted_direction.x);
+    OUT.ColorXYZAndDirectionX = float4(1,0,1, weighted_direction.x);
     OUT.DirectionYZ = weighted_direction.yz;
 }
