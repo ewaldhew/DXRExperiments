@@ -43,6 +43,11 @@ struct DebugOptions
     UINT debug;
 };
 
+struct ProceduralPrimitiveAttributes
+{
+    XMFLOAT3 normal;
+};
+
 // Attributes per primitive instance.
 struct PrimitiveInstanceConstants
 {
@@ -70,6 +75,7 @@ namespace MaterialType {
 }
 #else
 namespace MaterialType {
+    typedef UINT Enum;
     static const UINT
         Diffuse = 0,
         Glossy = Diffuse + 1,
@@ -134,6 +140,7 @@ namespace PrimitiveType {
 }
 #else
 namespace PrimitiveType {
+    typedef UINT Enum;
     static const UINT
         AnalyticPrimitive_AABB = 0,
         AnalyticPrimitive_Spheres = AnalyticPrimitive_AABB + 1,

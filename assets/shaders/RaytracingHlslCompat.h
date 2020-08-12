@@ -9,7 +9,7 @@
 //
 //*********************************************************
 
-#ifndef RAYTRACINGHLSLCOMPAT_H
+#if !defined(RAYTRACINGHLSLCOMPAT_H) && !defined(RASTER_PIPELINE)
 #define RAYTRACINGHLSLCOMPAT_H
 
 #ifdef HLSL
@@ -31,11 +31,6 @@ struct ShadowPayload
 struct Attributes
 {
     XMFLOAT2 bary;
-};
-
-struct ProceduralPrimitiveAttributes
-{
-    XMFLOAT3 normal;
 };
 
 struct Vertex
