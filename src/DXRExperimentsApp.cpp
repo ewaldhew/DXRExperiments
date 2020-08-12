@@ -179,7 +179,7 @@ void DXRExperimentsApp::InitRaytracing()
     }
 
     // Create raytracing pipelines
-    mRaytracingPipelines.emplace_back(HybridPipeline::create(mRtContext));
+    mRaytracingPipelines.emplace_back(HybridPipeline::create(mRtContext, m_deviceResources->GetBackBufferFormat()));
     mRaytracingPipelines.emplace_back(ProgressiveRaytracingPipeline::create(mRtContext));
 
     // Populate raytracing pipelines

@@ -70,7 +70,7 @@ namespace Pass
     };
 }
 
-HybridPipeline::HybridPipeline(RtContext::SharedPtr context) :
+HybridPipeline::HybridPipeline(RtContext::SharedPtr context, DXGI_FORMAT outputFormat) :
     mRtContext(context),
     mFrameAccumulationEnabled(true),
     mAnimationPaused(true),
