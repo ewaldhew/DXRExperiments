@@ -643,13 +643,18 @@ void HybridPipeline::createClearableUav(ID3D12Resource* pResource, const D3D12_U
     mClearableUavs.push_back({ uavHandle, uavCpuHandle, pResource });
 }
 
+inline void clearUav(ID3D12GraphicsCommandList* commandList, D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle, D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle, ID3D12Resource* pResource)
+{
+    const UINT clear[4] = { 0 };
+    commandList->ClearUnorderedAccessViewUint(gpuHandle, cpuHandle, pResource, clear, 0, nullptr);
+}
+
 void HybridPipeline::clearUavs()
 {
     auto commandList = mRtContext->getCommandList();
 
-    const UINT clear[4] = { 0 };
     for (auto const& uav : mClearableUavs) {
-        commandList->ClearUnorderedAccessViewUint(uav.gpuHandle, uav.cpuHandle, uav.pResource, clear, 0, nullptr);
+        clearUav(commandList, uav.gpuHandle, uav.cpuHandle, uav.pResource);
     }
 }
 
@@ -855,7 +860,6 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
 {
     if (pass == Pass::Begin)
     {
-        clearUavs();
 
         pass = Pass::GBuffer;
     }
@@ -1003,6 +1007,8 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
 
         mRtContext->transitionResource(mPhotonSeedResource.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         mRtBindings->apply(mRtContext, mRtState);
+
+        clearUavs();
 
         // Set global root arguments
         mRtContext->bindDescriptorHeap();
