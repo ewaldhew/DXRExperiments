@@ -6,6 +6,8 @@
 #include "CompiledShaders/PhotonSplatting_ps.hlsl.h"
 #include "CompiledShaders/GBuffer_ps.hlsl.h"
 #include "CompiledShaders/GBuffer_vs.hlsl.h"
+#include "CompiledShaders/PhotonLightingCombine_vs.hlsl.h"
+#include "CompiledShaders/PhotonLightingCombine_ps.hlsl.h"
 #include "WICTextureLoader.h"
 #include "DDSTextureLoader.h"
 #include "ResourceUploadBatch.h"
@@ -246,6 +248,7 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context, DXGI_FORMAT outputF
         psoDesc.BlendState.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ONE;
         psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
         psoDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+        psoDesc.DepthStencilState.DepthEnable = FALSE;
         psoDesc.InputLayout = GeometricPrimitive::VertexType::InputLayout; //{ inputDescs, ARRAYSIZE(inputDescs) };
         psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
         psoDesc.NumRenderTargets = 2;
@@ -306,6 +309,36 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context, DXGI_FORMAT outputF
 
         ThrowIfFailed(device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&mGBufferPass.stateObject)));
         NAME_D3D12_OBJECT(mGBufferPass.stateObject);
+    }
+
+    /*******************************
+     *  Combine Pass
+     *******************************/
+    {
+        RootSignatureGenerator rsConfig;
+        rsConfig.AddHeapRangesParameter({{0 /* t0 */, 1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // normals
+        rsConfig.AddHeapRangesParameter({{1 /* t1 */, 1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // splat0
+        rsConfig.AddHeapRangesParameter({{2 /* t2 */, 1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // splat1
+
+        mCombinePass.rootSignature = rsConfig.Generate(device, false);
+
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
+        psoDesc.pRootSignature = mCombinePass.rootSignature.Get();
+        psoDesc.VS = CD3DX12_SHADER_BYTECODE(g_pPhotonLightingCombine_vs, ARRAYSIZE(g_pPhotonLightingCombine_vs));
+        psoDesc.PS = CD3DX12_SHADER_BYTECODE(g_pPhotonLightingCombine_ps, ARRAYSIZE(g_pPhotonLightingCombine_ps));
+        psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+        psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+        psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+        psoDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+        psoDesc.DepthStencilState.DepthEnable = FALSE;
+        psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+        psoDesc.NumRenderTargets = 1;
+        psoDesc.RTVFormats[0] = outputFormat;
+        psoDesc.SampleMask = 1;
+        psoDesc.SampleDesc = { 1, 0 };
+
+        ThrowIfFailed(device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&mCombinePass.stateObject)));
+        NAME_D3D12_OBJECT(mCombinePass.stateObject);
     }
 
     mShaderDebugOptions.maxIterations = 1024;
@@ -578,9 +611,11 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
 
     AllocateRTVTexture(device, DXGI_FORMAT_R32G32B32A32_FLOAT, width, height, mPhotonSplat[0].Resource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, L"PhotonSplatResultColorDirX");
     CreateTextureRTV(device, mRtvDescriptorHeap.get(), mPhotonSplat[0]);
+    CreateTextureSRV(mRtContext, mPhotonSplat[0]);
 
     AllocateRTVTexture(device, DXGI_FORMAT_R32G32_FLOAT, width, height, mPhotonSplat[1].Resource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, L"PhotonSplatResultDirYZ");
     CreateTextureRTV(device, mRtvDescriptorHeap.get(), mPhotonSplat[1]);
+    CreateTextureSRV(mRtContext, mPhotonSplat[1]);
 
     AllocateRTVTexture(device, mGBufferFormats.at(GBufferID::Normal), width, height, mGBuffer[GBufferID::Normal].Resource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, L"G buffer normals");
     CreateTextureRTV(device, mRtvDescriptorHeap.get(), mGBuffer[GBufferID::Normal]);
@@ -810,6 +845,9 @@ void HybridPipeline::collectEmitters(UINT& numLights, UINT& maxSamples)
 
 void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIndex, UINT width, UINT height, UINT& pass)
 {
+    auto viewport = CD3DX12_VIEWPORT(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height));
+    auto scissorRect = CD3DX12_RECT(0, 0, (width), static_cast<LONG>(height));
+
     mNeedPhotonMap=false;
     if (pass == Pass::Begin)
     {
@@ -819,9 +857,6 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
 
     if (pass == Pass::GBuffer)
     {
-        auto viewport = CD3DX12_VIEWPORT(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height));
-        auto scissorRect = CD3DX12_RECT(0, 0, (width), static_cast<LONG>(height));
-
         std::initializer_list<D3D12_RESOURCE_BARRIER> barriers =
         {
             CD3DX12_RESOURCE_BARRIER::Transition(mGBuffer[GBufferID::Normal].Resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET),
@@ -994,8 +1029,6 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
 
     if (pass == Pass::PhotonSplatting)
     {
-        auto viewport = CD3DX12_VIEWPORT(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height));
-        auto scissorRect = CD3DX12_RECT(0, 0, (width), static_cast<LONG>(height));
 
         if (mNumPhotons == 0) {
             UINT* pReadbackBufferData;
@@ -1046,6 +1079,30 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
     // final render pass
     if (pass == Pass::Combine)
     {
+        std::initializer_list<D3D12_RESOURCE_BARRIER> barriers =
+        {
+            CD3DX12_RESOURCE_BARRIER::Transition(mOutput.Resource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RENDER_TARGET),
+        };
+        auto transitions = ScopedBarrier(commandList, barriers);
+
+        mRtContext->bindDescriptorHeap();
+        commandList->RSSetViewports(1, &viewport);
+        commandList->RSSetScissorRects(1, &scissorRect);
+
+        commandList->SetGraphicsRootSignature(mCombinePass.rootSignature.Get());
+        commandList->SetGraphicsRootDescriptorTable(0, mGBuffer[GBufferID::Normal].Srv.gpuHandle);
+        commandList->SetGraphicsRootDescriptorTable(1, mPhotonSplat[0].Srv.gpuHandle);
+        commandList->SetGraphicsRootDescriptorTable(2, mPhotonSplat[1].Srv.gpuHandle);
+
+        commandList->OMSetRenderTargets(1, &mOutput.Rtv.cpuHandle, FALSE, nullptr);
+
+        clearRtv(commandList, mOutput);
+
+        commandList->SetPipelineState(mCombinePass.stateObject.Get());
+
+        commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        commandList->DrawInstanced(3, 1, 0, 0);
+
         pass = Pass::End;
     }
 }

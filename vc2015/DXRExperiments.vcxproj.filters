@@ -641,5 +641,8 @@
     <FxCompile Include="..\assets\shaders\GBuffer_vs.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
+    <FxCompile Include="..\assets\shaders\PhotonLightingCombine_vs.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
   </ItemGroup>
 </Project>

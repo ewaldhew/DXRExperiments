@@ -66,6 +66,7 @@ private:
     RtPass mRtPhotonMappingPass;
     RasterPass mPhotonSplattingPass;
     RasterPass mGBufferPass;
+    RasterPass mCombinePass;
 
     // Scene description
     DXRFramework::RtScene::SharedPtrMut mRtScene;
