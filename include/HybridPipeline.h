@@ -125,7 +125,7 @@ private:
         { GBufferID::Albedo, DXGI_FORMAT_R32G32B32A32_FLOAT },
     };
     ComPtr<ID3D12Resource> mGBufferResource[GBufferID::Count];
-    UINT mGBufferSrvHeapIndex[GBufferID::Count] = { UINT_MAX };
+    UINT mGBufferSrvHeapIndex[GBufferID::Count];
     D3D12_GPU_DESCRIPTOR_HANDLE mGBufferSrvGpuHandle[GBufferID::Count];
     D3D12_CPU_DESCRIPTOR_HANDLE mGBufferTargetCpuHandle[GBufferID::Count];
 

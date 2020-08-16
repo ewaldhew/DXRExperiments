@@ -344,6 +344,8 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context) :
         mDsvDescriptorHeap = std::make_unique<DescriptorHeap>(device, &dsvDescriptorHeapDesc);
     }
 
+    std::fill_n(mGBufferSrvHeapIndex, GBufferID::Count, UINT_MAX);
+
     mPhotonSplatKernelShape = std::make_shared<DXTKExtend::GeometricModel>(device, [](auto& vertices, auto& indices) {
         GeometricPrimitive::CreateIcosahedron(vertices, indices);
     });
