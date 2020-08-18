@@ -9,7 +9,6 @@
 #include "WICTextureLoader.h"
 #include "DDSTextureLoader.h"
 #include "ResourceUploadBatch.h"
-#include "utils/DirectXHelper.h"
 #include "DirectXHelpers.h"
 #include "ImGuiRendererDX.h"
 #include <chrono>
@@ -325,14 +324,8 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context) :
     auto msTime = std::chrono::time_point_cast<std::chrono::milliseconds>(now);
     mRng = std::mt19937(uint32_t(msTime.time_since_epoch().count()));
 
-    // Create descriptor heaps for UAV CPU descriptors and render target views
+    // Create descriptor heaps for descriptors used in raster passes
     {
-        D3D12_DESCRIPTOR_HEAP_DESC descriptorHeapDesc = {};
-        descriptorHeapDesc.NumDescriptors = 4;
-        descriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-        mCpuOnlyDescriptorHeap = std::make_unique<DescriptorPile>(device, &descriptorHeapDesc);
-        SetName(mCpuOnlyDescriptorHeap->Heap(), L"CPU-only descriptor heap");
-
         D3D12_DESCRIPTOR_HEAP_DESC rtvDescriptorHeapDesc = {};
         rtvDescriptorHeapDesc.NumDescriptors = 8;
         rtvDescriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
@@ -343,8 +336,6 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context) :
         dsvDescriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
         mDsvDescriptorHeap = std::make_unique<DescriptorHeap>(device, &dsvDescriptorHeapDesc);
     }
-
-    std::fill_n(mGBufferSrvHeapIndex, GBufferID::Count, UINT_MAX);
 
     mPhotonSplatKernelShape = std::make_shared<DXTKExtend::GeometricModel>(device, [](auto& vertices, auto& indices) {
         GeometricPrimitive::CreateIcosahedron(vertices, indices);
@@ -468,81 +459,84 @@ void HybridPipeline::loadResources(ID3D12CommandQueue *uploadCommandQueue, UINT 
     AllocateUploadBuffer(device, &zero, 4, zeroResource.GetAddressOf());
 }
 
-inline void CreateRenderTargetView(ID3D12Device* device, ID3D12Resource* resource, DescriptorPile* heap, D3D12_CPU_DESCRIPTOR_HANDLE& handle)
+inline void CreateTextureRTV(ID3D12Device* device, DescriptorPile* heap, OutputResourceView& view)
 {
     D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
     rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
 
     size_t rtvHeapIndex = heap->Allocate();
-    handle = heap->GetCpuHandle(rtvHeapIndex);
-    device->CreateRenderTargetView(resource, &rtvDesc, handle);
+    view.Rtv.cpuHandle = heap->GetCpuHandle(rtvHeapIndex);
+    device->CreateRenderTargetView(view.Resource.Get(), &rtvDesc, view.Rtv.cpuHandle);
+}
+
+inline void CreateTextureSRV(const RtContext::SharedPtr pRtContext, OutputResourceView& view)
+{
+    D3D12_CPU_DESCRIPTOR_HANDLE srvCpuHandle;
+    view.Srv.heapIndex = pRtContext->allocateDescriptor(&srvCpuHandle, view.Srv.heapIndex);
+    view.Srv.gpuHandle = pRtContext->createTextureSRVHandle(view.Resource.Get(), false, view.Srv.heapIndex);
+    view.Srv.cpuHandle = srvCpuHandle;
 }
 
 void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT height)
 {
     auto device = mRtContext->getDevice();
 
-    mClearableUavs.clear();
-    mCpuOnlyDescriptorHeap = std::make_unique<DescriptorPile>(mCpuOnlyDescriptorHeap->Heap());
     mRtvDescriptorHeap = std::make_unique<DescriptorPile>(mRtvDescriptorHeap->Heap());
 
     // Final output resource
 
-    AllocateRTVTexture(device, format, width, height, mOutputResource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, L"Final output resource", D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
-    CreateRenderTargetView(device, mOutputResource.Get(), mRtvDescriptorHeap.get(), mOutputRtvCpuHandle);
+    AllocateRTVTexture(device, format, width, height, mOutput.Resource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, L"Final output resource", D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+    CreateTextureRTV(device, mRtvDescriptorHeap.get(), mOutput);
+    CreateTextureSRV(mRtContext, mOutput);
 
     {
         D3D12_CPU_DESCRIPTOR_HANDLE uavCpuHandle;
-        mOutputUavHeapIndex = mRtContext->allocateDescriptor(&uavCpuHandle, mOutputUavHeapIndex);
+        mOutputUav.heapIndex = mRtContext->allocateDescriptor(&uavCpuHandle, mOutputUav.heapIndex);
 
         D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
         uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-        device->CreateUnorderedAccessView(mOutputResource.Get(), nullptr, &uavDesc, uavCpuHandle);
+        device->CreateUnorderedAccessView(mOutput.Resource.Get(), nullptr, &uavDesc, uavCpuHandle);
 
-        mOutputUavGpuHandle = mRtContext->getDescriptorGPUHandle(mOutputUavHeapIndex);
-        createClearableUav(mOutputResource.Get(), &uavDesc, mOutputUavGpuHandle);
-    }
-
-    {
-        D3D12_CPU_DESCRIPTOR_HANDLE srvCpuHandle;
-        mOutputSrvHeapIndex = mRtContext->allocateDescriptor(&srvCpuHandle, mOutputSrvHeapIndex);
-        mOutputSrvGpuHandle = mRtContext->createTextureSRVHandle(mOutputResource.Get(), false, mOutputSrvHeapIndex);
+        mOutputUav.gpuHandle = mRtContext->getDescriptorGPUHandle(mOutputUav.heapIndex);
+        mOutputUav.cpuHandle = uavCpuHandle;
     }
 
     // Intermediate output resources
 
     mPhotonEmitters.Create(device, mRtScene->getNumInstances(), 1, L"PhotonEmitters");
     mPhotonUploadBuffer.Create(device, MAX_PHOTON_SEED_SAMPLES, 1, L"PhotonSeed");
-    AllocateUAVBuffer(device, MAX_PHOTON_SEED_SAMPLES * sizeof(Photon), mPhotonSeedResource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    AllocateUAVBuffer(device, MAX_PHOTON_SEED_SAMPLES * sizeof(Photon), mPhotonSeed.Resource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
     {
         D3D12_CPU_DESCRIPTOR_HANDLE uavCpuHandle;
-        mPhotonSeedUavHeapIndex = mRtContext->allocateDescriptor(&uavCpuHandle, mPhotonSeedUavHeapIndex);
+        mPhotonSeed.Uav.heapIndex = mRtContext->allocateDescriptor(&uavCpuHandle, mPhotonSeed.Uav.heapIndex);
 
         D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
         uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
         uavDesc.Format = DXGI_FORMAT_UNKNOWN;
         uavDesc.Buffer.StructureByteStride = sizeof(Photon);
         uavDesc.Buffer.NumElements = MAX_PHOTON_SEED_SAMPLES;
-        device->CreateUnorderedAccessView(mPhotonSeedResource.Get(), nullptr, &uavDesc, uavCpuHandle);
+        device->CreateUnorderedAccessView(mPhotonSeed.Resource.Get(), nullptr, &uavDesc, uavCpuHandle);
 
-        mPhotonSeedUavGpuHandle = mRtContext->getDescriptorGPUHandle(mPhotonSeedUavHeapIndex);
+        mPhotonSeed.Uav.gpuHandle = mRtContext->getDescriptorGPUHandle(mPhotonSeed.Uav.heapIndex);
+        mPhotonSeed.Uav.cpuHandle = uavCpuHandle;
     }
 
     {
         D3D12_CPU_DESCRIPTOR_HANDLE srvCpuHandle;
-        mPhotonSeedSrvHeapIndex = mRtContext->allocateDescriptor(&srvCpuHandle, mPhotonSeedSrvHeapIndex);
-        mPhotonSeedSrvGpuHandle = mRtContext->createBufferSRVHandle(mPhotonSeedResource.Get(), false, sizeof(Photon), mPhotonSeedSrvHeapIndex);
+        mPhotonSeed.Srv.heapIndex = mRtContext->allocateDescriptor(&srvCpuHandle, mPhotonSeed.Srv.heapIndex);
+        mPhotonSeed.Srv.gpuHandle = mRtContext->createBufferSRVHandle(mPhotonSeed.Resource.Get(), false, sizeof(Photon), mPhotonSeed.Srv.heapIndex);
+        mPhotonSeed.Srv.cpuHandle = srvCpuHandle;
     }
 
     // TODO: merge resources and use counterOffset
-    AllocateUAVBuffer(device, MAX_PHOTONS * sizeof(Photon), mPhotonMapResource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    AllocateUAVBuffer(device, MAX_PHOTONS * sizeof(Photon), mPhotonMap.Resource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     AllocateUAVBuffer(device, 4, mPhotonMapCounter.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     AllocateReadbackBuffer(device, 4, mPhotonMapCounterReadback.ReleaseAndGetAddressOf(), L"photon map counter readback");
 
     {
         D3D12_CPU_DESCRIPTOR_HANDLE uavCpuHandle;
-        mPhotonMapUavHeapIndex = mRtContext->allocateDescriptor(&uavCpuHandle, mPhotonMapUavHeapIndex);
+        mPhotonMap.Uav.heapIndex = mRtContext->allocateDescriptor(&uavCpuHandle, mPhotonMap.Uav.heapIndex);
 
         D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
         uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
@@ -550,15 +544,16 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
         uavDesc.Buffer.StructureByteStride = sizeof(Photon);
         uavDesc.Buffer.NumElements = MAX_PHOTONS;
         //uavDesc.Buffer.CounterOffsetInBytes = MAX_PHOTONS * sizeof(Photon);
-        device->CreateUnorderedAccessView(mPhotonMapResource.Get(), mPhotonMapCounter.Get(), &uavDesc, uavCpuHandle);
+        device->CreateUnorderedAccessView(mPhotonMap.Resource.Get(), mPhotonMapCounter.Get(), &uavDesc, uavCpuHandle);
 
-        mPhotonMapUavGpuHandle = mRtContext->getDescriptorGPUHandle(mPhotonMapUavHeapIndex);
+        mPhotonMap.Uav.gpuHandle = mRtContext->getDescriptorGPUHandle(mPhotonMap.Uav.heapIndex);
     }
 
     {
         D3D12_CPU_DESCRIPTOR_HANDLE srvCpuHandle;
-        mPhotonMapSrvHeapIndex = mRtContext->allocateDescriptor(&srvCpuHandle, mPhotonMapSrvHeapIndex);
-        mPhotonMapSrvGpuHandle = mRtContext->createBufferSRVHandle(mPhotonMapResource.Get(), false, sizeof(Photon), mPhotonMapSrvHeapIndex);
+        mPhotonMap.Srv.heapIndex = mRtContext->allocateDescriptor(&srvCpuHandle, mPhotonMap.Srv.heapIndex);
+        mPhotonMap.Srv.gpuHandle = mRtContext->createBufferSRVHandle(mPhotonMap.Resource.Get(), false, sizeof(Photon), mPhotonMap.Srv.heapIndex);
+        mPhotonMap.Srv.cpuHandle = srvCpuHandle;
     }
 
     const double preferredTileSizeInPixels = 8.0;
@@ -566,59 +561,44 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
     UINT numTilesY = static_cast<UINT>(ceil(height / preferredTileSizeInPixels));
     mPhotonMappingConstants->numTiles = XMUINT2(numTilesX, numTilesY);
     mPhotonMappingConstants.CopyStagingToGpu();
-    AllocateUAVTexture(device, DXGI_FORMAT_R32_UINT, numTilesX, numTilesY, mPhotonDensityResource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    AllocateUAVTexture(device, DXGI_FORMAT_R32_UINT, numTilesX, numTilesY, mPhotonDensity.Resource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    CreateTextureSRV(mRtContext, mPhotonDensity);
 
     {
         D3D12_CPU_DESCRIPTOR_HANDLE uavCpuHandle;
-        mPhotonDensityUavHeapIndex = mRtContext->allocateDescriptor(&uavCpuHandle, mPhotonDensityUavHeapIndex);
+        mPhotonDensity.Uav.heapIndex = mRtContext->allocateDescriptor(&uavCpuHandle, mPhotonDensity.Uav.heapIndex);
 
         D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
         uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-        device->CreateUnorderedAccessView(mPhotonDensityResource.Get(), nullptr, &uavDesc, uavCpuHandle);
+        device->CreateUnorderedAccessView(mPhotonDensity.Resource.Get(), nullptr, &uavDesc, uavCpuHandle);
 
-        mPhotonDensityUavGpuHandle = mRtContext->getDescriptorGPUHandle(mPhotonDensityUavHeapIndex);
-        createClearableUav(mPhotonDensityResource.Get(), &uavDesc, mPhotonDensityUavGpuHandle);
+        mPhotonDensity.Uav.gpuHandle = mRtContext->getDescriptorGPUHandle(mPhotonDensity.Uav.heapIndex);
+        mPhotonDensity.Uav.cpuHandle = uavCpuHandle;
     }
 
-    {
-        D3D12_CPU_DESCRIPTOR_HANDLE srvCpuHandle;
-        mPhotonDensitySrvHeapIndex = mRtContext->allocateDescriptor(&srvCpuHandle, mPhotonDensitySrvHeapIndex);
-        mPhotonDensitySrvGpuHandle = mRtContext->createTextureSRVHandle(mPhotonDensityResource.Get(), false, mPhotonDensitySrvHeapIndex);
-    }
+    AllocateRTVTexture(device, DXGI_FORMAT_R32G32B32A32_FLOAT, width, height, mPhotonSplat[0].Resource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, L"PhotonSplatResultColorDirX");
+    CreateTextureRTV(device, mRtvDescriptorHeap.get(), mPhotonSplat[0]);
 
-    AllocateRTVTexture(device, DXGI_FORMAT_R32G32B32A32_FLOAT, width, height, mPhotonSplatTargetResource[0].ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, L"PhotonSplatResultColorDirX");
-    CreateRenderTargetView(device, mPhotonSplatTargetResource[0].Get(), mRtvDescriptorHeap.get(), mPhotonSplatRtvCpuHandle[0]);
+    AllocateRTVTexture(device, DXGI_FORMAT_R32G32_FLOAT, width, height, mPhotonSplat[1].Resource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, L"PhotonSplatResultDirYZ");
+    CreateTextureRTV(device, mRtvDescriptorHeap.get(), mPhotonSplat[1]);
 
-    AllocateRTVTexture(device, DXGI_FORMAT_R32G32_FLOAT, width, height, mPhotonSplatTargetResource[1].ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, L"PhotonSplatResultDirYZ");
-    CreateRenderTargetView(device, mPhotonSplatTargetResource[1].Get(), mRtvDescriptorHeap.get(), mPhotonSplatRtvCpuHandle[1]);
+    AllocateRTVTexture(device, mGBufferFormats.at(GBufferID::Normal), width, height, mGBuffer[GBufferID::Normal].Resource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, L"G buffer normals");
+    CreateTextureRTV(device, mRtvDescriptorHeap.get(), mGBuffer[GBufferID::Normal]);
+    CreateTextureSRV(mRtContext, mGBuffer[GBufferID::Normal]);
 
-    AllocateRTVTexture(device, mGBufferFormats.at(GBufferID::Normal), width, height, mGBufferResource[GBufferID::Normal].ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, L"G buffer normals");
-    CreateRenderTargetView(device, mGBufferResource[GBufferID::Normal].Get(), mRtvDescriptorHeap.get(), mGBufferTargetCpuHandle[GBufferID::Normal]);
+    AllocateRTVTexture(device, mGBufferFormats.at(GBufferID::Albedo), width, height, mGBuffer[GBufferID::Albedo].Resource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, L"G buffer flux");
+    CreateTextureRTV(device, mRtvDescriptorHeap.get(), mGBuffer[GBufferID::Albedo]);
+    CreateTextureSRV(mRtContext, mGBuffer[GBufferID::Albedo]);
 
-    {
-        D3D12_CPU_DESCRIPTOR_HANDLE srvCpuHandle;
-        mGBufferSrvHeapIndex[GBufferID::Normal] = mRtContext->allocateDescriptor(&srvCpuHandle, mGBufferSrvHeapIndex[GBufferID::Normal]);
-        mGBufferSrvGpuHandle[GBufferID::Normal] = mRtContext->createTextureSRVHandle(mGBufferResource[GBufferID::Normal].Get(), false, mGBufferSrvHeapIndex[GBufferID::Normal]);
-    }
-
-    AllocateRTVTexture(device, mGBufferFormats.at(GBufferID::Albedo), width, height, mGBufferResource[GBufferID::Albedo].ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, L"G buffer flux");
-    CreateRenderTargetView(device, mGBufferResource[GBufferID::Albedo].Get(), mRtvDescriptorHeap.get(), mGBufferTargetCpuHandle[GBufferID::Albedo]);
-
-    {
-        D3D12_CPU_DESCRIPTOR_HANDLE srvCpuHandle;
-        mGBufferSrvHeapIndex[GBufferID::Albedo] = mRtContext->allocateDescriptor(&srvCpuHandle, mGBufferSrvHeapIndex[GBufferID::Albedo]);
-        mGBufferSrvGpuHandle[GBufferID::Albedo] = mRtContext->createTextureSRVHandle(mGBufferResource[GBufferID::Albedo].Get(), false, mGBufferSrvHeapIndex[GBufferID::Albedo]);
-    }
-
-    AllocateDepthTexture(device, width, height, mGBufferResource[GBufferID::Depth].ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, L"G buffer depth");
+    AllocateDepthTexture(device, width, height, mGBuffer[GBufferID::Depth].Resource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, L"G buffer depth");
 
     {
         D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
         dsvDesc.Format = DXGI_FORMAT_D32_FLOAT;
         dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
 
-        mGBufferTargetCpuHandle[GBufferID::Depth] = mDsvDescriptorHeap->GetCpuHandle(0);
-        device->CreateDepthStencilView(mGBufferResource[GBufferID::Depth].Get(), &dsvDesc, mGBufferTargetCpuHandle[GBufferID::Depth]);
+        mGBuffer[GBufferID::Depth].Dsv.cpuHandle = mDsvDescriptorHeap->GetCpuHandle(0);
+        device->CreateDepthStencilView(mGBuffer[GBufferID::Depth].Resource.Get(), &dsvDesc, mGBuffer[GBufferID::Depth].Dsv.cpuHandle);
     }
 
     {
@@ -629,41 +609,11 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
         srvDesc.Texture2D.MipLevels = -1;
 
         D3D12_CPU_DESCRIPTOR_HANDLE srvCpuHandle;
-        mGBufferSrvHeapIndex[GBufferID::Depth] = mRtContext->allocateDescriptor(&srvCpuHandle, mGBufferSrvHeapIndex[GBufferID::Depth]);
-        mGBufferSrvGpuHandle[GBufferID::Depth] = mRtContext->getDescriptorGPUHandle(mGBufferSrvHeapIndex[GBufferID::Depth]);
-        device->CreateShaderResourceView(mGBufferResource[GBufferID::Depth].Get(), &srvDesc, srvCpuHandle);
+        mGBuffer[GBufferID::Depth].Srv.heapIndex = mRtContext->allocateDescriptor(&srvCpuHandle, mGBuffer[GBufferID::Depth].Srv.heapIndex);
+        mGBuffer[GBufferID::Depth].Srv.gpuHandle = mRtContext->getDescriptorGPUHandle(mGBuffer[GBufferID::Depth].Srv.heapIndex);
+        mGBuffer[GBufferID::Depth].Srv.cpuHandle = srvCpuHandle;
+        device->CreateShaderResourceView(mGBuffer[GBufferID::Depth].Resource.Get(), &srvDesc, srvCpuHandle);
     }
-}
-
-void HybridPipeline::createClearableUav(ID3D12Resource* pResource, const D3D12_UNORDERED_ACCESS_VIEW_DESC* uavDesc, D3D12_GPU_DESCRIPTOR_HANDLE uavHandle)
-{
-    auto device = mRtContext->getDevice();
-
-    auto uavCpuHandle = mCpuOnlyDescriptorHeap->GetCpuHandle(mCpuOnlyDescriptorHeap->Allocate());
-    device->CreateUnorderedAccessView(pResource, nullptr, uavDesc, uavCpuHandle);
-
-    mClearableUavs.push_back({ uavHandle, uavCpuHandle, pResource });
-}
-
-inline void clearUav(ID3D12GraphicsCommandList* commandList, D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle, D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle, ID3D12Resource* pResource)
-{
-    const UINT clear[4] = { 0 };
-    commandList->ClearUnorderedAccessViewUint(gpuHandle, cpuHandle, pResource, clear, 0, nullptr);
-}
-
-void HybridPipeline::clearUavs()
-{
-    auto commandList = mRtContext->getCommandList();
-
-    for (auto const& uav : mClearableUavs) {
-        clearUav(commandList, uav.gpuHandle, uav.cpuHandle, uav.pResource);
-    }
-}
-
-inline void clearRtv(ID3D12GraphicsCommandList* commandList, D3D12_CPU_DESCRIPTOR_HANDLE handle)
-{
-    const float clearZero[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-    commandList->ClearRenderTargetView(handle, clearZero, 0, nullptr);
 }
 
 inline void calculateCameraVariables(Math::Camera &camera, float aspectRatio, XMFLOAT4 *U, XMFLOAT4 *V, XMFLOAT4 *W)
@@ -873,18 +823,18 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
 
         std::initializer_list<D3D12_RESOURCE_BARRIER> barriers =
         {
-            CD3DX12_RESOURCE_BARRIER::Transition(mGBufferResource[GBufferID::Normal].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET),
+            CD3DX12_RESOURCE_BARRIER::Transition(mGBuffer[GBufferID::Normal].Resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET),
             //CD3DX12_RESOURCE_BARRIER::Transition(mGBufferResource[GBufferID::Albedo].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET),
-            CD3DX12_RESOURCE_BARRIER::Transition(mGBufferResource[GBufferID::Depth].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE),
+            CD3DX12_RESOURCE_BARRIER::Transition(mGBuffer[GBufferID::Depth].Resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE),
         };
         auto transitions = ScopedBarrier(commandList, barriers);
 
         commandList->SetPipelineState(mGBufferPass.stateObject.Get());
 
-        clearRtv(commandList, mGBufferTargetCpuHandle[GBufferID::Normal]);
+        clearRtv(commandList, mGBuffer[GBufferID::Normal]);
         //clearRtv(commandList, mGBufferTargetCpuHandle[GBufferID::Albedo]);
-        commandList->ClearDepthStencilView(mGBufferTargetCpuHandle[GBufferID::Depth], D3D12_CLEAR_FLAG_DEPTH, 0.0f, 0, 0, nullptr);
-        commandList->OMSetRenderTargets(1, &mGBufferTargetCpuHandle[GBufferID::Normal], FALSE, &mGBufferTargetCpuHandle[GBufferID::Depth]);
+        commandList->ClearDepthStencilView(mGBuffer[GBufferID::Depth].Dsv.cpuHandle, D3D12_CLEAR_FLAG_DEPTH, 0.0f, 0, 0, nullptr);
+        commandList->OMSetRenderTargets(1, &mGBuffer[GBufferID::Normal].Rtv.cpuHandle, FALSE, &mGBuffer[GBufferID::Depth].Dsv.cpuHandle);
 
         // Set necessary state.
         mRtContext->bindDescriptorHeap();
@@ -961,17 +911,17 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
         mRtContext->bindDescriptorHeap();
         commandList->SetComputeRootSignature(program->getGlobalRootSignature());
         commandList->SetComputeRootConstantBufferView(GlobalRootSignatureParams::PerFrameConstantsSlot, mConstantBuffer.GpuVirtualAddress(frameIndex));
-        commandList->SetComputeRootDescriptorTable(GlobalRootSignatureParams::OutputViewSlot, mPhotonSeedUavGpuHandle);
+        commandList->SetComputeRootDescriptorTable(GlobalRootSignatureParams::OutputViewSlot, mPhotonSeed.Uav.gpuHandle);
         commandList->SetComputeRootShaderResourceView(GlobalRootSignatureParams::PhotonSourcesSRVSlot, mPhotonEmitters.GpuVirtualAddress());
         mRtContext->getFallbackCommandList()->SetTopLevelAccelerationStructure(GlobalRootSignatureParams::AccelerationStructureSlot, mRtScene->getTlasWrappedPtr());
 
         mRtContext->raytrace(mRtBindings, mRtState, maxSamples, numLights, 1);
 
-        mRtContext->insertUAVBarrier(mPhotonSeedResource.Get());
+        mRtContext->insertUAVBarrier(mPhotonSeed.Resource.Get());
 
         // copy photons emitted on CPU to the buffer
-        mRtContext->transitionResource(mPhotonSeedResource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_DEST);
-        commandList->CopyBufferRegion(mPhotonSeedResource.Get(), mSamplesGpu * sizeof(Photon), mPhotonUploadBuffer.GetResource().Get(), 0, mSamplesCpu * sizeof(Photon));
+        mRtContext->transitionResource(mPhotonSeed.Resource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_DEST);
+        commandList->CopyBufferRegion(mPhotonSeed.Resource.Get(), mSamplesGpu * sizeof(Photon), mPhotonUploadBuffer.GetResource().Get(), 0, mSamplesCpu * sizeof(Photon));
 
         pass = Pass::PhotonTracing;
         return;
@@ -1007,27 +957,27 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
             }
         }
 
-        mRtContext->transitionResource(mPhotonSeedResource.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        mRtContext->transitionResource(mPhotonSeed.Resource.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         mRtBindings->apply(mRtContext, mRtState);
 
-        clearUavs();
+        clearUav(commandList, mPhotonDensity);
 
         // Set global root arguments
         mRtContext->bindDescriptorHeap();
         commandList->SetComputeRootSignature(program->getGlobalRootSignature());
         commandList->SetComputeRootConstantBufferView(GlobalRootSignatureParams::PerFrameConstantsSlot, mConstantBuffer.GpuVirtualAddress(frameIndex));
-        commandList->SetComputeRootDescriptorTable(GlobalRootSignatureParams::OutputViewSlot, mPhotonMapUavGpuHandle);
-        commandList->SetComputeRootDescriptorTable(GlobalRootSignatureParams::PhotonDensityOutputViewSlot, mPhotonDensityUavGpuHandle);
+        commandList->SetComputeRootDescriptorTable(GlobalRootSignatureParams::OutputViewSlot, mPhotonMap.Uav.gpuHandle);
+        commandList->SetComputeRootDescriptorTable(GlobalRootSignatureParams::PhotonDensityOutputViewSlot, mPhotonDensity.Uav.gpuHandle);
         commandList->SetComputeRootDescriptorTable(GlobalRootSignatureParams::MaterialTextureSrvSlot, mTextureSrvGpuHandles[2]);
         commandList->SetComputeRootShaderResourceView(GlobalRootSignatureParams::MaterialTextureParamsSlot, mTextureParams.GpuVirtualAddress());
-        commandList->SetComputeRootDescriptorTable(GlobalRootSignatureParams::PhotonSourcesSRVSlot, mPhotonSeedSrvGpuHandle);
+        commandList->SetComputeRootDescriptorTable(GlobalRootSignatureParams::PhotonSourcesSRVSlot, mPhotonSeed.Srv.gpuHandle);
         commandList->SetComputeRootConstantBufferView(GlobalRootSignatureParams::PhotonMappingConstantsSlot, mPhotonMappingConstants.GpuVirtualAddress());
         mRtContext->getFallbackCommandList()->SetTopLevelAccelerationStructure(GlobalRootSignatureParams::AccelerationStructureSlot, mRtScene->getTlasWrappedPtr());
 
         mRtContext->raytrace(mRtBindings, mRtState, mSamplesCpu + mSamplesGpu, 1, 1);
 
-        mRtContext->insertUAVBarrier(mPhotonMapResource.Get());
-        mRtContext->transitionResource(mPhotonSeedResource.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        mRtContext->insertUAVBarrier(mPhotonMap.Resource.Get());
+        mRtContext->transitionResource(mPhotonSeed.Resource.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
         mRtContext->transitionResource(mPhotonMapCounter.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
         commandList->CopyResource(mPhotonMapCounterReadback.Get(), mPhotonMapCounter.Get());
@@ -1055,10 +1005,10 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
 
         std::initializer_list<D3D12_RESOURCE_BARRIER> barriers =
         {
-            CD3DX12_RESOURCE_BARRIER::Transition(mPhotonMapResource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
-            CD3DX12_RESOURCE_BARRIER::Transition(mPhotonDensityResource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
-            CD3DX12_RESOURCE_BARRIER::Transition(mPhotonSplatTargetResource[0].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET),
-            CD3DX12_RESOURCE_BARRIER::Transition(mPhotonSplatTargetResource[1].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET),
+            CD3DX12_RESOURCE_BARRIER::Transition(mPhotonMap.Resource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+            CD3DX12_RESOURCE_BARRIER::Transition(mPhotonDensity.Resource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+            CD3DX12_RESOURCE_BARRIER::Transition(mPhotonSplat[0].Resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET),
+            CD3DX12_RESOURCE_BARRIER::Transition(mPhotonSplat[1].Resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET),
         };
         auto transitions = ScopedBarrier(commandList, barriers);
 
@@ -1068,16 +1018,22 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
         commandList->RSSetScissorRects(1, &scissorRect);
 
         commandList->SetGraphicsRootSignature(mPhotonSplattingPass.rootSignature.Get());
-        commandList->SetGraphicsRootDescriptorTable(0, mPhotonMapSrvGpuHandle);
-        commandList->SetGraphicsRootDescriptorTable(1, mPhotonDensitySrvGpuHandle);
+        commandList->SetGraphicsRootDescriptorTable(0, mPhotonMap.Srv.gpuHandle);
+        commandList->SetGraphicsRootDescriptorTable(1, mPhotonDensity.Srv.gpuHandle);
         commandList->SetGraphicsRootConstantBufferView(2, mRasterConstantsBuffer.GpuVirtualAddress(frameIndex));
         commandList->SetGraphicsRootConstantBufferView(3, mPhotonMappingConstants.GpuVirtualAddress());
-        commandList->SetGraphicsRootDescriptorTable(4, mGBufferSrvGpuHandle[GBufferID::Depth]);
+        commandList->SetGraphicsRootDescriptorTable(4, mGBuffer[GBufferID::Depth].Srv.gpuHandle);
 
-        commandList->OMSetRenderTargets(ARRAYSIZE(mPhotonSplatRtvCpuHandle), mPhotonSplatRtvCpuHandle, FALSE, nullptr);
+        D3D12_CPU_DESCRIPTOR_HANDLE targets[] =
+        {
+            mPhotonSplat[0].Rtv.cpuHandle,
+            mPhotonSplat[1].Rtv.cpuHandle,
+        };
 
-        clearRtv(commandList, mPhotonSplatRtvCpuHandle[0]);
-        clearRtv(commandList, mPhotonSplatRtvCpuHandle[1]);
+        commandList->OMSetRenderTargets(ARRAYSIZE(targets), targets, FALSE, nullptr);
+
+        clearRtv(commandList, mPhotonSplat[0]);
+        clearRtv(commandList, mPhotonSplat[1]);
 
         commandList->SetPipelineState(mPhotonSplattingPass.stateObject.Get());
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Helpers/DirectXRaytracingHelper.h"
+#include "utils/DirectXHelper.h"
 #include "RasterHlslCompat.h"
 #include "RaytracingHlslCompat.h"
 #include "RaytracingPipeline.h"
@@ -36,17 +37,15 @@ public:
     virtual void setScene(DXRFramework::RtScene::SharedPtr scene) override;
 
     virtual int getNumOutputs() override { return 1; }
-    virtual ID3D12Resource *getOutputResource(UINT id) override { return mOutputResource.Get(); }
-    virtual D3D12_GPU_DESCRIPTOR_HANDLE getOutputUavHandle(UINT id) override { return mOutputUavGpuHandle; }
-    virtual D3D12_GPU_DESCRIPTOR_HANDLE getOutputSrvHandle(UINT id) override { return mOutputSrvGpuHandle; }
+    virtual ID3D12Resource *getOutputResource(UINT id) override { return mOutput.Resource.Get(); }
+    virtual D3D12_GPU_DESCRIPTOR_HANDLE getOutputUavHandle(UINT id) override { return mOutputUav.gpuHandle; }
+    virtual D3D12_GPU_DESCRIPTOR_HANDLE getOutputSrvHandle(UINT id) override { return mOutput.Srv.gpuHandle; }
 
     virtual bool *isActive() override { return &mActive; }
     virtual const char *getName() override { return "Hybrid Pipeline"; }
 private:
     HybridPipeline(DXRFramework::RtContext::SharedPtr context);
 
-    void createClearableUav(ID3D12Resource* pResource, const D3D12_UNORDERED_ACCESS_VIEW_DESC * uavDesc, D3D12_GPU_DESCRIPTOR_HANDLE uavHandle);
-    void clearUavs();
     void collectEmitters(UINT& numLights, UINT& maxSamples);
 
     // Pipeline components
@@ -75,12 +74,8 @@ private:
     std::vector<DXTKExtend::GeometricModel::SharedPtr> mRasterScene;
 
     // Resources
-    ComPtr<ID3D12Resource> mOutputResource;
-    UINT mOutputUavHeapIndex = UINT_MAX;
-    UINT mOutputSrvHeapIndex = UINT_MAX;
-    D3D12_GPU_DESCRIPTOR_HANDLE mOutputUavGpuHandle;
-    D3D12_GPU_DESCRIPTOR_HANDLE mOutputSrvGpuHandle;
-    D3D12_CPU_DESCRIPTOR_HANDLE mOutputRtvCpuHandle;
+    OutputResourceView mOutput;
+    ResourceView mOutputUav;
 
     ConstantBuffer<PerFrameConstants> mConstantBuffer;
     StructuredBuffer<DirectionalLightParams> mDirLights;
@@ -94,29 +89,16 @@ private:
 
     StructuredBuffer<PhotonEmitter> mPhotonEmitters;
     StructuredBuffer<Photon> mPhotonUploadBuffer;
-    ComPtr<ID3D12Resource> mPhotonSeedResource;
-    UINT mPhotonSeedUavHeapIndex = UINT_MAX;
-    UINT mPhotonSeedSrvHeapIndex = UINT_MAX;
-    D3D12_GPU_DESCRIPTOR_HANDLE mPhotonSeedUavGpuHandle;
-    D3D12_GPU_DESCRIPTOR_HANDLE mPhotonSeedSrvGpuHandle;
+    OutputResourceView mPhotonSeed;
 
-    ComPtr<ID3D12Resource> mPhotonMapResource;
     ComPtr<ID3D12Resource> mPhotonMapCounter;
     ComPtr<ID3D12Resource> mPhotonMapCounterReadback;
-    UINT mPhotonMapUavHeapIndex = UINT_MAX;
-    UINT mPhotonMapSrvHeapIndex = UINT_MAX;
-    D3D12_GPU_DESCRIPTOR_HANDLE mPhotonMapUavGpuHandle;
-    D3D12_GPU_DESCRIPTOR_HANDLE mPhotonMapSrvGpuHandle;
+    OutputResourceView mPhotonMap;
 
-    ComPtr<ID3D12Resource> mPhotonDensityResource;
-    UINT mPhotonDensityUavHeapIndex = UINT_MAX;
-    UINT mPhotonDensitySrvHeapIndex = UINT_MAX;
-    D3D12_GPU_DESCRIPTOR_HANDLE mPhotonDensityUavGpuHandle;
-    D3D12_GPU_DESCRIPTOR_HANDLE mPhotonDensitySrvGpuHandle;
+    OutputResourceView mPhotonDensity;
 
     DXTKExtend::GeometricModel::SharedPtr mPhotonSplatKernelShape;
-    ComPtr<ID3D12Resource> mPhotonSplatTargetResource[2];
-    D3D12_CPU_DESCRIPTOR_HANDLE mPhotonSplatRtvCpuHandle[2];
+    OutputResourceView mPhotonSplat[2];
 
     enum GBufferID { Normal = 0, Albedo, Depth, Count };
     const std::unordered_map<HybridPipeline::GBufferID, DXGI_FORMAT> mGBufferFormats =
@@ -124,21 +106,10 @@ private:
         { GBufferID::Normal, DXGI_FORMAT_R32G32B32A32_FLOAT },
         { GBufferID::Albedo, DXGI_FORMAT_R32G32B32A32_FLOAT },
     };
-    ComPtr<ID3D12Resource> mGBufferResource[GBufferID::Count];
-    UINT mGBufferSrvHeapIndex[GBufferID::Count];
-    D3D12_GPU_DESCRIPTOR_HANDLE mGBufferSrvGpuHandle[GBufferID::Count];
-    D3D12_CPU_DESCRIPTOR_HANDLE mGBufferTargetCpuHandle[GBufferID::Count];
+    OutputResourceView mGBuffer[GBufferID::Count];
 
-    struct ClearableUAV
-    {
-        D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle;
-        D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle;
-        ID3D12Resource* pResource;
-    };
-    std::vector<ClearableUAV> mClearableUavs;
     ComPtr<ID3D12Resource> zeroResource;
 
-    std::unique_ptr<DirectX::DescriptorPile> mCpuOnlyDescriptorHeap; // for clearing photon map resources
     std::unique_ptr<DirectX::DescriptorPile> mRtvDescriptorHeap;
     std::unique_ptr<DirectX::DescriptorHeap> mDsvDescriptorHeap;
 
