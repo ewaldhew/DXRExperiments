@@ -21,7 +21,7 @@ class HybridPipeline : public RaytracingPipeline
 public:
     using SharedPtr = std::shared_ptr<HybridPipeline>;
 
-    static SharedPtr create(DXRFramework::RtContext::SharedPtr context) { return SharedPtr(new HybridPipeline(context)); }
+    static SharedPtr create(DXRFramework::RtContext::SharedPtr context, DXGI_FORMAT outputFormat) { return SharedPtr(new HybridPipeline(context, outputFormat)); }
     virtual ~HybridPipeline();
 
     virtual void userInterface() override;
@@ -44,7 +44,7 @@ public:
     virtual bool *isActive() override { return &mActive; }
     virtual const char *getName() override { return "Hybrid Pipeline"; }
 private:
-    HybridPipeline(DXRFramework::RtContext::SharedPtr context);
+    HybridPipeline(DXRFramework::RtContext::SharedPtr context, DXGI_FORMAT outputFormat);
 
     void collectEmitters(UINT& numLights, UINT& maxSamples);
 
@@ -66,6 +66,7 @@ private:
     RtPass mRtPhotonMappingPass;
     RasterPass mPhotonSplattingPass;
     RasterPass mGBufferPass;
+    RasterPass mCombinePass;
 
     // Scene description
     DXRFramework::RtScene::SharedPtrMut mRtScene;
