@@ -51,7 +51,7 @@ float uniform_scaling(float3 pos, float ray_length)
     float2 posScreen = ((posClip / posClip.w).xy + 1.f) * 0.5f;
     uint2 tile = uint2(posScreen.x * photonMapConsts.numTiles.x, (1.0 - posScreen.y) * photonMapConsts.numTiles.y);
     int n_p = max(1, photonDensity.Load(int3(tile, 0)));
-    const float n_tile = 1.2f;
+    const float n_tile = 3.2f;
 
     // Equation 24.5
     float a_view = pos.z * pos.z * photonMapConsts.tileAreaConstant;
@@ -91,7 +91,10 @@ kernel_output kernel_modification_for_vertex_position(float3 vertex, float3 n, f
     float3 scaled_n = projected_v_to_n * KERNEL_COMPRESS_FACTOR * o.scaling_uniform;
     o.vertex_position = scaled_u + scaled_t + scaled_n;
 
-    o.ellipse_area = M_PI * o.scaling_uniform  * o.scaling_uniform * o.light_shaping_scale;
+    float min_scale = DYNAMIC_KERNEL_SCALE_MIN * .1f;
+    float min_area = min_scale * min_scale * 1.0f;
+    o.ellipse_area = o.scaling_uniform  * o.scaling_uniform * o.light_shaping_scale;
+    o.ellipse_area /= min_area;
 
     return o;
 }
