@@ -74,7 +74,7 @@ namespace Pass
 
 HybridPipeline::HybridPipeline(RtContext::SharedPtr context, DXGI_FORMAT outputFormat) :
     mRtContext(context),
-    mFrameAccumulationEnabled(true),
+    mFrameAccumulationEnabled(false),
     mAnimationPaused(true),
     mNeedPhotonMap(true),
     mActive(true)
@@ -719,7 +719,7 @@ void HybridPipeline::update(float elapsedTime, UINT elapsedFrames, UINT prevFram
         elapsedTime = 142.0f;
     }
 
-    if (hasCameraMoved(*mCamera, mLastCameraVPMatrix) || !mFrameAccumulationEnabled) {
+    if (hasCameraMoved(*mCamera, mLastCameraVPMatrix)) {
         mAccumCount = 0;
         mLastCameraVPMatrix = mCamera->GetViewProjMatrix();
         mNeedPhotonMap = true;
