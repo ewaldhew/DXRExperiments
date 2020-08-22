@@ -365,8 +365,14 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context, DXGI_FORMAT outputF
     auto msTime = std::chrono::time_point_cast<std::chrono::milliseconds>(now);
     mRng = std::mt19937(uint32_t(msTime.time_since_epoch().count()));
 
-    // Create descriptor heaps for descriptors used in raster passes
+    // Create descriptor heaps for UAV CPU descriptors and render target views
     {
+        D3D12_DESCRIPTOR_HEAP_DESC descriptorHeapDesc = {};
+        descriptorHeapDesc.NumDescriptors = 4;
+        descriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+        mCpuOnlyDescriptorHeap = std::make_unique<DescriptorPile>(device, &descriptorHeapDesc);
+        SetName(mCpuOnlyDescriptorHeap->Heap(), L"CPU-only descriptor heap");
+
         D3D12_DESCRIPTOR_HEAP_DESC rtvDescriptorHeapDesc = {};
         rtvDescriptorHeapDesc.NumDescriptors = 8;
         rtvDescriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
@@ -500,6 +506,14 @@ void HybridPipeline::loadResources(ID3D12CommandQueue *uploadCommandQueue, UINT 
     AllocateUploadBuffer(device, &zero, 4, zeroResource.GetAddressOf());
 }
 
+inline void CreateClearableUAV(ID3D12Device* device, DescriptorPile* heap, OutputResourceView& view, D3D12_UNORDERED_ACCESS_VIEW_DESC const& uavDesc)
+{
+    D3D12_CPU_DESCRIPTOR_HANDLE uavCpuHandle;
+    uavCpuHandle = heap->GetCpuHandle(heap->Allocate());
+    device->CreateUnorderedAccessView(view.Resource.Get(), nullptr, &uavDesc, uavCpuHandle);
+    view.Uav.cpuHandle = uavCpuHandle;
+}
+
 inline void CreateTextureRTV(ID3D12Device* device, DescriptorPile* heap, OutputResourceView& view)
 {
     D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
@@ -614,7 +628,7 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
         device->CreateUnorderedAccessView(mPhotonDensity.Resource.Get(), nullptr, &uavDesc, uavCpuHandle);
 
         mPhotonDensity.Uav.gpuHandle = mRtContext->getDescriptorGPUHandle(mPhotonDensity.Uav.heapIndex);
-        mPhotonDensity.Uav.cpuHandle = uavCpuHandle;
+        CreateClearableUAV(device, mCpuOnlyDescriptorHeap.get(), mPhotonDensity, uavDesc);
     }
 
     AllocateRTVTexture(device, DXGI_FORMAT_R32G32B32A32_FLOAT, width, height, mPhotonSplat[0].Resource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, L"PhotonSplatResultColorDirX");

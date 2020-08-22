@@ -111,6 +111,7 @@ private:
 
     ComPtr<ID3D12Resource> zeroResource;
 
+    std::unique_ptr<DirectX::DescriptorPile> mCpuOnlyDescriptorHeap; // for clearing photon map resources
     std::unique_ptr<DirectX::DescriptorPile> mRtvDescriptorHeap;
     std::unique_ptr<DirectX::DescriptorHeap> mDsvDescriptorHeap;
 
