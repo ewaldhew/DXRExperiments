@@ -15,6 +15,7 @@ struct PerFrameConstantsRaster
     CameraParams cameraParams;
     XMMATRIX WorldToViewMatrix;
     XMMATRIX WorldToViewClipMatrix;
+    XMMATRIX ClipToWorldMatrix;
 };
 
 struct PerObjectConstants

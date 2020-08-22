@@ -315,10 +315,18 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context, DXGI_FORMAT outputF
      *  Combine Pass
      *******************************/
     {
+        D3D12_STATIC_SAMPLER_DESC lightSampler = anisotropicSampler;
+        lightSampler.ShaderRegister = 0;
+        lightSampler.RegisterSpace = 1;
+        lightSampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
         RootSignatureGenerator rsConfig;
-        rsConfig.AddHeapRangesParameter({{0 /* t0 */, 1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // normals
-        rsConfig.AddHeapRangesParameter({{1 /* t1 */, 1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // splat0
-        rsConfig.AddHeapRangesParameter({{2 /* t2 */, 1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // splat1
+        rsConfig.AddHeapRangesParameter({{0 /* t0 */, 1, 1 /* space1 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // normals
+        rsConfig.AddHeapRangesParameter({{1 /* t1 */, 1, 1 /* space1 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // splat0
+        rsConfig.AddHeapRangesParameter({{2 /* t2 */, 1, 1 /* space1 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // splat1
+
+        rsConfig.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_CBV, 0 /* b0 */); // per frame constants
+        rsConfig.AddStaticSampler(lightSampler);
 
         mCombinePass.rootSignature = rsConfig.Generate(device, false);
 
@@ -1093,6 +1101,8 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
         commandList->SetGraphicsRootDescriptorTable(0, mGBuffer[GBufferID::Normal].Srv.gpuHandle);
         commandList->SetGraphicsRootDescriptorTable(1, mPhotonSplat[0].Srv.gpuHandle);
         commandList->SetGraphicsRootDescriptorTable(2, mPhotonSplat[1].Srv.gpuHandle);
+
+        commandList->SetGraphicsRootConstantBufferView(3, mRasterConstantsBuffer.GpuVirtualAddress(frameIndex));
 
         commandList->OMSetRenderTargets(1, &mOutput.Rtv.cpuHandle, FALSE, nullptr);
 
