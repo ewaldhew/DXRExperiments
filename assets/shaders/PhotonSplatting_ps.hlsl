@@ -45,7 +45,6 @@ void main(VSOutput IN, out PSOutput OUT)
     clip(KERNEL_COMPRESS_FACTOR * 1e-3 - d);
 
     float3 power = IN.power;
-    power /= max(power.x, max(power.y, power.z));
     float total_power = dot(power.xyz, float3(1.0f, 1.0f, 1.0f));
     float3 weighted_direction = total_power * IN.direction;
 

@@ -7,9 +7,9 @@ Texture2D<float2> photonSplatDirYZ : register(t2, space1);
 
 SamplerState lightSampler : register(s0, space1);
 
+/*
 float evaluateBrdf(float3 InDir, float3 OutDir, float3 N)
-{ return 1.0f; }
-/*{
+{
     MaterialParams mat = materialParams;
 
     switch (mat.type)
@@ -56,6 +56,6 @@ void main(
     lightDir.yz = photonSplatDirYZ.Load(int3(Pos.xy, 0)).xy;
     lightDir = normalize(lightDir);
 
-    float lightFactor = evaluateBrdf(lightDir, viewDir, normal);
+    float lightFactor = saturate(dot(normal, lightDir)) / M_PI; //evaluateBrdf(lightDir, viewDir, normal);
     Color = float4(photonSplatColorXYZDirX.Sample(lightSampler, Tex).xyz, 1) * lightFactor;
 }
