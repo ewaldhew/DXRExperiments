@@ -122,9 +122,8 @@ private:
     UINT mSamplesCpu;
     UINT mSamplesGpu;
     UINT mNumPhotons; // after tracing
-    bool mFrameAccumulationEnabled;
     bool mAnimationPaused;
-    DebugOptions mShaderDebugOptions;
+    HybridPipelineOptions mShaderOptions;
 
     Math::Matrix4 mLastCameraVPMatrix;
 

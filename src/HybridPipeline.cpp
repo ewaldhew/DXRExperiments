@@ -74,7 +74,6 @@ namespace Pass
 
 HybridPipeline::HybridPipeline(RtContext::SharedPtr context, DXGI_FORMAT outputFormat) :
     mRtContext(context),
-    mFrameAccumulationEnabled(false),
     mAnimationPaused(true),
     mNeedPhotonMap(true),
     mActive(true)
@@ -349,17 +348,14 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context, DXGI_FORMAT outputF
         NAME_D3D12_OBJECT(mCombinePass.stateObject);
     }
 
-    mShaderDebugOptions.maxIterations = 1024;
-    mShaderDebugOptions.cosineHemisphereSampling = true;
-    mShaderDebugOptions.showIndirectDiffuseOnly = false;
-    mShaderDebugOptions.showIndirectSpecularOnly = false;
-    mShaderDebugOptions.showAmbientOcclusionOnly = false;
-    mShaderDebugOptions.showGBufferAlbedoOnly = false;
-    mShaderDebugOptions.showDirectLightingOnly = false;
-    mShaderDebugOptions.showFresnelTerm = false;
-    mShaderDebugOptions.noIndirectDiffuse = false;
-    mShaderDebugOptions.environmentStrength = 1.0f;
-    mShaderDebugOptions.debug = 0;
+    mShaderOptions.photonSplat.kernelScaleMin = 0.01f;
+    mShaderOptions.photonSplat.kernelScaleMax = 1.0f;
+    mShaderOptions.photonSplat.uniformScaleStrength = 3.2f;
+    mShaderOptions.photonSplat.maxLightShapingScale = 5.0f;
+    mShaderOptions.photonSplat.kernelCompressFactor = 0.8f;
+    mShaderOptions.skipPhotonSplatting = false;
+    mShaderOptions.skipPhotonTracing = false;
+    mShaderOptions.useRaytracedVolumeSplatting = false;
 
     auto now = std::chrono::high_resolution_clock::now();
     auto msTime = std::chrono::time_point_cast<std::chrono::milliseconds>(now);
@@ -736,7 +732,7 @@ void HybridPipeline::update(float elapsedTime, UINT elapsedFrames, UINT prevFram
     cameraParams.accumCount = mAccumCount++;
 
     mConstantBuffer->cameraParams = cameraParams;
-    mConstantBuffer->options = mShaderDebugOptions;
+    mConstantBuffer->options = {};
     mConstantBuffer.CopyStagingToGpu(frameIndex);
 
     XMVECTOR dirLightVector = XMVectorSet(0.3f, -0.2f, -1.0f, 0.0f);
@@ -764,6 +760,7 @@ void HybridPipeline::update(float elapsedTime, UINT elapsedFrames, UINT prevFram
     mPhotonMappingConstants.CopyStagingToGpu();
 
     mRasterConstantsBuffer->cameraParams = cameraParams;
+    mRasterConstantsBuffer->options = mShaderOptions;
     mRasterConstantsBuffer->WorldToViewMatrix = mCamera->GetViewMatrix();
     mRasterConstantsBuffer->WorldToViewClipMatrix = mCamera->GetViewProjMatrix();
     mRasterConstantsBuffer.CopyStagingToGpu(frameIndex);
@@ -1144,10 +1141,12 @@ void HybridPipeline::userInterface()
 
     ui::Begin("Material");
     {
-        frameDirty |= ui::SliderFloat3("Albedo", &mMaterials[0].params.albedo.x, 0.0f, 1.0f);
-        frameDirty |= ui::SliderFloat3("Specular", &mMaterials[0].params.specular.x, 0.0f, 1.0f);
-        frameDirty |= ui::SliderFloat("Reflectivity", &mMaterials[0].params.reflectivity, 0.0f, 1.0f);
-        frameDirty |= ui::SliderFloat("Roughness", &mMaterials[0].params.roughness, 0.0f, 1.0f);
+        static int matIdx = 0;
+        ui::SliderInt("Material Index", &matIdx, 0, mMaterials.size() - 1);
+        frameDirty |= ui::SliderFloat3("Albedo", &mMaterials[matIdx].params.albedo.x, 0.0f, 1.0f);
+        frameDirty |= ui::SliderFloat("Reflectivity", &mMaterials[matIdx].params.reflectivity, 0.0f, 1.0f);
+        frameDirty |= ui::SliderFloat("Roughness", &mMaterials[matIdx].params.roughness, 0.0f, 1.0f);
+        frameDirty |= ui::SliderInt("Type", (int*)&mMaterials[matIdx].params.type, 0, MaterialType::Count - 1);
     }
     ui::End();
 
@@ -1157,37 +1156,21 @@ void HybridPipeline::userInterface()
 
         ui::Separator();
 
-        if (ui::Checkbox("Frame Accumulation", &mFrameAccumulationEnabled)) {
-            mAnimationPaused = true;
-            frameDirty = true;
-        }
+        frameDirty |= ui::Checkbox("Skip Tracing", (bool*)&mShaderOptions.skipPhotonTracing);
+        frameDirty |= ui::Checkbox("Skip Splatting", (bool*)&mShaderOptions.skipPhotonSplatting);
+        frameDirty |= ui::Checkbox("Use Raytraced Splatting", (bool*)&mShaderOptions.useRaytracedVolumeSplatting);
 
-        if (mFrameAccumulationEnabled) {
-            UINT currentIterations = min(mAccumCount, mShaderDebugOptions.maxIterations);
-            UINT oldMaxIterations = mShaderDebugOptions.maxIterations;
-            if (ui::SliderInt("Max Iterations", (int*)&mShaderDebugOptions.maxIterations, 1, 2048)) {
-                frameDirty |= (mShaderDebugOptions.maxIterations < mAccumCount);
-                mAccumCount = min(mAccumCount, oldMaxIterations);
-            }
-            ui::ProgressBar(float(currentIterations) / float(mShaderDebugOptions.maxIterations), ImVec2(), std::to_string(currentIterations).c_str());
-        }
+        ui::Separator();
+        ui::Text("Splatting Parameters");
+
+        frameDirty |= ui::DragFloatRange2("Uniform Scale Min/Max", &mShaderOptions.photonSplat.kernelScaleMin, &mShaderOptions.photonSplat.kernelScaleMax, 0.01f, 0.01f, 2.0f);
+        frameDirty |= ui::SliderFloat("Uniform Scale Strength", &mShaderOptions.photonSplat.uniformScaleStrength, 0.5f, 100.0f);
+        frameDirty |= ui::SliderFloat("Light Shaping Max", &mShaderOptions.photonSplat.maxLightShapingScale, 1.0f, 10.0f);
+        frameDirty |= ui::SliderFloat("Kernel Compress", &mShaderOptions.photonSplat.kernelCompressFactor, 0.3f, 1.0f);
 
         ui::Separator();
 
-        frameDirty |= ui::Checkbox("Cosine Hemisphere Sampling", (bool*)&mShaderDebugOptions.cosineHemisphereSampling);
-        frameDirty |= ui::Checkbox("Indirect Diffuse Only", (bool*)&mShaderDebugOptions.showIndirectDiffuseOnly);
-        frameDirty |= ui::Checkbox("Indirect Specular Only", (bool*)&mShaderDebugOptions.showIndirectSpecularOnly);
-        frameDirty |= ui::Checkbox("Ambient Occlusion Only", (bool*)&mShaderDebugOptions.showAmbientOcclusionOnly);
-        frameDirty |= ui::Checkbox("GBuffer Albedo Only", (bool*)&mShaderDebugOptions.showGBufferAlbedoOnly);
-        frameDirty |= ui::Checkbox("Direct Lighting Only", (bool*)&mShaderDebugOptions.showDirectLightingOnly);
-        frameDirty |= ui::Checkbox("Fresnel Term Only", (bool*)&mShaderDebugOptions.showFresnelTerm);
-        frameDirty |= ui::Checkbox("No Indirect Diffuse", (bool*)&mShaderDebugOptions.noIndirectDiffuse);
-        frameDirty |= ui::SliderFloat("Environment Strength", &mShaderDebugOptions.environmentStrength, 0.0f, 10.0f);
-        frameDirty |= ui::SliderInt("Debug", (int*)&mShaderDebugOptions.debug, 0, 2);
-
-        ui::Separator();
-
-        ui::Text("Press space to toggle first person camera");
+        ui::Text("Press F to toggle first person camera");
     }
     ui::End();
 
