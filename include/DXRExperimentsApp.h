@@ -32,6 +32,7 @@ private:
 
     std::shared_ptr<Math::Camera> mCamera;
     std::shared_ptr<GameCore::CameraController> mCamController;
+    std::vector<std::function<void(Math::Camera*)>> mCameraStateSetters;
 
     DXRFramework::RtContext::SharedPtr mRtContext;
     DXRFramework::RtScene::SharedPtrMut mRtScene;
@@ -43,6 +44,7 @@ private:
 
     DenoiseCompositor::SharedPtr mDenoiser;
 
+    void SetCameraPreset(UINT idx);
     void InitRaytracing();
     void BlitToBackbuffer(
         ID3D12Resource *textureResource,

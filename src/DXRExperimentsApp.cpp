@@ -59,12 +59,17 @@ void DXRExperimentsApp::OnInit()
     #endif
 
     // Setup camera states
+    mCameraStateSetters.push_back([](auto mCamera){
+        mCamera->SetEyeAtUp(Math::Vector3(0.0, 0.0, 35.5), Math::Vector3(0.0, 0.0, 1.0), Math::Vector3(Math::kYUnitVector));
+    });
+    mCameraStateSetters.push_back([](auto mCamera) {
+        mCamera->SetEyeAtUp(Math::Vector3(0.0, 0.0, -35.5), Math::Vector3(0.0, 0.0, 1.0), Math::Vector3(Math::kYUnitVector));
+    });
+
     mCamera.reset(new Math::Camera());
     mCamera->SetAspectRatio(1.0f / m_aspectRatio);
-    mCamera->SetEyeAtUp(Math::Vector3(0.0, 0.0, 35.5), Math::Vector3(0.0, 0.0, 1.0), Math::Vector3(Math::kYUnitVector));
     mCamera->SetZRange(1.0f, 10000.0f);
-    mCamController.reset(new GameCore::CameraController(*mCamera, mCamera->GetUpVec()));
-    mCamController->EnableFirstPersonMouse(false);
+    SetCameraPreset(0);
 
     InitRaytracing();
 
@@ -75,6 +80,13 @@ void DXRExperimentsApp::OnInit()
         D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = mRtContext->getDescriptorGPUHandle(heapOffset);
         return std::make_pair(cpuHandle, gpuHandle);
     });
+}
+
+void DXRExperimentsApp::SetCameraPreset(UINT idx)
+{
+    mCameraStateSetters[idx](mCamera.get());
+    mCamController.reset(new GameCore::CameraController(*mCamera, mCamera->GetUpVec()));
+    mCamController->EnableFirstPersonMouse(false);
 }
 
 void DXRExperimentsApp::InitRaytracing()
@@ -226,6 +238,15 @@ void DXRExperimentsApp::OnUpdate()
     mCamController->Update(deltaTime);
 
     {
+        for (int i = 0; i < mCameraStateSetters.size(); i++) {
+            if (ui::SmallButton(std::to_string(i).c_str())) {
+                SetCameraPreset(i);
+            }
+            ui::SameLine();
+        }
+        ui::Text("Camera Presets");
+        ui::Separator();
+
         if (ui::Combo("Pipeline Select", &mActivePipelineIndex, mPipelineNames.data(), static_cast<int>(mRaytracingPipelines.size()))) {
             mActiveRaytracingPipeline = mRaytracingPipelines[mActivePipelineIndex].get();
         }
