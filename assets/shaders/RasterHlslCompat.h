@@ -10,9 +10,27 @@ using namespace DirectX;
 
 #include "CommonHlslCompat.h"
 
+struct PhotonSplattingOptions
+{
+    float kernelScaleMin;
+    float kernelScaleMax;
+    float uniformScaleStrength;
+    float maxLightShapingScale;
+    float kernelCompressFactor;
+};
+
+struct HybridPipelineOptions
+{
+    PhotonSplattingOptions photonSplat;
+    UINT useRaytracedVolumeSplatting;
+    UINT skipPhotonTracing;
+    UINT skipPhotonSplatting;
+};
+
 struct PerFrameConstantsRaster
 {
     CameraParams cameraParams;
+    HybridPipelineOptions options;
     XMMATRIX WorldToViewMatrix;
     XMMATRIX WorldToViewClipMatrix;
 };

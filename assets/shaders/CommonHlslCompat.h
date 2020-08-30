@@ -28,21 +28,6 @@ struct CameraParams
     XMFLOAT2 padding;
 };
 
-struct DebugOptions
-{
-    UINT maxIterations;
-    UINT cosineHemisphereSampling;
-    UINT showIndirectDiffuseOnly;
-    UINT showIndirectSpecularOnly;
-    UINT showAmbientOcclusionOnly;
-    UINT showGBufferAlbedoOnly;
-    UINT showDirectLightingOnly;
-    UINT showFresnelTerm;
-    UINT noIndirectDiffuse;
-    float environmentStrength;
-    UINT debug;
-};
-
 struct ProceduralPrimitiveAttributes
 {
     XMFLOAT3 normal;
@@ -71,6 +56,8 @@ namespace MaterialType {
 
         DiffuseTexture,
         ParticipatingMedia,
+
+        Count,
     };
 }
 #else
