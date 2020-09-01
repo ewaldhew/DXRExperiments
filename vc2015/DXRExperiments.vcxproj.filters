@@ -57,6 +57,33 @@
     <Filter Include="Libs\DXTKExtend\Util">
       <UniqueIdentifier>{5aa80caf-6103-4b78-9bc4-0d787a535804}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Assets\Shaders\Effects">
+      <UniqueIdentifier>{350244b3-1044-41bc-ab77-c69f296df8a2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Assets\Shaders\Effects\RT">
+      <UniqueIdentifier>{8d1d90bc-30df-4468-9033-e54dc3fd9c40}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Assets\Shaders\Shared">
+      <UniqueIdentifier>{de86f0bf-7d45-4928-af56-6df4ad54cb62}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Assets\Shaders\Shared\Headers">
+      <UniqueIdentifier>{17d086ef-8e11-4922-9a9d-e596eb038afc}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Assets\Shaders\Passes">
+      <UniqueIdentifier>{7873e278-f232-402a-8dc4-1e97aab0b566}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Assets\Shaders\Passes\Denoise">
+      <UniqueIdentifier>{6b80b872-7d09-49b1-ac8f-f7cefb76e7c4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Assets\Shaders\Passes\Hybrid Pipeline">
+      <UniqueIdentifier>{df9098cd-5ac6-4909-a6d2-de07f576aa69}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Assets\Shaders\Passes\Single-pass RT">
+      <UniqueIdentifier>{3577158d-8bd9-4c48-8f17-c396dde0e589}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Assets\Shaders\Effects\Procedural Primitives">
+      <UniqueIdentifier>{b3ffdd39-395e-4fdb-9cdb-98c529e26ca0}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\include\utils\StepTimer.h">
@@ -70,12 +97,6 @@
     </ClInclude>
     <ClInclude Include="..\include\utils\DXSample.h">
       <Filter>Header Files\Utils</Filter>
-    </ClInclude>
-    <ClInclude Include="..\assets\shaders\RaytracingHlslCompat.h">
-      <Filter>Assets\Shaders</Filter>
-    </ClInclude>
-    <ClInclude Include="..\assets\shaders\HlslCompat.h">
-      <Filter>Assets\Shaders</Filter>
     </ClInclude>
     <ClInclude Include="..\include\DXRExperimentsApp.h">
       <Filter>Header Files</Filter>
@@ -443,11 +464,17 @@
     <ClInclude Include="..\libs\DXTKExtend\Util\DirectXHelper.h">
       <Filter>Libs\DXTKExtend\Util</Filter>
     </ClInclude>
-    <ClInclude Include="..\assets\shaders\RasterHlslCompat.h">
-      <Filter>Assets\Shaders</Filter>
-    </ClInclude>
     <ClInclude Include="..\assets\shaders\CommonHlslCompat.h">
-      <Filter>Assets\Shaders</Filter>
+      <Filter>Assets\Shaders\Shared\Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\assets\shaders\HlslCompat.h">
+      <Filter>Assets\Shaders\Shared\Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\assets\shaders\RasterHlslCompat.h">
+      <Filter>Assets\Shaders\Shared\Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\assets\shaders\RaytracingHlslCompat.h">
+      <Filter>Assets\Shaders\Shared\Headers</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -564,88 +591,88 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="..\assets\shaders\RaytracingUtils.hlsli">
-      <Filter>Assets\Shaders</Filter>
-    </None>
     <None Include="..\libs\MiniEngine\Math\Functions.inl">
       <Filter>Libs\MiniEngine\Math</Filter>
     </None>
     <None Include="..\assets\shaders\BilateralFilter.hlsli">
-      <Filter>Assets\Shaders</Filter>
-    </None>
-    <None Include="..\assets\shaders\RaytracingCommon.hlsli">
-      <Filter>Assets\Shaders</Filter>
+      <Filter>Assets\Shaders\Passes\Denoise</Filter>
     </None>
     <None Include="..\assets\shaders\DenoiseCommon.hlsli">
-      <Filter>Assets\Shaders</Filter>
-    </None>
-    <None Include="..\assets\shaders\VolumetricPrimitives.hlsli">
-      <Filter>Assets\Shaders</Filter>
+      <Filter>Assets\Shaders\Passes\Denoise</Filter>
     </None>
     <None Include="..\assets\shaders\AnalyticPrimitives.hlsli">
-      <Filter>Assets\Shaders</Filter>
+      <Filter>Assets\Shaders\Effects\Procedural Primitives</Filter>
     </None>
     <None Include="..\assets\shaders\ProceduralPrimitivesLibrary.hlsli">
-      <Filter>Assets\Shaders</Filter>
-    </None>
-    <None Include="..\assets\shaders\RaytracingShaderHelper.hlsli">
-      <Filter>Assets\Shaders</Filter>
-    </None>
-    <None Include="..\assets\shaders\SignedDistanceFractals.hlsli">
-      <Filter>Assets\Shaders</Filter>
+      <Filter>Assets\Shaders\Effects\Procedural Primitives</Filter>
     </None>
     <None Include="..\assets\shaders\SignedDistancePrimitives.hlsli">
-      <Filter>Assets\Shaders</Filter>
+      <Filter>Assets\Shaders\Effects\Procedural Primitives</Filter>
     </None>
-    <None Include="..\assets\shaders\ProceduralPrimitives.hlsli">
-      <Filter>Assets\Shaders</Filter>
+    <None Include="..\assets\shaders\VolumetricPrimitives.hlsli">
+      <Filter>Assets\Shaders\Effects\Procedural Primitives</Filter>
+    </None>
+    <None Include="..\assets\shaders\SignedDistanceFractals.hlsli">
+      <Filter>Assets\Shaders\Effects\Procedural Primitives</Filter>
+    </None>
+    <None Include="..\assets\shaders\RaytracingShaderHelper.hlsli">
+      <Filter>Assets\Shaders\Effects\Procedural Primitives</Filter>
     </None>
     <None Include="..\assets\shaders\ParticipatingMedia.hlsli">
-      <Filter>Assets\Shaders</Filter>
+      <Filter>Assets\Shaders\Effects\RT</Filter>
+    </None>
+    <None Include="..\assets\shaders\ProceduralPrimitives.hlsli">
+      <Filter>Assets\Shaders\Effects\RT</Filter>
+    </None>
+    <None Include="..\assets\shaders\RaytracingUtils.hlsli">
+      <Filter>Assets\Shaders\Shared</Filter>
     </None>
     <None Include="..\assets\shaders\RasterCommon.hlsli">
-      <Filter>Assets\Shaders</Filter>
+      <Filter>Assets\Shaders\Shared</Filter>
+    </None>
+    <None Include="..\assets\shaders\RaytracingCommon.hlsli">
+      <Filter>Assets\Shaders\Shared</Filter>
     </None>
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="..\assets\shaders\RealtimeRaytracing.hlsl">
-      <Filter>Assets\Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="..\assets\shaders\ProgressiveRaytracing.hlsl">
-      <Filter>Assets\Shaders</Filter>
-    </FxCompile>
     <FxCompile Include="..\assets\shaders\DenoiseCompositorH.hlsl">
-      <Filter>Assets\Shaders</Filter>
+      <Filter>Assets\Shaders\Passes\Denoise</Filter>
     </FxCompile>
     <FxCompile Include="..\assets\shaders\DenoiseCompositorV.hlsl">
-      <Filter>Assets\Shaders</Filter>
+      <Filter>Assets\Shaders\Passes\Denoise</Filter>
+    </FxCompile>
+    <FxCompile Include="..\assets\shaders\RealtimeRaytracing.hlsl">
+      <Filter>Assets\Shaders\Passes\Single-pass RT</Filter>
+    </FxCompile>
+    <FxCompile Include="..\assets\shaders\ProgressiveRaytracing.hlsl">
+      <Filter>Assets\Shaders\Passes\Single-pass RT</Filter>
     </FxCompile>
     <FxCompile Include="..\assets\shaders\ProgressivePathtracing.hlsl">
-      <Filter>Assets\Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="..\assets\shaders\PhotonTracing.hlsl">
-      <Filter>Assets\Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="..\assets\shaders\PhotonEmission.hlsl">
-      <Filter>Assets\Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="..\assets\shaders\PhotonSplatting_ps.hlsl">
-      <Filter>Assets\Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="..\assets\shaders\PhotonSplatting_vs.hlsl">
-      <Filter>Assets\Shaders</Filter>
+      <Filter>Assets\Shaders\Passes\Single-pass RT</Filter>
     </FxCompile>
     <FxCompile Include="..\assets\shaders\GBuffer_ps.hlsl">
-      <Filter>Assets\Shaders</Filter>
+      <Filter>Assets\Shaders\Passes\Hybrid Pipeline</Filter>
     </FxCompile>
     <FxCompile Include="..\assets\shaders\GBuffer_vs.hlsl">
-      <Filter>Assets\Shaders</Filter>
+      <Filter>Assets\Shaders\Passes\Hybrid Pipeline</Filter>
     </FxCompile>
     <FxCompile Include="..\assets\shaders\PhotonLightingCombine_ps.hlsl">
-      <Filter>Assets\Shaders</Filter>
+      <Filter>Assets\Shaders\Passes\Hybrid Pipeline</Filter>
     </FxCompile>
     <FxCompile Include="..\assets\shaders\PhotonLightingCombine_vs.hlsl">
-      <Filter>Assets\Shaders</Filter>
+      <Filter>Assets\Shaders\Passes\Hybrid Pipeline</Filter>
+    </FxCompile>
+    <FxCompile Include="..\assets\shaders\PhotonSplatting_ps.hlsl">
+      <Filter>Assets\Shaders\Passes\Hybrid Pipeline</Filter>
+    </FxCompile>
+    <FxCompile Include="..\assets\shaders\PhotonSplatting_vs.hlsl">
+      <Filter>Assets\Shaders\Passes\Hybrid Pipeline</Filter>
+    </FxCompile>
+    <FxCompile Include="..\assets\shaders\PhotonTracing.hlsl">
+      <Filter>Assets\Shaders\Passes\Hybrid Pipeline</Filter>
+    </FxCompile>
+    <FxCompile Include="..\assets\shaders\PhotonEmission.hlsl">
+      <Filter>Assets\Shaders\Passes\Hybrid Pipeline</Filter>
     </FxCompile>
   </ItemGroup>
 </Project>
