@@ -529,6 +529,14 @@ inline void CreateTextureSRV(const RtContext::SharedPtr pRtContext, OutputResour
     view.Srv.cpuHandle = srvCpuHandle;
 }
 
+inline void CreateBufferSRV(const RtContext::SharedPtr pRtContext, OutputResourceView& view, UINT structureStride = 4)
+{
+    D3D12_CPU_DESCRIPTOR_HANDLE srvCpuHandle;
+    view.Srv.heapIndex = pRtContext->allocateDescriptor(&srvCpuHandle, view.Srv.heapIndex);
+    view.Srv.gpuHandle = pRtContext->createBufferSRVHandle(view.Resource.Get(), false, structureStride, view.Srv.heapIndex);
+    view.Srv.cpuHandle = srvCpuHandle;
+}
+
 void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT height)
 {
     auto device = mRtContext->getDevice();
@@ -558,6 +566,7 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
     mPhotonEmitters.Create(device, mRtScene->getNumInstances(), 1, L"PhotonEmitters");
     mPhotonUploadBuffer.Create(device, MAX_PHOTON_SEED_SAMPLES, 1, L"PhotonSeed");
     AllocateUAVBuffer(device, MAX_PHOTON_SEED_SAMPLES * sizeof(Photon), mPhotonSeed.Resource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    CreateBufferSRV(mRtContext, mPhotonSeed, sizeof(Photon));
 
     {
         D3D12_CPU_DESCRIPTOR_HANDLE uavCpuHandle;
@@ -574,17 +583,11 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
         mPhotonSeed.Uav.cpuHandle = uavCpuHandle;
     }
 
-    {
-        D3D12_CPU_DESCRIPTOR_HANDLE srvCpuHandle;
-        mPhotonSeed.Srv.heapIndex = mRtContext->allocateDescriptor(&srvCpuHandle, mPhotonSeed.Srv.heapIndex);
-        mPhotonSeed.Srv.gpuHandle = mRtContext->createBufferSRVHandle(mPhotonSeed.Resource.Get(), false, sizeof(Photon), mPhotonSeed.Srv.heapIndex);
-        mPhotonSeed.Srv.cpuHandle = srvCpuHandle;
-    }
-
     // TODO: merge resources and use counterOffset
     AllocateUAVBuffer(device, MAX_PHOTONS * sizeof(Photon), mPhotonMap.Resource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     AllocateUAVBuffer(device, 4, mPhotonMapCounter.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     AllocateReadbackBuffer(device, 4, mPhotonMapCounterReadback.ReleaseAndGetAddressOf(), L"photon map counter readback");
+    CreateBufferSRV(mRtContext, mPhotonMap, sizeof(Photon));
 
     {
         D3D12_CPU_DESCRIPTOR_HANDLE uavCpuHandle;
@@ -602,10 +605,6 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
     }
 
     {
-        D3D12_CPU_DESCRIPTOR_HANDLE srvCpuHandle;
-        mPhotonMap.Srv.heapIndex = mRtContext->allocateDescriptor(&srvCpuHandle, mPhotonMap.Srv.heapIndex);
-        mPhotonMap.Srv.gpuHandle = mRtContext->createBufferSRVHandle(mPhotonMap.Resource.Get(), false, sizeof(Photon), mPhotonMap.Srv.heapIndex);
-        mPhotonMap.Srv.cpuHandle = srvCpuHandle;
     }
 
     const double preferredTileSizeInPixels = 8.0;
