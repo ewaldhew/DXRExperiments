@@ -902,6 +902,10 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
 
         for (UINT instance = 0; instance < mRtScene->getNumInstances(); ++instance) {
             auto model = mRtScene->getModel(instance);
+            if (mMaterials[model->mMaterialIndex].params.type == MaterialType::ParticipatingMedia) {
+                continue;
+            }
+
             PerObjectConstants constants = {};
             constants.worldMatrix = mRtScene->getTransform(instance);
             constants.invWorldMatrix = XMMatrixInverse(nullptr, constants.worldMatrix);
@@ -911,6 +915,7 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
             } else {
                 constants.isProcedural = FALSE;
             }
+
             commandList->SetGraphicsRoot32BitConstants(1, SizeOfInUint32(PerObjectConstants), &constants, 0);
             commandList->SetGraphicsRoot32BitConstants(2, SizeOfInUint32(MaterialParams), &mMaterials[model->mMaterialIndex].params, 0);
             mRasterScene[instance]->Draw(commandList);

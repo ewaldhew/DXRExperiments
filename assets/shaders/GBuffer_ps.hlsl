@@ -57,46 +57,6 @@ bool Intersection(in Ray ray, out float thit, out ProceduralPrimitiveAttributes 
     return true;
 }
 
-// Test if a position is in the volume
-bool shootVolumeRay(inout float3 pos, float3 dir)
-{
-    Ray ray; // input: obj space
-    ray.origin = mul(float4(pos, 1), (float4x4) aabbCB.bottomLevelASToLocalSpace).xyz;
-    ray.direction = mul(dir, (float3x3) aabbCB.bottomLevelASToLocalSpace);
-
-    float thit;
-    ProceduralPrimitiveAttributes attr;
-    bool hit = Intersection(ray, thit, attr);
-    if (hit) {
-       return thit > 0.0f;
-    }
-
-    return hit;
-}
-
-float getExtinction(float3 position)
-{
-    return sampleMaterial(materialParams.albedo, position).x;
-}
-
-bool evaluateVolumeInteraction(inout uint randSeed, inout float3 position, float3 direction, out float t, inout float3 params)
-{
-    float extinctionMax = materialParams.reflectivity;
-    t = 0.0f;
-    float3 pos;
-
-    do { // woodcock tracking
-        t -= log(nextRand(randSeed)) / extinctionMax;
-        pos = position + direction * t;
-    } while (shootVolumeRay(pos, direction) && getExtinction(pos) < nextRand(randSeed) * extinctionMax);
-
-    position = pos;
-    // x - extinction (ka), y - scattering (ks)
-    params = sampleMaterial(materialParams.albedo, pos).xyz;
-
-    return shootVolumeRay(position, direction);
-}
-
 PixelShaderOutput main(PixelShaderInput IN)
 {
     PixelShaderOutput OUT;
@@ -125,37 +85,6 @@ PixelShaderOutput main(PixelShaderInput IN)
         if (!Intersection(ray, thit, attr)) { discard; }
 
         float3 hitPositionObj = camPosObj + thit * rayDir;
-
-        if (mat.type == MaterialType::ParticipatingMedia)
-        {
-            // single scattering
-            uint randSeed = initRand(IN.position.x, IN.position.y);
-            float throughput = 1.0;
-            float3 params; // x - extinction, y - scattering
-            float t;
-            if(!evaluateVolumeInteraction(randSeed, hitPositionObj, rayDir, t, params))
-            {
-                discard;
-            }
-/*
-            if (evaluateVolumeInteraction(randSeed, hitPositionObj, rayDir, t, params))
-            {
-                // attenuate by albedo = scattering / extinction
-                throughput *= params.y / params.x;
-
-                // Russian roulette absorption
-                if (throughput < 0.2) {
-                    if (nextRand(randSeed) > throughput * 5.0) {
-                        throughput = 0.0;
-                    } else {
-                        throughput = 0.2;
-                    }
-                }
-            }
-            else { discard; }
-*/
-        }
-
         float4x4 mvp = mul(perFrameConstants.WorldToViewClipMatrix, (float4x4) obj.worldMatrix);
         float4 position = mul(mvp, float4(hitPositionObj, 1.0f));
 
