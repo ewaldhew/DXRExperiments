@@ -2,8 +2,8 @@
 #include "RasterHlslCompat.h"
 #include "RaytracingUtils.hlsli"
 
-StructuredBuffer<Photon> photonBuffer : register(t0);
-Texture2D<uint> photonDensity : register(t1);
+Texture2D<uint> photonDensity : register(t0);
+StructuredBuffer<Photon> photonBuffer[PhotonMapID::Count] : register(t1);
 
 ConstantBuffer<PerFrameConstantsRaster> perFrameConstants : register(b0);
 ConstantBuffer<PhotonMappingConstants> photonMapConsts : register(b1);
@@ -16,6 +16,7 @@ struct VSInput
 
 struct VSOutput
 {
+    uint photonID : PHOTON_ID;
     float4 position : SV_Position;
     float3 power : COLOR;
     float3 direction : DIRECTION_WS;
@@ -98,7 +99,15 @@ kernel_output kernel_modification_for_vertex_position(float3 vertex, float3 n, f
 
 unpacked_photon get_photon(uint index)
 {
-    Photon photon = photonBuffer[index];
+    uint buffer_index;
+    for (buffer_index = 0; buffer_index < PhotonMapID::Count; buffer_index++) {
+        if (index < photonMapConsts.counts[buffer_index].x) break;
+    }
+    if (buffer_index > 0) {
+        index -= photonMapConsts.counts[buffer_index - 1].x;
+    }
+
+    Photon photon = photonBuffer[buffer_index][index];
 
     unpacked_photon result;
     result.position = photon.position;
@@ -118,6 +127,7 @@ void main(in VSInput IN, out VSOutput OUT)
 
     float3 position = photon_position + o.vertex_position;
 
+    OUT.photonID = IN.instanceID;
     OUT.position = mul(perFrameConstants.WorldToViewClipMatrix, float4(position, 1));
     OUT.power = up.power / o.ellipse_area;
     OUT.direction = -up.direction;

@@ -143,11 +143,29 @@ namespace PrimitiveType {
 }
 #endif
 
+namespace PhotonMapID {
+#ifndef RASTER_PIPELINE
+    enum Value
+    {
+        Surface = 0,
+        Volume, /* must be last */
+        Count
+    };
+#else
+    typedef UINT Value;
+    static const Value
+        Surface = 0,
+        Volume = Surface + 1,
+        Count = Volume + 1;
+#endif
+}
+
 struct PhotonMappingConstants
 {
     XMUINT2 numTiles;
     float tileAreaConstant;
     float maxRayLength;
+    XMUINT4 counts[PhotonMapID::Count];
 };
 
 struct Photon

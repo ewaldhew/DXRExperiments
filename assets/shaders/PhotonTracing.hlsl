@@ -24,13 +24,16 @@ struct PhotonPayload
 // Global root signature
 StructuredBuffer<Photon> photonSeed : register(t3);
 
-RWStructuredBuffer<Photon> gOutput : register(u0);
-RWTexture2D<uint> gPhotonDensityMap : register(u1);
+RWBuffer<uint> gCounters : register(u0);
+RWStructuredBuffer<Photon> gPhotonMapSurface : register(u1);
+RWStructuredBuffer<Photon> gPhotonMapVolume : register(u2);
+
+RWTexture2D<uint> gPhotonDensityMap : register(u3);
 
 ConstantBuffer<PhotonMappingConstants> photonMapConsts : register(b1);
 
 
-void validate_and_add_photon(float3 normal, float3 position, float3 power, float3 in_direction, float t)
+void validate_and_add_photon(float3 normal, float3 position, float3 power, float3 in_direction, float t, uint map_idx)
 {
     if (any(power) && isInCameraFrustum(position))
     {
@@ -38,7 +41,8 @@ void validate_and_add_photon(float3 normal, float3 position, float3 power, float
         uint2 tile = uint2((offsetFromBottomRight * float2(photonMapConsts.numTiles.xy)).xy);
 
         // Offset in the photon buffer and the indirect argument
-        uint photon_index = gOutput.IncrementCounter();
+        uint photon_index;
+        InterlockedAdd(gCounters[map_idx], 1, photon_index);
 
         // Photon is packed and stored with correct offset.
         Photon stored_photon;
@@ -47,7 +51,15 @@ void validate_and_add_photon(float3 normal, float3 position, float3 power, float
         stored_photon.direction = unitvec_to_spherical(in_direction);
         stored_photon.normal = unitvec_to_spherical(normal);
         stored_photon.distTravelled = t;
-        gOutput[photon_index] = stored_photon;
+
+        switch (map_idx) {
+        case PhotonMapID::Surface:
+            gPhotonMapSurface[photon_index] = stored_photon;
+            break;
+        case PhotonMapID::Volume:
+            gPhotonMapVolume[photon_index] = stored_photon;
+            break;
+        }
 
         // Tile-based photon density estimation
         InterlockedAdd(gPhotonDensityMap[tile.xy], 1);
@@ -202,7 +214,7 @@ bool russian_roulette(float3 in_power, float3 in_direction, float3 normal, inout
 
             dist += t;
             float3 stored_power = in_power * throughput;
-            validate_and_add_photon(rayDir, position, stored_power, rayDirPrev, dist);
+            validate_and_add_photon(rayDir, position, stored_power, rayDirPrev, dist, PhotonMapID::Volume);
         }
 
         if (!any(throughput)) {
@@ -236,7 +248,7 @@ bool russian_roulette(float3 in_power, float3 in_direction, float3 normal, inout
         out_power = float4(rp, q);
 
         float3 stored_power = out_power.rgb;
-        validate_and_add_photon(normal, position, stored_power, in_direction, dist);
+        validate_and_add_photon(normal, position, stored_power, in_direction, dist, PhotonMapID::Surface);
 
         bool keep_going = nextRand(randSeed) < q;
 

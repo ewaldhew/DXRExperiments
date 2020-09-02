@@ -8,6 +8,7 @@ Texture2D<float> DepthTexture : register(t0, space1);
 
 struct VSOutput
 {
+    uint photonID : PHOTON_ID;
     float4 position : SV_Position;
     float3 power : COLOR;
     float3 direction : DIRECTION_WS;
@@ -40,7 +41,9 @@ void main(VSOutput IN, out PSOutput OUT)
     float kernel_linear_depth = LinearDepth(IN.position.z);
     float d = abs(gbuffer_linear_depth - kernel_linear_depth);
 
-    clip(perFrameConstants.options.photonSplat.kernelCompressFactor * 1e-3 - d);
+    if (IN.photonID < photonMapConsts.counts[PhotonMapID::Volume - 1].x) {
+        clip(perFrameConstants.options.photonSplat.kernelCompressFactor * 1e-3 - d);
+    }
 
     float3 power = IN.power;
     float total_power = dot(power.xyz, float3(1.0f, 1.0f, 1.0f));

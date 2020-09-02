@@ -16,6 +16,8 @@
 #include <vector>
 #include <random>
 
+namespace GBufferID { enum Value { Normal = 0, Albedo, Depth, Count }; };
+
 class HybridPipeline : public RaytracingPipeline
 {
 public:
@@ -68,6 +70,8 @@ private:
     RasterPass mGBufferPass;
     RasterPass mCombinePass;
 
+    ComPtr<ID3D12PipelineState> mGBufferVolumeStateObject;
+
     // Scene description
     DXRFramework::RtScene::SharedPtrMut mRtScene;
     std::vector<Material> mMaterials;
@@ -92,24 +96,22 @@ private:
     StructuredBuffer<Photon> mPhotonUploadBuffer;
     OutputResourceView mPhotonSeed;
 
-    ComPtr<ID3D12Resource> mPhotonMapCounter;
+    OutputResourceView mPhotonMapCounters;
     ComPtr<ID3D12Resource> mPhotonMapCounterReadback;
     OutputResourceView mPhotonMap;
+    OutputResourceView mVolumePhotonMap;
 
     OutputResourceView mPhotonDensity;
 
     DXTKExtend::GeometricModel::SharedPtr mPhotonSplatKernelShape;
     OutputResourceView mPhotonSplat[2];
 
-    enum GBufferID { Normal = 0, Albedo, Depth, Count };
-    const std::unordered_map<HybridPipeline::GBufferID, DXGI_FORMAT> mGBufferFormats =
+    const std::unordered_map<GBufferID::Value, DXGI_FORMAT> mGBufferFormats =
     {
         { GBufferID::Normal, DXGI_FORMAT_R32G32B32A32_FLOAT },
         { GBufferID::Albedo, DXGI_FORMAT_R32G32B32A32_FLOAT },
     };
     OutputResourceView mGBuffer[GBufferID::Count];
-
-    ComPtr<ID3D12Resource> zeroResource;
 
     std::unique_ptr<DirectX::DescriptorPile> mCpuOnlyDescriptorHeap; // for clearing photon map resources
     std::unique_ptr<DirectX::DescriptorPile> mRtvDescriptorHeap;
@@ -121,6 +123,7 @@ private:
     UINT mSamplesCpu;
     UINT mSamplesGpu;
     UINT mNumPhotons; // after tracing
+    UINT mPhotonMapCounts[PhotonMapID::Count];
     bool mAnimationPaused;
     HybridPipelineOptions mShaderOptions;
 
