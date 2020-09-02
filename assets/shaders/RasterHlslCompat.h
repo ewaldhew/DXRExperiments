@@ -24,7 +24,8 @@ struct HybridPipelineOptions
     PhotonSplattingOptions photonSplat;
     UINT useRaytracedVolumeSplatting;
     UINT skipPhotonTracing;
-    UINT skipPhotonSplatting;
+    UINT showRawSplattingResult;
+    UINT showVolumePhotonsOnly;
 };
 
 struct PerFrameConstantsRaster

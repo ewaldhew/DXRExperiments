@@ -42,6 +42,7 @@ void main(VSOutput IN, out PSOutput OUT)
     float d = abs(gbuffer_linear_depth - kernel_linear_depth);
 
     if (IN.photonID < photonMapConsts.counts[PhotonMapID::Volume - 1].x) {
+        if(perFrameConstants.options.showVolumePhotonsOnly) discard;
         clip(perFrameConstants.options.photonSplat.kernelCompressFactor * 1e-3 - d);
     }
 

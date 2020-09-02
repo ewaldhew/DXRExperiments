@@ -356,7 +356,8 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context, DXGI_FORMAT outputF
     mShaderOptions.photonSplat.uniformScaleStrength = 3.2f;
     mShaderOptions.photonSplat.maxLightShapingScale = 5.0f;
     mShaderOptions.photonSplat.kernelCompressFactor = 0.8f;
-    mShaderOptions.skipPhotonSplatting = false;
+    mShaderOptions.showVolumePhotonsOnly = false;
+    mShaderOptions.showRawSplattingResult = false;
     mShaderOptions.skipPhotonTracing = false;
     mShaderOptions.useRaytracedVolumeSplatting = false;
 
@@ -1193,7 +1194,8 @@ void HybridPipeline::userInterface()
         ui::Separator();
 
         mNeedPhotonMap |= ui::Checkbox("Skip Tracing", (bool*)&mShaderOptions.skipPhotonTracing);
-        frameDirty |= ui::Checkbox("Skip Splatting", (bool*)&mShaderOptions.skipPhotonSplatting);
+        frameDirty |= ui::Checkbox("Show Volume Photons Only", (bool*)&mShaderOptions.showVolumePhotonsOnly);
+        frameDirty |= ui::Checkbox("Show Splatting Result Only", (bool*)&mShaderOptions.showRawSplattingResult);
         frameDirty |= ui::Checkbox("Use Raytraced Splatting", (bool*)&mShaderOptions.useRaytracedVolumeSplatting);
 
         ui::Separator();

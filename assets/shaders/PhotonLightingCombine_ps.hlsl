@@ -57,5 +57,5 @@ void main(
     lightDir = normalize(lightDir);
 
     float lightFactor = saturate(dot(normal, lightDir)) / M_PI; //evaluateBrdf(lightDir, viewDir, normal);
-    Color = float4(photonSplatColorXYZDirX.Sample(lightSampler, Tex).xyz, 1) * lightFactor;
+    Color = float4(photonSplatColorXYZDirX.Sample(lightSampler, Tex).xyz, 1); //* lerp(lightFactor, 1.0, perFrameConstants.options.showRawSplattingResult);
 }
