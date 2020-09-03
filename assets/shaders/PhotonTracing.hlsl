@@ -283,7 +283,7 @@ void StartingVolumeHit(inout PhotonPayload payload, in Attributes attrib)
     float3 vertPosition, vertNormal;
     interpolateVertexAttributes(attrib.bary, vertPosition, vertNormal);
 
-    if (exitingVolume(normalize(vertNormal), WorldRayDirection(), -1)) {
+    if (exitingVolume(normalize(vertNormal), WorldRayDirection())) {
         handle_hit(WorldRayOrigin(), WorldRayDirection(), payload);
     }
 }
@@ -291,7 +291,7 @@ void StartingVolumeHit(inout PhotonPayload payload, in Attributes attrib)
 [shader("closesthit")]
 void StartingVolumeHit_AABB(inout PhotonPayload payload, in ProceduralPrimitiveAttributes attr)
 {
-    if (exitingVolume(normalize(attr.normal), WorldRayDirection(), -1)) {
+    if (exitingVolume(normalize(attr.normal), WorldRayDirection())) {
         handle_hit(WorldRayOrigin(), WorldRayDirection(), payload);
     }
 }

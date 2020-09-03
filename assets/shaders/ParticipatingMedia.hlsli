@@ -9,7 +9,7 @@ struct VolumePayload
 };
 
 // Test if a position is in the volume
-bool shootVolumeRay(inout float3 pos, float3 dir, float minT, float maxT, uint currentDepth)
+bool shootVolumeRay(float3 pos, float3 dir, float minT, float maxT, uint currentDepth)
 {
     if (currentDepth >= MAX_RADIANCE_RAY_DEPTH) {
         return false;
@@ -50,9 +50,9 @@ bool evaluateVolumeInteraction(inout uint randSeed, inout float3 position, float
     return inVolume;
 }
 
-bool exitingVolume(float3 normal, float3 rayDir, uint fromIndex)
+bool exitingVolume(float3 normal, float3 rayDir)
 {
-    return dot(normal, rayDir) >= 0 || fromIndex == InstanceIndex();
+    return dot(normal, rayDir) >= 0;
 }
 
 [shader("closesthit")]
@@ -61,13 +61,13 @@ void VolumeClosestHit(inout VolumePayload payload, Attributes attrib)
     float3 vertPosition, vertNormal;
     interpolateVertexAttributes(attrib.bary, vertPosition, vertNormal);
 
-    payload.inVolume = exitingVolume(normalize(vertNormal), WorldRayDirection(), payload.originIndex);
+    payload.inVolume = exitingVolume(normalize(vertNormal), WorldRayDirection());
 }
 
 [shader("closesthit")]
 void VolumeClosestHit_AABB(inout VolumePayload payload, in ProceduralPrimitiveAttributes attr)
 {
-    payload.inVolume = exitingVolume(normalize(attr.normal), WorldRayDirection(), payload.originIndex);
+    payload.inVolume = exitingVolume(normalize(attr.normal), WorldRayDirection());
 }
 
 [shader("miss")]
