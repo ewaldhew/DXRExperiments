@@ -210,11 +210,11 @@ bool russian_roulette(float3 in_power, float3 in_direction, float3 normal, inout
                 rayDir = getUniformSphereSample(randSeed);
             }
 
-            prevPosition = position;
-
             dist += t;
             float3 stored_power = in_power * throughput;
-            validate_and_add_photon(rayDir, position, stored_power, rayDirPrev, dist, PhotonMapID::Volume);
+            validate_and_add_photon(rayDir, prevPosition, stored_power, rayDirPrev, dist, PhotonMapID::Volume);
+
+            prevPosition = position;
         }
 
         if (!any(throughput)) {
