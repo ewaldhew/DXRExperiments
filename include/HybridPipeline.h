@@ -117,12 +117,10 @@ private:
 
     // Rendering states
     bool mActive;
-    UINT mAccumCount;
     bool mNeedPhotonMap;
     UINT mSamplesCpu;
     UINT mSamplesGpu;
     UINT mNumPhotons; // after tracing
-    bool mFrameAccumulationEnabled;
     bool mAnimationPaused;
     HybridPipelineOptions mShaderOptions;
 

@@ -74,7 +74,6 @@ namespace Pass
 
 HybridPipeline::HybridPipeline(RtContext::SharedPtr context, DXGI_FORMAT outputFormat) :
     mRtContext(context),
-    mFrameAccumulationEnabled(true),
     mAnimationPaused(true),
     mNeedPhotonMap(true),
     mActive(true)
@@ -425,6 +424,8 @@ void HybridPipeline::setScene(RtScene::SharedPtr scene)
         }
         }
     }
+
+    mNeedPhotonMap = true;
 }
 
 void HybridPipeline::buildAccelerationStructures()
@@ -715,10 +716,9 @@ void HybridPipeline::update(float elapsedTime, UINT elapsedFrames, UINT prevFram
         elapsedTime = 142.0f;
     }
 
-    if (hasCameraMoved(*mCamera, mLastCameraVPMatrix) || !mFrameAccumulationEnabled) {
-        mAccumCount = 0;
+    if (hasCameraMoved(*mCamera, mLastCameraVPMatrix)) {
         mLastCameraVPMatrix = mCamera->GetViewProjMatrix();
-        mNeedPhotonMap = true;
+        mNumPhotons = 0;
     }
 
     CameraParams cameraParams = {};
@@ -729,7 +729,6 @@ void HybridPipeline::update(float elapsedTime, UINT elapsedFrames, UINT prevFram
     float yJitter = (mRngDist(mRng) - 0.5f) / float(height);
     cameraParams.jitters = XMFLOAT2(xJitter, yJitter);
     cameraParams.frameCount = elapsedFrames;
-    cameraParams.accumCount = mAccumCount++;
 
     mConstantBuffer->cameraParams = cameraParams;
     mConstantBuffer->options = {};
@@ -869,7 +868,6 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
 
     if (pass == Pass::Begin)
     {
-
         pass = Pass::GBuffer;
     }
 
@@ -1160,7 +1158,7 @@ void HybridPipeline::userInterface()
 
         ui::Separator();
 
-        frameDirty |= ui::Checkbox("Skip Tracing", (bool*)&mShaderOptions.skipPhotonTracing);
+        mNeedPhotonMap |= ui::Checkbox("Skip Tracing", (bool*)&mShaderOptions.skipPhotonTracing);
         frameDirty |= ui::Checkbox("Skip Splatting", (bool*)&mShaderOptions.skipPhotonSplatting);
         frameDirty |= ui::Checkbox("Use Raytraced Splatting", (bool*)&mShaderOptions.useRaytracedVolumeSplatting);
 
@@ -1178,7 +1176,7 @@ void HybridPipeline::userInterface()
     }
     ui::End();
 
-    if (frameDirty) {
+    if (frameDirty || mNeedPhotonMap) {
         mLastCameraVPMatrix = Math::Matrix4();
     }
 }
