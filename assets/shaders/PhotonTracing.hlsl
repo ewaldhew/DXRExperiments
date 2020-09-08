@@ -30,6 +30,9 @@ RWStructuredBuffer<Photon> gPhotonMapVolume : register(u2);
 
 RWTexture2D<uint> gPhotonDensityMap : register(u3);
 
+RWStructuredBuffer<PhotonAABB> gVolumePhotonAabb : register(u4);
+RWBuffer<float4> gVolumePhotonPos : register(u5);
+
 ConstantBuffer<PhotonMappingConstants> photonMapConsts : register(b1);
 
 
@@ -58,6 +61,13 @@ void validate_and_add_photon(float3 normal, float3 position, float3 power, float
             break;
         case PhotonMapID::Volume:
             gPhotonMapVolume[photon_index] = stored_photon;
+            gVolumePhotonPos[photon_index] = float4(stored_photon.position, 1);
+            PhotonAABB aabb = {
+                stored_photon.position - perFrameConstants.options.photonRadius,
+                stored_photon.position + perFrameConstants.options.photonRadius,
+                0.0f, 0.0f
+            };
+            gVolumePhotonAabb[photon_index] = aabb;
             break;
         }
 

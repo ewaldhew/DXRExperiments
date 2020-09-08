@@ -101,6 +101,8 @@ private:
     OutputResourceView mPhotonMap;
     OutputResourceView mVolumePhotonMap;
 
+    OutputResourceView mVolumePhotonAabbs;
+    OutputResourceView mVolumePhotonPositions;
     OutputResourceView mPhotonDensity;
 
     DXTKExtend::GeometricModel::SharedPtr mPhotonSplatKernelShape;

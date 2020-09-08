@@ -17,6 +17,7 @@ struct PhotonSplattingOptions
     float uniformScaleStrength;
     float maxLightShapingScale;
     float kernelCompressFactor;
+    float volumeSplatPhotonSize;
 };
 
 struct HybridPipelineOptions

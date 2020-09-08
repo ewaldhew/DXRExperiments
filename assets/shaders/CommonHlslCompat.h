@@ -179,4 +179,16 @@ struct Photon
     XMUINT2 padding;
 };
 
+struct PhotonAABB
+{
+    float MinX;
+    float MinY;
+    float MinZ;
+    float MaxX;
+    float MaxY;
+    float MaxZ;
+    float pad0;
+    float pad1;
+};
+
 #endif // !COMMONHLSLCOMPAT_H
