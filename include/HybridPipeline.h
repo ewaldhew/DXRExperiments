@@ -49,6 +49,7 @@ private:
     HybridPipeline(DXRFramework::RtContext::SharedPtr context, DXGI_FORMAT outputFormat);
 
     void collectEmitters(UINT& numLights, UINT& maxSamples);
+    void buildVolumePhotonAccelerationStructure(UINT buildStrategy);
 
     // Pipeline components
     struct RtPass
@@ -103,6 +104,11 @@ private:
 
     OutputResourceView mVolumePhotonAabbs;
     OutputResourceView mVolumePhotonPositions;
+    ComPtr<ID3D12Resource> mVolumePhotonPositionsReadback;
+    ComPtr<ID3D12Resource> mVolumePhotonBlas;
+    ComPtr<ID3D12Resource> mVolumePhotonTlas;
+    WRAPPED_GPU_POINTER mVolumePhotonTlasWrappedPtr;
+
     OutputResourceView mPhotonDensity;
 
     DXTKExtend::GeometricModel::SharedPtr mPhotonSplatKernelShape;
@@ -122,6 +128,7 @@ private:
     // Rendering states
     bool mActive;
     bool mNeedPhotonMap;
+    bool mNeedPhotonAS;
     UINT mSamplesCpu;
     UINT mSamplesGpu;
     UINT mNumPhotons; // after tracing

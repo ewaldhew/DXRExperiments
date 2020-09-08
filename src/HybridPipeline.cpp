@@ -13,6 +13,8 @@
 #include "ResourceUploadBatch.h"
 #include "DirectXHelpers.h"
 #include "ImGuiRendererDX.h"
+#include "Helpers/BottomLevelASGenerator.h"
+#include "Helpers/TopLevelASGenerator.h"
 #include <chrono>
 
 using namespace DXRFramework;
@@ -67,6 +69,7 @@ namespace Pass
         PhotonEmission,
         PhotonTracing,
         PhotonSplatting,
+        PhotonSplattingVolume,
         Combine,
 
         End = 0,
@@ -77,6 +80,7 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context, DXGI_FORMAT outputF
     mRtContext(context),
     mAnimationPaused(true),
     mNeedPhotonMap(true),
+    mNeedPhotonAS(false),
     mActive(true)
 {
     auto device = context->getDevice();
@@ -891,6 +895,181 @@ void HybridPipeline::collectEmitters(UINT& numLights, UINT& maxSamples)
     mPhotonEmitters.CopyStagingToGpu();
 }
 
+void HybridPipeline::buildVolumePhotonAccelerationStructure(UINT buildStrategy)
+{
+    static ComPtr<ID3D12Resource> mAabbBuffer;
+    static ComPtr<ID3D12Resource> blasScratch;
+    static ComPtr<ID3D12Resource> tlasScratch;
+    static ComPtr<ID3D12Resource> tlasInstanceDescs;
+
+    auto context = mRtContext;
+    auto device = context->getDevice();
+    auto commandList = context->getCommandList();
+    auto fallbackDevice = context->getFallbackDevice();
+    auto fallbackCommandList = context->getFallbackCommandList();
+
+    const UINT numPhotons = mPhotonMapCounts[PhotonMapID::Volume];
+
+    if (!mNeedPhotonAS) return;
+
+    switch (buildStrategy) {
+    case 0: {
+        // N AABBs at photon positions in 1 BLAS, 1 instance at origin in TLAS
+        // Needs: AABBs array
+
+        // Build BLAS
+        {
+            auto transitions = ScopedBarrier(commandList, { CD3DX12_RESOURCE_BARRIER::Transition(
+                mVolumePhotonAabbs.Resource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
+            });
+
+            D3D12_RAYTRACING_GEOMETRY_DESC descriptor = {};
+            descriptor.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_PROCEDURAL_PRIMITIVE_AABBS;
+            descriptor.AABBs.AABBCount = numPhotons;
+            descriptor.AABBs.AABBs.StartAddress = mVolumePhotonAabbs.Resource->GetGPUVirtualAddress();
+            descriptor.AABBs.AABBs.StrideInBytes = sizeof(PhotonAABB);
+            descriptor.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_NONE;
+
+            D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS buildInputs = {};
+            buildInputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
+            buildInputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
+            buildInputs.NumDescs = 1;
+            buildInputs.pGeometryDescs = &descriptor;
+            buildInputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
+
+            D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info = {};
+            fallbackDevice->GetRaytracingAccelerationStructurePrebuildInfo(&buildInputs, &info);
+            UINT64 scratchSizeInBytes = ROUND_UP(info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+            UINT64 resultSizeInBytes = ROUND_UP(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+
+            D3D12_RESOURCE_STATES initialResourceState = fallbackDevice->GetAccelerationStructureResourceState();
+            AllocateUAVBuffer(device, resultSizeInBytes, mVolumePhotonBlas.ReleaseAndGetAddressOf(), initialResourceState);
+            AllocateUAVBuffer(device, scratchSizeInBytes, blasScratch.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+            D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC buildDesc = {};
+            buildDesc.Inputs = buildInputs;
+            buildDesc.DestAccelerationStructureData = mVolumePhotonBlas->GetGPUVirtualAddress();
+            buildDesc.ScratchAccelerationStructureData = blasScratch->GetGPUVirtualAddress();
+
+            // Build the AS
+            fallbackCommandList->BuildRaytracingAccelerationStructure(&buildDesc, 0, nullptr);
+            context->insertUAVBarrier(mVolumePhotonBlas.Get());
+        }
+        // Build TLAS
+        {
+            nv_helpers_dx12::TopLevelASGenerator tlasGenerator;
+            tlasGenerator.AddInstance(mVolumePhotonBlas.Get(), XMMatrixIdentity(), 0, 0, 0xFF);
+
+            UINT64 scratchSizeInBytes = 0;
+            UINT64 resultSizeInBytes = 0;
+            UINT64 instanceDescsSize = 0;
+            tlasGenerator.ComputeASBufferSizes(fallbackDevice, false, &scratchSizeInBytes, &resultSizeInBytes, &instanceDescsSize);
+
+            D3D12_RESOURCE_STATES initialResourceState = fallbackDevice->GetAccelerationStructureResourceState();
+            AllocateUAVBuffer(device, resultSizeInBytes, mVolumePhotonTlas.ReleaseAndGetAddressOf(), initialResourceState);
+            AllocateUAVBuffer(device, scratchSizeInBytes, tlasScratch.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+            *tlasInstanceDescs.ReleaseAndGetAddressOf() = CreateBuffer(device, instanceDescsSize, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
+
+            context->bindDescriptorHeap();
+
+            tlasGenerator.Generate(commandList, fallbackCommandList, tlasScratch.Get(), mVolumePhotonTlas.Get(), tlasInstanceDescs.Get(),
+                [&](ID3D12Resource *resource) -> WRAPPED_GPU_POINTER { return context->createBufferUAVWrappedPointer(resource); });
+
+            mVolumePhotonTlasWrappedPtr = context->createBufferUAVWrappedPointer(mVolumePhotonTlas.Get());
+        }
+    } break;
+
+    case 1: {
+        // 1 AABB at origin in 1 BLAS, N instances at photon positions in TLAS
+        // Needs: Photon positions array
+
+        // Build BLAS
+        {
+            auto photonRadius = mShaderOptions.photonSplat.volumeSplatPhotonSize;
+            auto mAabb = D3D12_RAYTRACING_AABB{
+                -photonRadius, -photonRadius, -photonRadius,
+                photonRadius, photonRadius, photonRadius,
+            };
+            AllocateUploadBuffer(device, &mAabb, sizeof(mAabb), mAabbBuffer.ReleaseAndGetAddressOf());
+
+            nv_helpers_dx12::BottomLevelASGenerator blasGenerator;
+            blasGenerator.AddAabbBuffer(mAabbBuffer.Get(), false);
+
+            UINT64 scratchSizeInBytes = 0;
+            UINT64 resultSizeInBytes = 0;
+            blasGenerator.ComputeASBufferSizes(fallbackDevice, false, &scratchSizeInBytes, &resultSizeInBytes);
+
+            D3D12_RESOURCE_STATES initialResourceState = fallbackDevice->GetAccelerationStructureResourceState();
+            AllocateUAVBuffer(device, resultSizeInBytes, mVolumePhotonBlas.ReleaseAndGetAddressOf(), initialResourceState);
+            AllocateUAVBuffer(device, scratchSizeInBytes, blasScratch.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+            blasGenerator.Generate(commandList, fallbackCommandList, blasScratch.Get(), mVolumePhotonBlas.Get());
+        }
+        // Build TLAS
+        {
+            D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS buildInputs = {};
+            buildInputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
+            buildInputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
+            buildInputs.NumDescs = numPhotons;
+            buildInputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
+
+            D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info = {};
+            fallbackDevice->GetRaytracingAccelerationStructurePrebuildInfo(&buildInputs, &info);
+
+            UINT64 resultSizeInBytes = ROUND_UP(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+            UINT64 scratchSizeInBytes = ROUND_UP(info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+            UINT64 instanceDescsSize = ROUND_UP(sizeof(D3D12_RAYTRACING_INSTANCE_DESC) * static_cast<UINT64>(numPhotons), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+
+            D3D12_RESOURCE_STATES initialResourceState = fallbackDevice->GetAccelerationStructureResourceState();
+            AllocateUAVBuffer(device, resultSizeInBytes, mVolumePhotonTlas.ReleaseAndGetAddressOf(), initialResourceState);
+            AllocateUAVBuffer(device, scratchSizeInBytes, tlasScratch.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+            *tlasInstanceDescs.ReleaseAndGetAddressOf() = CreateBuffer(device, instanceDescsSize, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
+
+            context->bindDescriptorHeap();
+
+            // Copy the descriptors into the target descriptor buffer
+            D3D12_RAYTRACING_FALLBACK_INSTANCE_DESC* instanceDescs;
+            ThrowIfFailed(tlasInstanceDescs->Map(0, nullptr, reinterpret_cast<void**>(&instanceDescs)));
+
+            // Read photon positions
+            XMVECTOR* photonPositions;
+            ThrowIfFailed(mVolumePhotonPositionsReadback->Map(0, nullptr, reinterpret_cast<void**>(&photonPositions)));
+
+            for (uint32_t i = 0; i < buildInputs.NumDescs; i++)
+            {
+                instanceDescs[i] = {};
+                instanceDescs[i].InstanceID = i;
+                instanceDescs[i].InstanceContributionToHitGroupIndex = 0;
+                instanceDescs[i].Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
+                instanceDescs[i].AccelerationStructure = context->createBufferUAVWrappedPointer(mVolumePhotonBlas.Get());
+                instanceDescs[i].InstanceMask = 0xFF;
+                // GLM is column major, the INSTANCE_DESC is row major
+                XMMATRIX m = XMMatrixTranspose(XMMatrixTranslationFromVector(photonPositions[i]));
+                memcpy(instanceDescs[i].Transform, &m, sizeof(instanceDescs[i].Transform));
+            }
+
+            mVolumePhotonPositionsReadback->Unmap(0, &CD3DX12_RANGE(0, 0));
+            tlasInstanceDescs->Unmap(0, nullptr);
+
+            buildInputs.InstanceDescs = tlasInstanceDescs->GetGPUVirtualAddress();
+
+            D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC buildDesc = {};
+            buildDesc.Inputs = buildInputs;
+            buildDesc.DestAccelerationStructureData = mVolumePhotonTlas->GetGPUVirtualAddress();
+            buildDesc.ScratchAccelerationStructureData = tlasScratch->GetGPUVirtualAddress();
+
+            // Build the top-level AS
+            fallbackCommandList->BuildRaytracingAccelerationStructure(&buildDesc, 0, nullptr);
+            context->insertUAVBarrier(mVolumePhotonTlas.Get());
+
+            mVolumePhotonTlasWrappedPtr = context->createBufferUAVWrappedPointer(mVolumePhotonTlas.Get());
+        }
+    } break;
+    }
+
+    mNeedPhotonAS = false;
+}
+
 void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIndex, UINT width, UINT height, UINT& pass)
 {
     auto viewport = CD3DX12_VIEWPORT(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height));
@@ -1074,6 +1253,7 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
 
         mNumPhotons = 0;
         mNeedPhotonMap = false;
+        mNeedPhotonAS = true;
         pass = Pass::PhotonSplatting;
         return;
     }
@@ -1085,6 +1265,7 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
             ThrowIfFailed(mPhotonMapCounterReadback->Map(0, nullptr, reinterpret_cast<void**>(&pReadbackBufferData)));
             for (UINT i = 0; i < PhotonMapID::Count; i++) {
                 mNumPhotons += pReadbackBufferData[i];
+                mPhotonMapCounts[i] = pReadbackBufferData[i];
                 mPhotonMappingConstants->counts[i].x = mNumPhotons;
             }
             mPhotonMappingConstants.CopyStagingToGpu();
@@ -1131,7 +1312,22 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
 
         mPhotonSplatKernelShape->Draw(commandList, mNumPhotons);
 
-        pass = Pass::Combine;
+        if (mShaderOptions.useRaytracedVolumeSplatting) {
+            mRtContext->transitionResource(mVolumePhotonPositions.Resource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
+            commandList->CopyResource(mVolumePhotonPositionsReadback.Get(), mVolumePhotonPositions.Resource.Get());
+            mRtContext->transitionResource(mVolumePhotonPositions.Resource.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+            pass = Pass::PhotonSplattingVolume;
+            return;
+        }
+        else {
+            pass = Pass::Combine;
+        }
+    }
+
+    if (pass == Pass::PhotonSplattingVolume)
+    {
+        buildVolumePhotonAccelerationStructure(0);
     }
 
     // final render pass
