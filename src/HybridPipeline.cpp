@@ -539,6 +539,22 @@ inline void CreateBufferSRV(const RtContext::SharedPtr pRtContext, OutputResourc
     view.Srv.cpuHandle = srvCpuHandle;
 }
 
+inline void CreateStructuredBufferUAV(ID3D12Device* device, const RtContext::SharedPtr pRtContext, OutputResourceView& view, UINT structureStride, UINT numElements)
+{
+    D3D12_CPU_DESCRIPTOR_HANDLE uavCpuHandle;
+    view.Uav.heapIndex = pRtContext->allocateDescriptor(&uavCpuHandle, view.Uav.heapIndex);
+
+    D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+    uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+    uavDesc.Format = DXGI_FORMAT_UNKNOWN;
+    uavDesc.Buffer.StructureByteStride = structureStride;
+    uavDesc.Buffer.NumElements = numElements;
+    device->CreateUnorderedAccessView(view.Resource.Get(), nullptr, &uavDesc, uavCpuHandle);
+
+    view.Uav.gpuHandle = pRtContext->getDescriptorGPUHandle(view.Uav.heapIndex);
+    view.Uav.cpuHandle = uavCpuHandle;
+}
+
 void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT height)
 {
     auto device = mRtContext->getDevice();
@@ -569,21 +585,7 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
     mPhotonUploadBuffer.Create(device, MAX_PHOTON_SEED_SAMPLES, 1, L"PhotonSeed");
     AllocateUAVBuffer(device, MAX_PHOTON_SEED_SAMPLES * sizeof(Photon), mPhotonSeed.Resource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     CreateBufferSRV(mRtContext, mPhotonSeed, sizeof(Photon));
-
-    {
-        D3D12_CPU_DESCRIPTOR_HANDLE uavCpuHandle;
-        mPhotonSeed.Uav.heapIndex = mRtContext->allocateDescriptor(&uavCpuHandle, mPhotonSeed.Uav.heapIndex);
-
-        D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
-        uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
-        uavDesc.Format = DXGI_FORMAT_UNKNOWN;
-        uavDesc.Buffer.StructureByteStride = sizeof(Photon);
-        uavDesc.Buffer.NumElements = MAX_PHOTON_SEED_SAMPLES;
-        device->CreateUnorderedAccessView(mPhotonSeed.Resource.Get(), nullptr, &uavDesc, uavCpuHandle);
-
-        mPhotonSeed.Uav.gpuHandle = mRtContext->getDescriptorGPUHandle(mPhotonSeed.Uav.heapIndex);
-        mPhotonSeed.Uav.cpuHandle = uavCpuHandle;
-    }
+    CreateStructuredBufferUAV(device, mRtContext, mPhotonSeed, sizeof(Photon), MAX_PHOTON_SEED_SAMPLES);
 
     AllocateUAVBuffer(device, PhotonMapID::Count * 4, mPhotonMapCounters.Resource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     AllocateReadbackBuffer(device, PhotonMapID::Count * 4, mPhotonMapCounterReadback.ReleaseAndGetAddressOf(), L"photon map counter readback");
@@ -607,35 +609,10 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
         CreateClearableUAV(device, mCpuOnlyDescriptorHeap.get(), mPhotonMapCounters, uavDesc);
     }
 
-    {
-        D3D12_CPU_DESCRIPTOR_HANDLE uavCpuHandle;
-        mPhotonMap.Uav.heapIndex = mRtContext->allocateDescriptor(&uavCpuHandle, mPhotonMap.Uav.heapIndex);
-        ThrowIfFalse(mPhotonMap.Uav.heapIndex == mPhotonMapCounters.Uav.heapIndex + 1);
-
-        D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
-        uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
-        uavDesc.Format = DXGI_FORMAT_UNKNOWN;
-        uavDesc.Buffer.StructureByteStride = sizeof(Photon);
-        uavDesc.Buffer.NumElements = MAX_PHOTONS;
-        device->CreateUnorderedAccessView(mPhotonMap.Resource.Get(), nullptr, &uavDesc, uavCpuHandle);
-
-        mPhotonMap.Uav.gpuHandle = mRtContext->getDescriptorGPUHandle(mPhotonMap.Uav.heapIndex);
-    }
-
-    {
-        D3D12_CPU_DESCRIPTOR_HANDLE uavCpuHandle;
-        mVolumePhotonMap.Uav.heapIndex = mRtContext->allocateDescriptor(&uavCpuHandle, mVolumePhotonMap.Uav.heapIndex);
-        ThrowIfFalse(mVolumePhotonMap.Uav.heapIndex == mPhotonMapCounters.Uav.heapIndex + 2);
-
-        D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
-        uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
-        uavDesc.Format = DXGI_FORMAT_UNKNOWN;
-        uavDesc.Buffer.StructureByteStride = sizeof(Photon);
-        uavDesc.Buffer.NumElements = MAX_PHOTONS;
-        device->CreateUnorderedAccessView(mVolumePhotonMap.Resource.Get(), nullptr, &uavDesc, uavCpuHandle);
-
-        mVolumePhotonMap.Uav.gpuHandle = mRtContext->getDescriptorGPUHandle(mVolumePhotonMap.Uav.heapIndex);
-    }
+    CreateStructuredBufferUAV(device, mRtContext, mPhotonMap, sizeof(Photon), MAX_PHOTONS);
+    CreateStructuredBufferUAV(device, mRtContext, mVolumePhotonMap, sizeof(Photon), MAX_PHOTONS);
+    ThrowIfFalse(mPhotonMapCounters.Uav.heapIndex + 1 == mPhotonMap.Uav.heapIndex);
+    ThrowIfFalse(mPhotonMapCounters.Uav.heapIndex + 2 == mVolumePhotonMap.Uav.heapIndex);
 
     const double preferredTileSizeInPixels = 8.0;
     UINT numTilesX = static_cast<UINT>(ceil(width / preferredTileSizeInPixels));
