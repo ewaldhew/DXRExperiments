@@ -51,7 +51,6 @@ struct DebugOptions
     UINT showFresnelTerm;
     UINT noIndirectDiffuse;
     float environmentStrength;
-    float photonRadius;
     UINT debug;
 };
 

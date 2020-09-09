@@ -166,6 +166,14 @@ struct PhotonMappingConstants
     float tileAreaConstant;
     float maxRayLength;
     XMUINT4 counts[PhotonMapID::Count];
+
+    // Splatting options
+    float kernelScaleMin;
+    float kernelScaleMax;
+    float uniformScaleStrength;
+    float maxLightShapingScale;
+    float kernelCompressFactor;
+    float volumeSplatPhotonSize;
 };
 
 struct Photon

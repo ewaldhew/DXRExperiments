@@ -358,12 +358,6 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context, DXGI_FORMAT outputF
         NAME_D3D12_OBJECT(mCombinePass.stateObject);
     }
 
-    mShaderOptions.photonSplat.kernelScaleMin = 0.01f;
-    mShaderOptions.photonSplat.kernelScaleMax = 1.0f;
-    mShaderOptions.photonSplat.uniformScaleStrength = 3.2f;
-    mShaderOptions.photonSplat.maxLightShapingScale = 5.0f;
-    mShaderOptions.photonSplat.kernelCompressFactor = 0.8f;
-    mShaderOptions.photonSplat.volumeSplatPhotonSize = mShaderOptions.photonSplat.uniformScaleStrength;
     mShaderOptions.showVolumePhotonsOnly = false;
     mShaderOptions.showRawSplattingResult = false;
     mShaderOptions.skipPhotonTracing = false;
@@ -511,6 +505,12 @@ void HybridPipeline::loadResources(ID3D12CommandQueue *uploadCommandQueue, UINT 
     mPointLights.Create(device, NUM_POINT_LIGHTS, frameCount, L"PointLightBuffer");
 
     mPhotonMappingConstants.Create(device, 1, L"PhotonMappingConstantBuffer");
+    mPhotonMappingConstants->kernelScaleMin = 0.01f;
+    mPhotonMappingConstants->kernelScaleMax = 1.0f;
+    mPhotonMappingConstants->uniformScaleStrength = 3.2f;
+    mPhotonMappingConstants->maxLightShapingScale = 5.0f;
+    mPhotonMappingConstants->kernelCompressFactor = 0.8f;
+    mPhotonMappingConstants->volumeSplatPhotonSize = mPhotonMappingConstants->uniformScaleStrength;
 }
 
 inline void CreateClearableUAV(ID3D12Device* device, DescriptorPile* heap, OutputResourceView& view, D3D12_UNORDERED_ACCESS_VIEW_DESC const& uavDesc)
@@ -765,7 +765,6 @@ void HybridPipeline::update(float elapsedTime, UINT elapsedFrames, UINT prevFram
 
     mConstantBuffer->cameraParams = cameraParams;
     mConstantBuffer->options = {};
-    mConstantBuffer->options.photonRadius = mShaderOptions.photonSplat.volumeSplatPhotonSize;
     mConstantBuffer.CopyStagingToGpu(frameIndex);
 
     XMVECTOR dirLightVector = XMVectorSet(0.3f, -0.2f, -1.0f, 0.0f);
@@ -985,7 +984,7 @@ void HybridPipeline::buildVolumePhotonAccelerationStructure(UINT buildStrategy)
 
         // Build BLAS
         {
-            auto photonRadius = mShaderOptions.photonSplat.volumeSplatPhotonSize;
+            auto photonRadius = mPhotonMappingConstants->volumeSplatPhotonSize;
             auto mAabb = D3D12_RAYTRACING_AABB{
                 -photonRadius, -photonRadius, -photonRadius,
                 photonRadius, photonRadius, photonRadius,
@@ -1399,11 +1398,11 @@ void HybridPipeline::userInterface()
         ui::Separator();
         ui::Text("Splatting Parameters");
 
-        frameDirty |= ui::DragFloatRange2("Uniform Scale Min/Max", &mShaderOptions.photonSplat.kernelScaleMin, &mShaderOptions.photonSplat.kernelScaleMax, 0.01f, 0.01f, 2.0f);
-        frameDirty |= ui::SliderFloat("Uniform Scale Strength", &mShaderOptions.photonSplat.uniformScaleStrength, 0.5f, 100.0f);
-        frameDirty |= ui::SliderFloat("Light Shaping Max", &mShaderOptions.photonSplat.maxLightShapingScale, 1.0f, 10.0f);
-        frameDirty |= ui::SliderFloat("Kernel Compress", &mShaderOptions.photonSplat.kernelCompressFactor, 0.3f, 1.0f);
-        frameDirty |= ui::SliderFloat("Volume Splatting Radius", &mShaderOptions.photonSplat.volumeSplatPhotonSize, 0.5f, 100.0f);
+        frameDirty |= ui::DragFloatRange2("Uniform Scale Min/Max", &mPhotonMappingConstants->kernelScaleMin, &mPhotonMappingConstants->kernelScaleMax, 0.01f, 0.01f, 2.0f);
+        frameDirty |= ui::SliderFloat("Uniform Scale Strength", &mPhotonMappingConstants->uniformScaleStrength, 0.5f, 100.0f);
+        frameDirty |= ui::SliderFloat("Light Shaping Max", &mPhotonMappingConstants->maxLightShapingScale, 1.0f, 10.0f);
+        frameDirty |= ui::SliderFloat("Kernel Compress", &mPhotonMappingConstants->kernelCompressFactor, 0.3f, 1.0f);
+        frameDirty |= ui::SliderFloat("Volume Splatting Radius", &mPhotonMappingConstants->volumeSplatPhotonSize, 0.5f, 100.0f);
 
         ui::Separator();
 

@@ -43,7 +43,7 @@ void main(VSOutput IN, out PSOutput OUT)
 
     if (IN.photonID < photonMapConsts.counts[PhotonMapID::Volume - 1].x) {
         if(perFrameConstants.options.showVolumePhotonsOnly) discard;
-        clip(perFrameConstants.options.photonSplat.kernelCompressFactor * 1e-3 - d);
+        clip(photonMapConsts.kernelCompressFactor * 1e-3 - d);
     }
 
     float3 power = IN.power;

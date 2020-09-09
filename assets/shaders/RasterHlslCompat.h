@@ -10,19 +10,8 @@ using namespace DirectX;
 
 #include "CommonHlslCompat.h"
 
-struct PhotonSplattingOptions
-{
-    float kernelScaleMin;
-    float kernelScaleMax;
-    float uniformScaleStrength;
-    float maxLightShapingScale;
-    float kernelCompressFactor;
-    float volumeSplatPhotonSize;
-};
-
 struct HybridPipelineOptions
 {
-    PhotonSplattingOptions photonSplat;
     UINT useRaytracedVolumeSplatting;
     UINT skipPhotonTracing;
     UINT showRawSplattingResult;

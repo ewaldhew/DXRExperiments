@@ -39,7 +39,7 @@ struct kernel_output
     float light_shaping_scale;
 };
 
-#define SPLAT_PARAMS perFrameConstants.options.photonSplat
+#define SPLAT_PARAMS photonMapConsts
 
 // E. Haines, T. Akenine-Möller (eds.), Ray Tracing Gems, https://doi.org/10.1007/978-1-4842-4427-2_24
 float uniform_scaling(float3 pos, float ray_length)
