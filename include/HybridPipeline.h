@@ -67,6 +67,7 @@ private:
     DXRFramework::RtContext::SharedPtr mRtContext;
     RtPass mRtPhotonEmissionPass;
     RtPass mRtPhotonMappingPass;
+    RtPass mRtPhotonSplattingVolumePass;
     RasterPass mPhotonSplattingPass;
     RasterPass mGBufferPass;
     RasterPass mCombinePass;
@@ -113,6 +114,7 @@ private:
 
     DXTKExtend::GeometricModel::SharedPtr mPhotonSplatKernelShape;
     OutputResourceView mPhotonSplat[2];
+    ResourceView mPhotonSplatUav[2];
 
     const std::unordered_map<GBufferID::Value, DXGI_FORMAT> mGBufferFormats =
     {

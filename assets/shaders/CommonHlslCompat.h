@@ -168,12 +168,16 @@ struct PhotonMappingConstants
     XMUINT4 counts[PhotonMapID::Count];
 
     // Splatting options
+    XMFLOAT3 volumeBboxMin;
     float kernelScaleMin;
+    XMFLOAT3 volumeBboxMax;
     float kernelScaleMax;
     float uniformScaleStrength;
     float maxLightShapingScale;
     float kernelCompressFactor;
     float volumeSplatPhotonSize;
+    UINT particlesPerSlab;
+    UINT photonGeometryBuildStrategy;
 };
 
 struct Photon
