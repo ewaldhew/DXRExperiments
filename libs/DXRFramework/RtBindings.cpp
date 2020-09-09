@@ -35,7 +35,7 @@ namespace DXRFramework
         mRayGenParams->allocateStorage(maxRootSigSize);
         // update maxRootSigSize
 
-        UINT recordCountPerHit = mScene->getNumInstances();
+        UINT recordCountPerHit = max(mScene->getNumInstances(), 1);
         mHitParams.resize(mHitProgCount);
         for (UINT i = 0 ; i < mHitProgCount; ++i) {
             mHitParams[i].resize(recordCountPerHit);
@@ -107,6 +107,10 @@ namespace DXRFramework
         UINT hitCount = mProgram->getHitProgramCount(); // = MultiplierForGeometryContributionToHitGroupIndex
         for (UINT h = 0; h < hitCount; h++) {
             UINT geometryCount = mScene->getNumInstances();
+            if (!geometryCount) {
+                uint8_t *pHitRecord = getHitRecordPtr(h, 0);
+                applyRtProgramVars(pHitRecord, mProgram->getHitProgram(h, 0), rtso, mHitParams[h][0]);
+            }
             for (UINT i = 0; i < geometryCount; i++) {
                 uint8_t *pHitRecord = getHitRecordPtr(h, i);
                 uint32_t type = mScene->getModel(i)->getGeometryType();
