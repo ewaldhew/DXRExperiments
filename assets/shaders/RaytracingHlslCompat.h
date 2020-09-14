@@ -84,7 +84,7 @@ struct PhotonEmitter
     XMFLOAT3 pad;
 };
 
-#define PARTICLE_BUFFER_SIZE 64
+#define PARTICLE_BUFFER_SIZE 15
 struct PhotonSplatPayload
 {
     XMFLOAT3 result;
