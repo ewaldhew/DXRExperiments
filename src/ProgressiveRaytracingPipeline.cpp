@@ -96,9 +96,9 @@ ProgressiveRaytracingPipeline::ProgressiveRaytracingPipeline(RtContext::SharedPt
             config.AddStaticSampler(matTexSampler);
 
             // GlobalRootSignatureParams::MaterialTextureParamsSlot
-            config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 0 /* t0 */, 9); // space9 t0
+            config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 1 /* t1 */, 9); // space9 t1
             // GlobalRootSignatureParams::MaterialTextureSrvSlot
-            config.AddHeapRangesParameter({{1 /* t1 */, -1 /* unbounded */, 9 /* space9 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}});
+            config.AddHeapRangesParameter({{2 /* t2 */, -1 /* unbounded */, 9 /* space9 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}});
         });
         programDesc.configureHitGroupRootSignature([] (RootSignatureGenerator &config) {
             config = {};

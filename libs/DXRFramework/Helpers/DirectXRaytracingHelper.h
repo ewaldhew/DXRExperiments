@@ -34,6 +34,23 @@ inline void AllocateUAVTexture(ID3D12Device* pDevice, DXGI_FORMAT textureFormat,
     }
 }
 
+inline void AllocateUAVTexture3D(ID3D12Device* pDevice, DXGI_FORMAT textureFormat, UINT64 width, UINT64 height, UINT16 depth, ID3D12Resource **ppResource, D3D12_RESOURCE_STATES initialResourceState = D3D12_RESOURCE_STATE_COMMON, const wchar_t* resourceName = nullptr)
+{
+    auto uploadHeapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+    auto texDesc = CD3DX12_RESOURCE_DESC::Tex3D(textureFormat, width, static_cast<UINT>(height), depth, 1, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+    ThrowIfFailed(pDevice->CreateCommittedResource(
+        &uploadHeapProperties,
+        D3D12_HEAP_FLAG_NONE,
+        &texDesc,
+        initialResourceState,
+        nullptr,
+        IID_PPV_ARGS(ppResource)));
+    if (resourceName)
+    {
+        (*ppResource)->SetName(resourceName);
+    }
+}
+
 inline void AllocateUAVBuffer(ID3D12Device* pDevice, UINT64 bufferSize, ID3D12Resource **ppResource, D3D12_RESOURCE_STATES initialResourceState = D3D12_RESOURCE_STATE_COMMON, const wchar_t* resourceName = nullptr)
 {
     auto uploadHeapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);

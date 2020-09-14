@@ -580,6 +580,7 @@ PostbuildCopy.bat "$(SolutionDir)vc2015\build\bin\$(Configuration)\"
     <None Include="..\assets\shaders\SignedDistancePrimitives.hlsli" />
     <None Include="..\assets\shaders\VolumetricPrimitives.hlsli" />
     <None Include="..\assets\shaders\ParticipatingMedia.hlsli" />
+    <None Include="..\assets\shaders\ParticipatingMediaUtil.hlsli" />
     <None Include="..\libs\MiniEngine\Math\Functions.inl" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

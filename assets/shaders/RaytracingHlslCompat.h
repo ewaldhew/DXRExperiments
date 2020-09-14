@@ -88,8 +88,7 @@ struct PhotonEmitter
 struct PhotonSplatPayload
 {
     XMFLOAT3 result;
-    int tail;
-    XMFLOAT2 particles[PARTICLE_BUFFER_SIZE];
+    UINT tail;
 };
 
 #endif // RAYTRACINGHLSLCOMPAT_H

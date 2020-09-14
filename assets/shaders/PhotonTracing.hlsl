@@ -32,9 +32,15 @@ RWTexture2D<uint> gPhotonDensityMap : register(u3);
 
 RWStructuredBuffer<PhotonAABB> gVolumePhotonAabb : register(u4);
 RWBuffer<float4> gVolumePhotonPos : register(u5);
+RWBuffer<float4> gVolumePhotonPosObj : register(u6);
 
 ConstantBuffer<PhotonMappingConstants> photonMapConsts : register(b1);
 
+// Local root signature
+cbuffer Material : register(b2, space1)
+{
+    uint materialIndex;
+}
 
 void validate_and_add_photon(float3 normal, float3 position, float3 power, float3 in_direction, float t, uint map_idx)
 {
@@ -54,14 +60,20 @@ void validate_and_add_photon(float3 normal, float3 position, float3 power, float
         stored_photon.direction = unitvec_to_spherical(in_direction);
         stored_photon.normal = unitvec_to_spherical(normal);
         stored_photon.distTravelled = t;
+        stored_photon.materialIndex = materialIndex;
 
         switch (map_idx) {
         case PhotonMapID::Surface:
             gPhotonMapSurface[photon_index] = stored_photon;
+            // Tile-based photon density estimation
+            InterlockedAdd(gPhotonDensityMap[tile.xy], 1);
             break;
         case PhotonMapID::Volume:
+        {
+            float4 pos = float4(stored_photon.position, 1);
             gPhotonMapVolume[photon_index] = stored_photon;
-            gVolumePhotonPos[photon_index] = float4(stored_photon.position, 1);
+            gVolumePhotonPos[photon_index] = pos;
+            gVolumePhotonPosObj[photon_index] = float4(mul(WorldToObject3x4(), pos), 1);
             PhotonAABB aabb = {
                 stored_photon.position - photonMapConsts.volumeSplatPhotonSize,
                 stored_photon.position + photonMapConsts.volumeSplatPhotonSize,
@@ -70,9 +82,7 @@ void validate_and_add_photon(float3 normal, float3 position, float3 power, float
             gVolumePhotonAabb[photon_index] = aabb;
             break;
         }
-
-        // Tile-based photon density estimation
-        InterlockedAdd(gPhotonDensityMap[tile.xy], 1);
+        }
     }
 }
 
@@ -192,7 +202,7 @@ bool russian_roulette(float3 in_power, float3 in_direction, float3 normal, inout
         float throughput = 1.0;
         uint numInteractions = 0;
         float3 prevPosition = position;
-        float3 params; // x - extinction, y - scattering
+        float3 params; // x - absorption, y - scattering
         float3 rayDir = WorldRayDirection();
         float t;
         while (evaluateVolumeInteraction(randSeed, position, rayDir, t, params, 1))
@@ -202,7 +212,7 @@ bool russian_roulette(float3 in_power, float3 in_direction, float3 normal, inout
             }
 
             // attenuate by albedo = scattering / extinction
-            throughput *= params.y / params.x;
+            throughput *= params.y / (params.x + params.y);
 
             // Russian roulette absorption
             if (throughput < 0.2) {

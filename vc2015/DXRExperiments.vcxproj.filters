@@ -633,6 +633,9 @@
     <None Include="..\assets\shaders\RaytracingCommon.hlsli">
       <Filter>Assets\Shaders\Shared</Filter>
     </None>
+    <None Include="..\assets\shaders\ParticipatingMediaUtil.hlsli">
+      <Filter>Assets\Shaders\Effects</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="..\assets\shaders\DenoiseCompositorH.hlsl">

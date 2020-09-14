@@ -146,7 +146,7 @@ float3 shade(float3 position, float3 normal, uint currentDepth)
         float throughput = 1.0;
         uint numInteractions = 0;
         float3 prevPosition = position;
-        float3 params; // x - extinction, y - scattering
+        float3 params; // x - absorption, y - scattering
         float3 rayDir = WorldRayDirection();
         float t;
         while (evaluateVolumeInteraction(randSeed, position, rayDir, t, params, currentDepth))
@@ -157,7 +157,7 @@ float3 shade(float3 position, float3 normal, uint currentDepth)
             }
 
             // attenuate by albedo = scattering / extinction
-            throughput *= params.y / params.x;
+            throughput *= params.y / (params.x + params.y);
 
             // Russian roulette absorption
             if (throughput < 0.2) {

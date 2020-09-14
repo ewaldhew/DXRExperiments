@@ -24,8 +24,9 @@ StructuredBuffer<PointLightParams> pointLights : register(t2);
 SamplerState defaultSampler : register(s0);
 SamplerState matTexSampler : register(s1);
 
-Texture3D<float4> materialParamsTex[] : register(t1, space9);
-StructuredBuffer<MaterialTextureParams> texParams : register(t0, space9);
+Texture3D<float4> materialParamsTex[] : register(t2, space9);
+StructuredBuffer<MaterialTextureParams> texParams : register(t1, space9);
+StructuredBuffer<MaterialParams> matParams : register(t0, space9);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Hit-group local root signature
