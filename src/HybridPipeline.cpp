@@ -1464,7 +1464,7 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
         commandList->SetComputeRootDescriptorTable(GlobalRootSignatureParams::OutputViewSlot, mPhotonSplatUav[0].gpuHandle);
         mRtContext->getFallbackCommandList()->SetTopLevelAccelerationStructure(GlobalRootSignatureParams::AccelerationStructureSlot, mVolumePhotonTlasWrappedPtr);
 
-        commandList->SetComputeRootShaderResourceView(3, mMaterialParamsBuffer.GpuVirtualAddress()); 
+        commandList->SetComputeRootShaderResourceView(3, mMaterialParamsBuffer.GpuVirtualAddress());
         commandList->SetComputeRootShaderResourceView(4, mTextureParams.GpuVirtualAddress());
         commandList->SetComputeRootDescriptorTable(5, mTextureSrvGpuHandles[2]);
 

@@ -1,5 +1,6 @@
 #include "RaytracingCommon.hlsli"
 #include "RaytracingShaderHelper.hlsli"
+#include "ParticipatingMediaUtil.hlsli"
 
 struct DummyAttr { uint padding; };
 
@@ -127,7 +128,8 @@ void RayGen()
                 }
 
                 //integrate depth-sorted list of particles
-                for (i = 0; i < prd.tail; i++) {
+                float3 prev_pos = prd.tail ? ray.Origin + ray.Direction * payloadBuffer[BufIndex(0)].x : 0.f;
+                for (i=0; i<prd.tail; i++) {
                     float trbf = payloadBuffer[BufIndex(i)].x;
                     uint photon_idx = uint(payloadBuffer[BufIndex(i)].y);
 
@@ -137,23 +139,31 @@ void RayGen()
 
                     float3 sample_pos = ray.Origin + ray.Direction * trbf;
                     float3 sample_n = photon.position - sample_pos;
+                    float dist = length(sample_pos - prev_pos);
 
-                    float drbf = length(sample_n) * 2 / photonMapConsts.volumeSplatPhotonSize;
-                    drbf = saturate(exp(-drbf*drbf));
+                    MaterialParams mat = matParams[photon.materialIndex];
+                    collectMaterialParams1(mat, volPhotonPosObj[photon_idx].xyz);
+                    VolumeParams vol = getVolumeParams(mat);
+                    float3 emission = vol.emission;
+                    float absorption = vol.absorption;
+                    float scattering = vol.scattering;
+                    float extinction = absorption + scattering;
+                    float albedo = scattering / extinction;
+                    float phase_factor = evalPhaseFuncPdf(vol.phase_func_type, photon.direction, ray.Direction);
 
+                    float diff_volume = (4.f/3.f)*M_PI * pow(length(sample_n), 3);
                     float kernel_scale = kernel_size(photon.normal, -photon.direction, photon.position.z, photon.distTravelled);
+                    float volume_factor = 1.f / (kernel_scale * diff_volume);
 
-                    // TODO: blending
-
-                    float3 power = photon.power / kernel_scale * 2.f;
+                    float3 power = photon.power * volume_factor * phase_factor;
                     float3 direction = -photon.direction;
                     float total_power = dot(power.xyz, float3(1.0f, 1.0f, 1.0f));
                     float3 weighted_direction = total_power * direction;
                     result_direction += weighted_direction;
 
-                    float4 color_sample = float4(power, 0.9);
-                    float alpha = color_sample.a;
-                    result += color_sample.rgb * result_alpha;
+                    float3 sample_color = (absorption * emission + albedo * power) * dist;
+                    float alpha = exp(-extinction * dist);
+                    result += sample_color.rgb * result_alpha;
                     result_alpha *= alpha;
                 }
             }
