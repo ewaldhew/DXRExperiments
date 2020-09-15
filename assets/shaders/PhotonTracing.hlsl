@@ -35,6 +35,11 @@ RWBuffer<float4> gVolumePhotonPos : register(u5);
 
 ConstantBuffer<PhotonMappingConstants> photonMapConsts : register(b1);
 
+// Local root signature
+cbuffer Material : register(b2, space1)
+{
+    uint materialIndex;
+}
 
 void validate_and_add_photon(float3 normal, float3 position, float3 power, float3 in_direction, float t, uint map_idx)
 {

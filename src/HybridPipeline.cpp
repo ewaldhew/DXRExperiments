@@ -207,11 +207,13 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context, DXGI_FORMAT outputF
             config.AddHeapRangesParameter({{0 /* t0 */, 1, 1 /* space1 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // vertices
             config.AddHeapRangesParameter({{1 /* t1 */, 1, 1 /* space1 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // indices
             config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS, 0, 1, SizeOfInUint32(MaterialParams)); // space1 b0
+            config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS, 2, 1, SizeOfInUint32(UINT)); // space1 b1
         }, RtModel::GeometryType::Triangles);
         const auto aabbHitGroupConfigurator = [] (RootSignatureGenerator &config) {
             config = {};
             config.AddHeapRangesParameter({{1 /* b1 */, 1, 1 /* space1 */, D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 0}}); // attrs
             config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS, 0, 1, SizeOfInUint32(MaterialParams)); // space1 b0
+            config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS, 2, 1, SizeOfInUint32(UINT)); // space1 b1
         };
         photonTrace.configureHitGroupRootSignature(aabbHitGroupConfigurator, RtModel::GeometryType::AABB_Analytic);
         photonTrace.configureHitGroupRootSignature(aabbHitGroupConfigurator, RtModel::GeometryType::AABB_Volumetric);
@@ -1296,22 +1298,23 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
         for (UINT rayType = 0; rayType < program->getHitProgramCount(); ++rayType) {
             for (UINT instance = 0; instance < mRtScene->getNumInstances(); ++instance) {
                 auto &hitVars = mRtBindings->getHitVars(rayType, instance);
-                switch (mRtScene->getModel(instance)->getGeometryType())
+                auto rtModel = mRtScene->getModel(instance);
+                switch (rtModel->getGeometryType())
                 {
                 case RtModel::GeometryType::Triangles: {
-                    auto model = toRtMesh(mRtScene->getModel(instance));
+                    auto model = toRtMesh(rtModel);
                     hitVars->appendHeapRanges(model->getVertexBufferSrvHandle().ptr);
                     hitVars->appendHeapRanges(model->getIndexBufferSrvHandle().ptr);
-                    hitVars->append32BitConstants((void*)&mMaterials[model->mMaterialIndex].params, SizeOfInUint32(MaterialParams));
                     break;
                 }
                 default: {
-                    auto model = toRtProcedural(mRtScene->getModel(instance));
+                    auto model = toRtProcedural(rtModel);
                     hitVars->appendHeapRanges(model->getPrimitiveConstantsCbvHandle().ptr);
-                    hitVars->append32BitConstants((void*)&mMaterials[model->mMaterialIndex].params, SizeOfInUint32(MaterialParams));
                     break;
                 }
                 }
+                hitVars->append32BitConstants((void*)&mMaterials[rtModel->mMaterialIndex].params, SizeOfInUint32(MaterialParams));
+                hitVars->append32BitConstants((void*)&rtModel->mMaterialIndex, 1);
             }
         }
 
