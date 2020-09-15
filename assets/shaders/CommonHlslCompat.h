@@ -188,7 +188,8 @@ struct Photon
     XMFLOAT3 normal;
     float distTravelled;
     UINT randSeed;
-    XMUINT2 padding;
+    UINT materialIndex;
+    UINT padding;
 };
 
 struct PhotonAABB

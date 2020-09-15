@@ -198,9 +198,9 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context, DXGI_FORMAT outputF
             config.AddStaticSampler(matTexSampler);
 
             // GlobalRootSignatureParams::MaterialTextureParamsSlot
-            config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 0 /* t0 */, 9); // space9 t0
+            config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 1 /* t1 */, 9); // space9 t1
             // GlobalRootSignatureParams::MaterialTextureSrvSlot
-            config.AddHeapRangesParameter({ {1 /* t1 */, -1 /* unbounded */, 9 /* space9 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0} });
+            config.AddHeapRangesParameter({{2 /* t2 */, -1 /* unbounded */, 9 /* space9 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}});
         });
         photonTrace.configureHitGroupRootSignature([] (RootSignatureGenerator &config) {
             config = {};
@@ -287,9 +287,15 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context, DXGI_FORMAT outputF
             // GlobalRootSignatureParams::PerFrameConstantsSlot
             config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_CBV, 0 /* b0 */);
 
+            config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 0 /* t0 */, 9 /* space9 */); // material params
+            config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 1 /* t1 */, 9 /* space9 */); // material texture params
+            config.AddHeapRangesParameter({{2 /* t2 */, -1 /* unbounded */, 9 /* space9 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // material textures
+
             config.AddHeapRangesParameter({{0 /* t0 */, 1, 1 /* space1 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // density
             config.AddHeapRangesParameter({{1 /* t1 */, 1, 1 /* space1 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // photons
             config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_CBV, 1 /* b1 */, 0, 1); // mapping consts
+
+            config.AddHeapRangesParameter({{0 /* u0 */, 1, 1 /* space1 */, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0}}); // rt buffer
         });
     }
     mRtPhotonSplattingVolumePass.mRtProgram = RtProgram::create(context, photonSplatVolume);
@@ -312,8 +318,8 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context, DXGI_FORMAT outputF
         rsConfig.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_CBV, 0 /* b0 */); // per frame constants
         rsConfig.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS, 1 /* b1 */, 0, SizeOfInUint32(PerObjectConstants)); // object constants
         rsConfig.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS, 0 /* b0 */, 1 /* space1 */, SizeOfInUint32(MaterialParams)); // material
-        rsConfig.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 0 /* t0 */, 9 /* space9 */); // material texture params
-        rsConfig.AddHeapRangesParameter({{1 /* t1 */, -1 /* unbounded */, 9 /* space9 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // material textures
+        rsConfig.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 1 /* t1 */, 9 /* space9 */); // material texture params
+        rsConfig.AddHeapRangesParameter({{2 /* t2 */, -1 /* unbounded */, 9 /* space9 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // material textures
         rsConfig.AddHeapRangesParameter({{1 /* b1 */, 1, 1 /* space1 */, D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 0}}); // procedural aabb attrs
         rsConfig.AddStaticSampler(albedoSampler);
 
@@ -470,6 +476,10 @@ void HybridPipeline::setScene(RtScene::SharedPtr scene)
 void HybridPipeline::buildAccelerationStructures()
 {
     mRtScene->build(mRtContext, mRtPhotonMappingPass.mRtProgram->getHitProgramCount());
+
+    // NOTE: abusing this call to initialize other resources
+    mRtContext->getCommandList()->CopyResource(mMaterialParamsResource.Get(), mMaterialParamsBuffer.GetResource().Get());
+    mRtContext->transitionResource(mMaterialParamsResource.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 }
 
 void HybridPipeline::loadResources(ID3D12CommandQueue *uploadCommandQueue, UINT frameCount)
@@ -479,6 +489,7 @@ void HybridPipeline::loadResources(ID3D12CommandQueue *uploadCommandQueue, UINT 
     mTextureResources.resize(2);
     mTextureSrvGpuHandles.resize(3);
 
+    mMaterialParamsBuffer.Create(device, mMaterials.size(), 1, L"MaterialParams");
     mTextureParams.Create(device, mMaterials.size(), 1, L"MaterialTextureParams");
 
     // Create and upload global textures
@@ -529,6 +540,10 @@ void HybridPipeline::loadResources(ID3D12CommandQueue *uploadCommandQueue, UINT 
     if (!mTextureSrvGpuHandles[2].ptr) {
         mTextureSrvGpuHandles[2] = mTextureSrvGpuHandles[1];
     }
+
+    mMaterialParamsBuffer.CopyStagingToGpu();
+    *mMaterialParamsResource.ReleaseAndGetAddressOf() = CreateBuffer(device, mMaterialParamsBuffer.InstanceSize(), D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COPY_DEST, kDefaultHeapProps);
+    NAME_D3D12_OBJECT(mMaterialParamsResource);
 
     // Create per-frame constant buffer
     mConstantBuffer.Create(device, frameCount, L"PerFrameConstantBuffer");
@@ -730,6 +745,20 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
     }
 
     ThrowIfFalse(mPhotonSplatUav[0].heapIndex + 1 == mPhotonSplatUav[1].heapIndex);
+
+    AllocateUAVTexture3D(device, DXGI_FORMAT_R32G32_FLOAT, width, height, PARTICLE_BUFFER_SIZE, mPhotonSplatRtBuffer.Resource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, L"payload buffer for RT volsplat");
+
+    {
+        D3D12_CPU_DESCRIPTOR_HANDLE uavCpuHandle;
+        mPhotonSplatRtBuffer.Uav.heapIndex = mRtContext->allocateDescriptor(&uavCpuHandle, mPhotonSplatRtBuffer.Uav.heapIndex);
+
+        D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+        uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE3D;
+        uavDesc.Texture3D.WSize = -1;
+        device->CreateUnorderedAccessView(mPhotonSplatRtBuffer.Resource.Get(), nullptr, &uavDesc, uavCpuHandle);
+
+        mPhotonSplatRtBuffer.Uav.gpuHandle = mRtContext->getDescriptorGPUHandle(mPhotonSplatRtBuffer.Uav.heapIndex);
+    }
 
     AllocateRTVTexture(device, mGBufferFormats.at(GBufferID::Normal), width, height, mGBuffer[GBufferID::Normal].Resource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, L"G buffer normals");
     CreateTextureRTV(device, mRtvDescriptorHeap.get(), mGBuffer[GBufferID::Normal]);
@@ -1354,7 +1383,7 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
         commandList->RSSetScissorRects(1, &scissorRect);
 
         commandList->SetGraphicsRootSignature(mPhotonSplattingPass.rootSignature.Get());
-        commandList->SetGraphicsRootDescriptorTable(0, mPhotonDensity.Srv.gpuHandle);
+        commandList->SetGraphicsRootDescriptorTable(0, mPhotonDensity.Srv.gpuHandle); // XXX: not redrawn after camera move!
         commandList->SetGraphicsRootDescriptorTable(1, mPhotonMap.Srv.gpuHandle);
         commandList->SetGraphicsRootConstantBufferView(2, mRasterConstantsBuffer.GpuVirtualAddress(frameIndex));
         commandList->SetGraphicsRootConstantBufferView(3, mPhotonMappingConstants.GpuVirtualAddress());
@@ -1414,9 +1443,15 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
         commandList->SetComputeRootDescriptorTable(GlobalRootSignatureParams::OutputViewSlot, mPhotonSplatUav[0].gpuHandle);
         mRtContext->getFallbackCommandList()->SetTopLevelAccelerationStructure(GlobalRootSignatureParams::AccelerationStructureSlot, mVolumePhotonTlasWrappedPtr);
 
-        commandList->SetComputeRootDescriptorTable(3, mPhotonDensity.Srv.gpuHandle);
-        commandList->SetComputeRootDescriptorTable(4, mVolumePhotonMap.Srv.gpuHandle);
-        commandList->SetComputeRootConstantBufferView(5, mPhotonMappingConstants.GpuVirtualAddress());
+        commandList->SetComputeRootShaderResourceView(3, mMaterialParamsBuffer.GpuVirtualAddress()); 
+        commandList->SetComputeRootShaderResourceView(4, mTextureParams.GpuVirtualAddress());
+        commandList->SetComputeRootDescriptorTable(5, mTextureSrvGpuHandles[2]);
+
+        commandList->SetComputeRootDescriptorTable(6, mPhotonDensity.Srv.gpuHandle);
+        commandList->SetComputeRootDescriptorTable(7, mVolumePhotonMap.Srv.gpuHandle);
+        commandList->SetComputeRootConstantBufferView(8, mPhotonMappingConstants.GpuVirtualAddress());
+
+        commandList->SetComputeRootDescriptorTable(9, mPhotonSplatRtBuffer.Uav.gpuHandle);
 
         mRtContext->raytrace(mRtBindings, mRtState, width, height, 1);
 

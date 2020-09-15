@@ -17,10 +17,11 @@ StructuredBuffer<PointLightParams> pointLights : register(t2);
 SamplerState cubeSampler : register(s0);
 SamplerState matTexSampler : register(s1);
 
-Texture3D<float4> materialParamsTex[10000] : register(t1, space9);
-StructuredBuffer<MaterialTextureParams> texParams : register(t0, space9);
+Texture3D<float4> materialParamsTex[10000] : register(t2, space9);
+StructuredBuffer<MaterialTextureParams> texParams : register(t1, space9);
+StructuredBuffer<MaterialParams> matParams : register(t0, space9); // global buffer version
 
-cbuffer MaterialConstants : register(b0, space1)
+cbuffer MaterialConstants : register(b0, space1) // local per object version
 {
     MaterialParams materialParams;
 }

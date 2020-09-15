@@ -90,6 +90,8 @@ private:
     ConstantBuffer<PhotonMappingConstants> mPhotonMappingConstants;
     ConstantBuffer<PerFrameConstantsRaster> mRasterConstantsBuffer;
 
+    ComPtr<ID3D12Resource> mMaterialParamsResource;
+    StructuredBuffer<MaterialParams> mMaterialParamsBuffer;
     StructuredBuffer<MaterialTextureParams> mTextureParams;
     std::vector<ComPtr<ID3D12Resource>> mTextureResources;
     std::vector<D3D12_GPU_DESCRIPTOR_HANDLE> mTextureSrvGpuHandles;
@@ -115,6 +117,8 @@ private:
     DXTKExtend::GeometricModel::SharedPtr mPhotonSplatKernelShape;
     OutputResourceView mPhotonSplat[2];
     ResourceView mPhotonSplatUav[2];
+
+    OutputResourceView mPhotonSplatRtBuffer;
 
     const std::unordered_map<GBufferID::Value, DXGI_FORMAT> mGBufferFormats =
     {

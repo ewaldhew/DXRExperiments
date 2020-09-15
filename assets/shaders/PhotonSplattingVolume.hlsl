@@ -9,6 +9,8 @@ RWTexture2D<float2> DirectionYZ : register(u1);
 Texture2D<uint> photonDensity : register(t0, space1);
 StructuredBuffer<Photon> volPhotonBuffer : register(t1, space1);
 
+RWTexture3D<float2> payloadBuffer : register(u0, space1);
+
 ConstantBuffer<PhotonMappingConstants> photonMapConsts : register(b1);
 
 // Simplified version of the one in PhotonSplatting.vs
@@ -45,6 +47,11 @@ float kernel_size(float3 n, float3 light, float pos_z, float ray_length)
     return ellipse_area / min_area;
 }
 
+// get index of payload data in global payload buffer
+uint3 BufIndex(uint local_idx)
+{
+    return uint3(DispatchRaysIndex().xy, local_idx);
+}
 
 [shader("raygeneration")]
 void RayGen()
@@ -77,11 +84,11 @@ void RayGen()
     float texit = min(tmax.x, min(tmax.y, tmax.z));
 
     const float fixed_radius = photonMapConsts.volumeSplatPhotonSize;
-    float slab_spacing = PARTICLE_BUFFER_SIZE * photonMapConsts.particlesPerSlab * fixed_radius;
+    float slab_spacing = PARTICLE_BUFFER_SIZE / photonMapConsts.particlesPerSlab * fixed_radius;
 
-    float3 direction = 0.f;
+    float3 result_direction = 0.f;
     float3 result = 0.f;
-    float result_alpha = 0.f;
+    float result_alpha = 1.f; // throughput
 
     if (tenter < texit)
     {
@@ -92,7 +99,7 @@ void RayGen()
         //  sort,
         //  integrate.
 
-        while(tbuf < texit && result_alpha < 0.97f)
+        while(tbuf < texit && result_alpha > 0.03f)
         {
             prd.tail = 0;
             ray.TMin = max(tenter, tbuf);
@@ -107,49 +114,46 @@ void RayGen()
                 int i;
 
                 //bubble sort
-                //for (i=0; i<N; i++) {
-                //    for (int j=0; j < N-i-1; j++)
-                //    {
-                //        const float2 tmp = prd.particles[i];
-                //        if (tmp.x < prd.particles[j].x) {
-                //            prd.particles[i] = prd.particles[j];
-                //            prd.particles[j] = tmp;
-                //        }
-                //    }
-                //}
-                uint minidx = 2147483647;
-                for (i=0;i<N;i++){
-                    if (minidx > prd.particles[i].y) {
-                        minidx = prd.particles[i].y;
+                for (i=0; i<N; i++) {
+                    for (int j=0; j < N-i-1; j++)
+                    {
+                        const float2 tmp = payloadBuffer[BufIndex(i)];
+                        if (tmp.x < payloadBuffer[BufIndex(j)].x) {
+                            payloadBuffer[BufIndex(i)] = payloadBuffer[BufIndex(j)];
+                            payloadBuffer[BufIndex(j)] = tmp;
+                        }
                     }
                 }
 
                 //integrate depth-sorted list of particles
-                /*for (i=0; i<prd.tail; i++)*/i=minidx+1;if(prd.tail) {
-                    float trbf = prd.particles[i].x;
-                    uint idx = uint(prd.particles[i].y);
+                for (i = 0; i < prd.tail; i++) {
+                    float trbf = payloadBuffer[BufIndex(i)].x;
+                    uint photon_idx = uint(payloadBuffer[BufIndex(i)].y);
 
-                    Photon photon = volPhotonBuffer[idx];
+                    Photon photon = volPhotonBuffer[photon_idx];
+                    photon.direction = spherical_to_unitvec(photon.direction);
+                    photon.normal = spherical_to_unitvec(photon.normal);
+
+                    float3 sample_pos = ray.Origin + ray.Direction * trbf;
+                    float3 sample_n = photon.position - sample_pos;
+
+                    float drbf = length(sample_n) * 2 / photonMapConsts.volumeSplatPhotonSize;
+                    drbf = saturate(exp(-drbf*drbf));
 
                     float kernel_scale = kernel_size(photon.normal, -photon.direction, photon.position.z, photon.distTravelled);
 
                     // TODO: blending
-                    //float4 color_sample = float4(photon.power, 1.0f);
-                    //direction = -photon.direction;
 
-                    float3 power = float3(idx, 0,0);//photon.power / kernel_scale;
+                    float3 power = photon.power / kernel_scale * 2.f;
                     float3 direction = -photon.direction;
                     float total_power = dot(power.xyz, float3(1.0f, 1.0f, 1.0f));
                     float3 weighted_direction = total_power * direction;
+                    result_direction += weighted_direction;
 
-                    ColorXYZAndDirectionX[launchIndex] += float4(power, weighted_direction.x);
-                    DirectionYZ[launchIndex] += weighted_direction.yz;
-
-                    //float alpha = color_sample.a;
-                    //float alpha_1msa = alpha * (1.0 - result_alpha);
-                    //result += color_sample.rgb * alpha_1msa;
-                    //result_alpha += alpha_1msa;
-                    break;
+                    float4 color_sample = float4(power, 0.9);
+                    float alpha = color_sample.a;
+                    result += color_sample.rgb * result_alpha;
+                    result_alpha *= alpha;
                 }
             }
 
@@ -157,11 +161,9 @@ void RayGen()
         }
     }
 
-    //float total_power = dot(result.xyz, float3(1.0f, 1.0f, 1.0f));
-    //float3 weighted_direction = total_power * direction;
-
-    //ColorXYZAndDirectionX[launchIndex] += float4(result, weighted_direction.x);
-    //DirectionYZ[launchIndex] += weighted_direction.yz;
+    float3 color = result + ColorXYZAndDirectionX[launchIndex].rgb * result_alpha;
+    ColorXYZAndDirectionX[launchIndex] += float4(color, result_direction.x);
+    DirectionYZ[launchIndex] += result_direction.yz;
 }
 
 uint PhotonIndex()
@@ -192,7 +194,7 @@ void AnyHit(inout PhotonSplatPayload payload, in DummyAttr attr)
 {
     if (payload.tail < PARTICLE_BUFFER_SIZE)
     {
-        payload.particles[payload.tail] = float2(RayTCurrent(), PhotonIndex());
+        payloadBuffer[BufIndex(payload.tail)] = float2(RayTCurrent(), PhotonIndex());
         payload.tail++;
         IgnoreHit();
     }

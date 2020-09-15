@@ -54,6 +54,7 @@ void validate_and_add_photon(float3 normal, float3 position, float3 power, float
         stored_photon.direction = unitvec_to_spherical(in_direction);
         stored_photon.normal = unitvec_to_spherical(normal);
         stored_photon.distTravelled = t;
+        stored_photon.materialIndex = materialIndex;
 
         switch (map_idx) {
         case PhotonMapID::Surface:
