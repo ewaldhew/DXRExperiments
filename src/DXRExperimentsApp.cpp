@@ -179,10 +179,10 @@ void DXRExperimentsApp::InitRaytracing()
         for (UINT i = 0; i < tex.depth; i++) {
             for (UINT j = 0; j < tex.height; j++) {
                 for (UINT k = 0; k < tex.width; k++) {
-                    float extinction = (noise.eval(i / (double)tex.depth, j/ (double)tex.height, k/ (double)tex.width) + 0.23) ;
-                    extinction = 0.6;//(j + k) % 2 ? 0.8 : 0.4;
-                    //extinction = min(max(extinction, 0.1), 0.8);
-                    tex.data[i*tex.height*tex.width + j*tex.width + k] = XMFLOAT4(extinction, extinction * 0.8, 0, 1);
+                    float absorption = (noise.eval(i / (double)tex.depth, j/ (double)tex.height, k/ (double)tex.width) + 0.23) ;
+                    absorption = 0.6;//(j + k) % 2 ? 0.8 : 0.4;
+                    //absorption = min(max(absorption, 0.1), 0.8);
+                    tex.data[i*tex.height*tex.width + j*tex.width + k] = XMFLOAT4(absorption, absorption * 0.8, 0, 1);
                 }
             }
         }

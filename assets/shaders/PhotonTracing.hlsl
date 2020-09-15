@@ -198,7 +198,7 @@ bool russian_roulette(float3 in_power, float3 in_direction, float3 normal, inout
         float throughput = 1.0;
         uint numInteractions = 0;
         float3 prevPosition = position;
-        float3 params; // x - extinction, y - scattering
+        float3 params; // x - absorption, y - scattering
         float3 rayDir = WorldRayDirection();
         float t;
         while (evaluateVolumeInteraction(randSeed, position, rayDir, t, params, 1))
@@ -208,7 +208,7 @@ bool russian_roulette(float3 in_power, float3 in_direction, float3 normal, inout
             }
 
             // attenuate by albedo = scattering / extinction
-            throughput *= params.y / params.x;
+            throughput *= params.y / (params.x + params.y);
 
             // Russian roulette absorption
             if (throughput < 0.2) {

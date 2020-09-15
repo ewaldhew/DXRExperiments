@@ -27,7 +27,8 @@ bool shootVolumeRay(float3 pos, float3 dir, float minT, float maxT, uint current
 
 float getExtinction(float3 position)
 {
-    return sampleMaterialEx(materialParams.albedo, position).x;
+    float4 param = sampleMaterialEx(materialParams.albedo, position);
+    return param.x + param.y;
 }
 
 bool evaluateVolumeInteraction(inout uint randSeed, inout float3 position, float3 direction, out float t, inout float3 params, uint currentDepth)
@@ -44,7 +45,7 @@ bool evaluateVolumeInteraction(inout uint randSeed, inout float3 position, float
     } while (inVolume && getExtinction(pos) < nextRand(randSeed) * extinctionMax);
 
     position = pos;
-    // x - extinction (ka), y - scattering (ks)
+    // x - absorption (ka), y - scattering (ks)
     params = sampleMaterialEx(materialParams.albedo, pos).xyz;
 
     return inVolume;
