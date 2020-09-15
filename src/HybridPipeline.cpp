@@ -189,7 +189,7 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context, DXGI_FORMAT outputF
             // GlobalRootSignatureParams::PhotonDensityOutputViewSlot
             config.AddHeapRangesParameter({{PhotonMapID::Count + 1, 1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0}});
             // GlobalRootSignatureParams::PhotonGeometryOutputViewSlot
-            config.AddHeapRangesParameter({{PhotonMapID::Count + 2, 2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0}});
+            config.AddHeapRangesParameter({{PhotonMapID::Count + 2, 3, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0}});
             // GlobalRootSignatureParams::PhotonMappingConstantsSlot
             config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_CBV, 1 /* b1 */);
 
@@ -295,6 +295,7 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context, DXGI_FORMAT outputF
 
             config.AddHeapRangesParameter({{0 /* t0 */, 1, 1 /* space1 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // density
             config.AddHeapRangesParameter({{1 /* t1 */, 1, 1 /* space1 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // photons
+            config.AddHeapRangesParameter({{2 /* t2 */, 1, 1 /* space1 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // photon object space positions
             config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_CBV, 1 /* b1 */, 0, 1); // mapping consts
 
             config.AddHeapRangesParameter({{0 /* u0 */, 1, 1 /* space1 */, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0}}); // rt buffer
@@ -677,8 +678,10 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
 
     AllocateUAVBuffer(device, MAX_PHOTONS * sizeof(PhotonAABB), mVolumePhotonAabbs.Resource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     AllocateUAVBuffer(device, MAX_PHOTONS * sizeof(XMVECTOR), mVolumePhotonPositions.Resource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    AllocateUAVBuffer(device, MAX_PHOTONS * sizeof(XMVECTOR), mVolumePhotonPositionsObjSpace.Resource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     AllocateReadbackBuffer(device, MAX_PHOTONS * sizeof(XMVECTOR), mVolumePhotonPositionsReadback.ReleaseAndGetAddressOf());
     CreateStructuredBufferUAV(device, mRtContext, mVolumePhotonAabbs, sizeof(PhotonAABB), MAX_PHOTONS);
+    CreateBufferSRV(mRtContext, mVolumePhotonPositionsObjSpace, sizeof(XMVECTOR));
 
     {
         D3D12_CPU_DESCRIPTOR_HANDLE uavCpuHandle;
@@ -692,6 +695,20 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
         device->CreateUnorderedAccessView(mVolumePhotonPositions.Resource.Get(), nullptr, &uavDesc, uavCpuHandle);
 
         mVolumePhotonPositions.Uav.gpuHandle = mRtContext->getDescriptorGPUHandle(mVolumePhotonPositions.Uav.heapIndex);
+    }
+
+    {
+        D3D12_CPU_DESCRIPTOR_HANDLE uavCpuHandle;
+        mVolumePhotonPositionsObjSpace.Uav.heapIndex = mRtContext->allocateDescriptor(&uavCpuHandle, mVolumePhotonPositionsObjSpace.Uav.heapIndex);
+        ThrowIfFalse(mVolumePhotonAabbs.Uav.heapIndex + 2 == mVolumePhotonPositionsObjSpace.Uav.heapIndex);
+
+        D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+        uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+        uavDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+        uavDesc.Buffer.NumElements = MAX_PHOTONS;
+        device->CreateUnorderedAccessView(mVolumePhotonPositionsObjSpace.Resource.Get(), nullptr, &uavDesc, uavCpuHandle);
+
+        mVolumePhotonPositionsObjSpace.Uav.gpuHandle = mRtContext->getDescriptorGPUHandle(mVolumePhotonPositionsObjSpace.Uav.heapIndex);
     }
 
     const double preferredTileSizeInPixels = 8.0;
@@ -1431,6 +1448,7 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
         std::initializer_list<D3D12_RESOURCE_BARRIER> barriers =
         {
             CD3DX12_RESOURCE_BARRIER::Transition(mVolumePhotonMap.Resource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+            CD3DX12_RESOURCE_BARRIER::Transition(mVolumePhotonPositionsObjSpace.Resource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
             CD3DX12_RESOURCE_BARRIER::Transition(mPhotonDensity.Resource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
             CD3DX12_RESOURCE_BARRIER::Transition(mPhotonSplat[0].Resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
             CD3DX12_RESOURCE_BARRIER::Transition(mPhotonSplat[1].Resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
@@ -1452,9 +1470,10 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
 
         commandList->SetComputeRootDescriptorTable(6, mPhotonDensity.Srv.gpuHandle);
         commandList->SetComputeRootDescriptorTable(7, mVolumePhotonMap.Srv.gpuHandle);
-        commandList->SetComputeRootConstantBufferView(8, mPhotonMappingConstants.GpuVirtualAddress());
+        commandList->SetComputeRootDescriptorTable(8, mVolumePhotonPositionsObjSpace.Srv.gpuHandle);
+        commandList->SetComputeRootConstantBufferView(9, mPhotonMappingConstants.GpuVirtualAddress());
 
-        commandList->SetComputeRootDescriptorTable(9, mPhotonSplatRtBuffer.Uav.gpuHandle);
+        commandList->SetComputeRootDescriptorTable(10, mPhotonSplatRtBuffer.Uav.gpuHandle);
 
         mRtContext->raytrace(mRtBindings, mRtState, width, height, 1);
 

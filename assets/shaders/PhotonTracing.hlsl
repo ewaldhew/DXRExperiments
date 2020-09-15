@@ -32,6 +32,7 @@ RWTexture2D<uint> gPhotonDensityMap : register(u3);
 
 RWStructuredBuffer<PhotonAABB> gVolumePhotonAabb : register(u4);
 RWBuffer<float4> gVolumePhotonPos : register(u5);
+RWBuffer<float4> gVolumePhotonPosObj : register(u6);
 
 ConstantBuffer<PhotonMappingConstants> photonMapConsts : register(b1);
 
@@ -66,8 +67,11 @@ void validate_and_add_photon(float3 normal, float3 position, float3 power, float
             gPhotonMapSurface[photon_index] = stored_photon;
             break;
         case PhotonMapID::Volume:
+        {
+            float4 pos = float4(stored_photon.position, 1);
             gPhotonMapVolume[photon_index] = stored_photon;
-            gVolumePhotonPos[photon_index] = float4(stored_photon.position, 1);
+            gVolumePhotonPos[photon_index] = pos;
+            gVolumePhotonPosObj[photon_index] = float4(mul(WorldToObject3x4(), pos), 1);
             PhotonAABB aabb = {
                 stored_photon.position - photonMapConsts.volumeSplatPhotonSize,
                 stored_photon.position + photonMapConsts.volumeSplatPhotonSize,
@@ -75,6 +79,7 @@ void validate_and_add_photon(float3 normal, float3 position, float3 power, float
             };
             gVolumePhotonAabb[photon_index] = aabb;
             break;
+        }
         }
 
         // Tile-based photon density estimation

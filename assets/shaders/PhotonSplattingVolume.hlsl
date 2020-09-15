@@ -8,6 +8,7 @@ RWTexture2D<float2> DirectionYZ : register(u1);
 
 Texture2D<uint> photonDensity : register(t0, space1);
 StructuredBuffer<Photon> volPhotonBuffer : register(t1, space1);
+Buffer<float4> volPhotonPosObj : register(t2, space1);
 
 RWTexture3D<float2> payloadBuffer : register(u0, space1);
 

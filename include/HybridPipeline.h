@@ -107,6 +107,7 @@ private:
 
     OutputResourceView mVolumePhotonAabbs;
     OutputResourceView mVolumePhotonPositions;
+    OutputResourceView mVolumePhotonPositionsObjSpace;
     ComPtr<ID3D12Resource> mVolumePhotonPositionsReadback;
     ComPtr<ID3D12Resource> mVolumePhotonBlas;
     ComPtr<ID3D12Resource> mVolumePhotonTlas;
