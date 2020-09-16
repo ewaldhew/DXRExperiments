@@ -115,7 +115,7 @@ void RayGen()
                 int N = prd.tail;
                 int i;
 
-#if 0
+#if 1
                 //bubble sort
                 for (i=0; i<N; i++) {
                     for (int j=0; j < N-i-1; j++)
@@ -154,24 +154,27 @@ void RayGen()
 
                     float diff_volume = (4.f/3.f)*M_PI * pow(fixed_radius, 3);
                     float kernel_scale = kernel_size(photon.normal, -photon.direction, photon.position.z, photon.distTravelled);
-                    float volume_factor = 1.f / diff_volume;
+                    //float volume_factor = 1.f / diff_volume;
+                    const float volume_factor = M_PI * fixed_radius * fixed_radius;
 
-                    float3 power = photon.power * volume_factor * phase_factor;
+                    //float3 power = photon.power * volume_factor * phase_factor;
+                    float3 power = photon.power * phase_factor * exp(-extinction * trbf) / volume_factor;
                     float3 direction = -photon.direction;
                     float total_power = dot(power.xyz, float3(1.0f, 1.0f, 1.0f));
                     float3 weighted_direction = total_power * direction;
                     result_direction += weighted_direction;
 
-                    float3 sample_color = (absorption * emission + albedo * power) * dist;
-                    float alpha = max(exp(-extinction * dist), 0.9);
-                    result += sample_color.rgb * result_alpha;
-                    result_alpha *= alpha;
+                    //float3 sample_color = (absorption * emission + albedo * power) * dist;
+                    float3 sample_color = absorption * emission + power;
+                    //float alpha = max(exp(-extinction * dist), 0.9);
+                    result += sample_color.rgb;// * result_alpha;
+                    //result_alpha *= alpha;
                 }
 #else
                 // randomly pick a point along this slab to integrate over N nearest photons
                 float eval_t = lerp(ray.TMin, ray.TMax, nextRand(randSeed));
                 float3 eval_pos = ray.Origin + ray.Direction * eval_t;
-                
+
                 ////bubble sort
                 //for (i=0; i<N; i++) {
                 //    for (int j=0; j < N-i-1; j++)
