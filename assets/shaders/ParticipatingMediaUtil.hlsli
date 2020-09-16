@@ -1,5 +1,8 @@
-#include "HlslCompat.h"
-#include "CommonHlslCompat.h"
+#ifdef RASTER_PIPELINE
+#include "RasterCommon.hlsli"
+#else
+#include "RaytracingCommon.hlsli"
+#endif
 
 struct VolumeParams
 {

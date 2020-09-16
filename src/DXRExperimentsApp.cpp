@@ -119,8 +119,13 @@ void DXRExperimentsApp::InitRaytracing()
         };
         mRtScene->addModel(RtMesh::create(mRtContext, squareVerts, { 0, 1, 3, 1, 2, 3 }, 3), lightMeshTransform, MaterialSceneFlags::Emissive);
 
+#if 1
         auto volumeTransform = XMMatrixScaling(20, 20, 20) * XMMatrixTranslation(-10., -10., -10.);
         mRtScene->addModel(RtProcedural::create(mRtContext, PrimitiveType::AnalyticPrimitive_Spheres, XMFLOAT3(), XMFLOAT3(1, 1, 1), 5), volumeTransform, MaterialSceneFlags::Volume);
+#else
+        auto volumeTransform = XMMatrixScaling(10, 9.90, 10) * XMMatrixTranslation(-10., -10., -10.);
+        mRtScene->addModel(RtProcedural::create(mRtContext, PrimitiveType::AnalyticPrimitive_AABB, XMFLOAT3(), XMFLOAT3(2, 2, 2), 5), volumeTransform, MaterialSceneFlags::Volume);
+#endif
     }
 
     // Create materials

@@ -101,7 +101,7 @@ void RayGen()
         //  sort,
         //  integrate.
 
-        while(tbuf < texit && result_alpha > 0.03f)
+        while(tbuf < texit /*&& result_alpha > 0.03f*/)
         {
             prd.tail = 0;
             ray.TMin = max(tenter, tbuf);
@@ -139,7 +139,7 @@ void RayGen()
 
                     float3 sample_pos = ray.Origin + ray.Direction * trbf;
                     float3 sample_n = photon.position - sample_pos;
-                    float dist = length(sample_pos - prev_pos);
+                    float dist = max(length(sample_pos - prev_pos), 0.01);
 
                     MaterialParams mat = matParams[photon.materialIndex];
                     collectMaterialParams1(mat, volPhotonPosObj[photon_idx].xyz);
@@ -153,16 +153,16 @@ void RayGen()
 
                     float diff_volume = (4.f/3.f)*M_PI * pow(length(sample_n), 3);
                     float kernel_scale = kernel_size(photon.normal, -photon.direction, photon.position.z, photon.distTravelled);
-                    float volume_factor = 1.f / (kernel_scale * diff_volume);
+                    float volume_factor = 1;2.f / diff_volume;
 
-                    float3 power = photon.power * volume_factor * phase_factor;
+                    float3 power = photon.power; //* volume_factor * phase_factor;
                     float3 direction = -photon.direction;
                     float total_power = dot(power.xyz, float3(1.0f, 1.0f, 1.0f));
                     float3 weighted_direction = total_power * direction;
                     result_direction += weighted_direction;
 
                     float3 sample_color = (absorption * emission + albedo * power) * dist;
-                    float alpha = exp(-extinction * dist);
+                    float alpha = max(exp(-extinction * dist), 0.9);
                     result += sample_color.rgb * result_alpha;
                     result_alpha *= alpha;
                 }
@@ -172,8 +172,8 @@ void RayGen()
         }
     }
 
-    float3 color = result + ColorXYZAndDirectionX[launchIndex].rgb * result_alpha;
-    ColorXYZAndDirectionX[launchIndex] += float4(color, result_direction.x);
+    ColorXYZAndDirectionX[launchIndex].rgb = result + ColorXYZAndDirectionX[launchIndex].rgb * result_alpha;
+    ColorXYZAndDirectionX[launchIndex].w += result_direction.x;
     DirectionYZ[launchIndex] += result_direction.yz;
 }
 

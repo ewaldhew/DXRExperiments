@@ -289,6 +289,8 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context, DXGI_FORMAT outputF
             // GlobalRootSignatureParams::PerFrameConstantsSlot
             config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_CBV, 0 /* b0 */);
 
+            D3D12_STATIC_SAMPLER_DESC matTexSampler = pointClampSampler;
+            config.AddStaticSampler(matTexSampler);
             config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 0 /* t0 */, 9 /* space9 */); // material params
             config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 1 /* t1 */, 9 /* space9 */); // material texture params
             config.AddHeapRangesParameter({{2 /* t2 */, -1 /* unbounded */, 9 /* space9 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // material textures
@@ -544,6 +546,9 @@ void HybridPipeline::loadResources(ID3D12CommandQueue *uploadCommandQueue, UINT 
         mTextureSrvGpuHandles[2] = mTextureSrvGpuHandles[1];
     }
 
+    for (int i = 0; i < mMaterials.size(); i++) {
+        mMaterialParamsBuffer[i] = mMaterials[i].params;
+    }
     mMaterialParamsBuffer.CopyStagingToGpu();
     *mMaterialParamsResource.ReleaseAndGetAddressOf() = CreateBuffer(device, mMaterialParamsBuffer.InstanceSize(), D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COPY_DEST, kDefaultHeapProps);
     NAME_D3D12_OBJECT(mMaterialParamsResource);
@@ -680,8 +685,8 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
     AllocateUAVBuffer(device, MAX_PHOTONS * sizeof(XMVECTOR), mVolumePhotonPositions.Resource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     AllocateUAVBuffer(device, MAX_PHOTONS * sizeof(XMVECTOR), mVolumePhotonPositionsObjSpace.Resource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     AllocateReadbackBuffer(device, MAX_PHOTONS * sizeof(XMVECTOR), mVolumePhotonPositionsReadback.ReleaseAndGetAddressOf());
-    CreateStructuredBufferUAV(device, mRtContext, mVolumePhotonAabbs, sizeof(PhotonAABB), MAX_PHOTONS);
     CreateBufferSRV(mRtContext, mVolumePhotonPositionsObjSpace, sizeof(XMVECTOR));
+    CreateStructuredBufferUAV(device, mRtContext, mVolumePhotonAabbs, sizeof(PhotonAABB), MAX_PHOTONS);
 
     {
         D3D12_CPU_DESCRIPTOR_HANDLE uavCpuHandle;
