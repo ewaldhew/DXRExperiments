@@ -187,7 +187,7 @@ void DXRExperimentsApp::InitRaytracing()
                     float absorption = (noise.eval(i / (double)tex.depth, j/ (double)tex.height, k/ (double)tex.width) + 0.23) ;
                     absorption = 0.6;//(j + k) % 2 ? 0.8 : 0.4;
                     //absorption = min(max(absorption, 0.1), 0.8);
-                    tex.data[i*tex.height*tex.width + j*tex.width + k] = XMFLOAT4(absorption, absorption * 0.8, 0, 1);
+                    tex.data[i*tex.height*tex.width + j*tex.width + k] = XMFLOAT4(absorption, (1.0 - absorption) * 0.8, 0, 1);
                 }
             }
         }

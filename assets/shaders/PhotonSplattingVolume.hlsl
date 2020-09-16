@@ -86,7 +86,7 @@ void RayGen()
     float texit = min(tmax.x, min(tmax.y, tmax.z));
 
     const float fixed_radius = photonMapConsts.volumeSplatPhotonSize;
-    float slab_spacing = PARTICLE_BUFFER_SIZE / photonMapConsts.particlesPerSlab * fixed_radius;
+    float slab_spacing = fixed_radius;//PARTICLE_BUFFER_SIZE * fixed_radius;
 
     float3 result_direction = 0.f;
     float3 result = 0.f;
@@ -115,6 +115,7 @@ void RayGen()
                 int N = prd.tail;
                 int i;
 
+#if 0
                 //bubble sort
                 for (i=0; i<N; i++) {
                     for (int j=0; j < N-i-1; j++)
@@ -151,11 +152,11 @@ void RayGen()
                     float albedo = scattering / extinction;
                     float phase_factor = evalPhaseFuncPdf(vol.phase_func_type, photon.direction, ray.Direction);
 
-                    float diff_volume = (4.f/3.f)*M_PI * pow(length(sample_n), 3);
+                    float diff_volume = (4.f/3.f)*M_PI * pow(fixed_radius, 3);
                     float kernel_scale = kernel_size(photon.normal, -photon.direction, photon.position.z, photon.distTravelled);
-                    float volume_factor = 1;2.f / diff_volume;
+                    float volume_factor = 1.f / diff_volume;
 
-                    float3 power = photon.power; //* volume_factor * phase_factor;
+                    float3 power = photon.power * volume_factor * phase_factor;
                     float3 direction = -photon.direction;
                     float total_power = dot(power.xyz, float3(1.0f, 1.0f, 1.0f));
                     float3 weighted_direction = total_power * direction;
@@ -166,6 +167,56 @@ void RayGen()
                     result += sample_color.rgb * result_alpha;
                     result_alpha *= alpha;
                 }
+#else
+                // randomly pick a point along this slab to integrate over N nearest photons
+                float eval_t = lerp(ray.TMin, ray.TMax, nextRand(randSeed));
+                float3 eval_pos = ray.Origin + ray.Direction * eval_t;
+                
+                ////bubble sort
+                //for (i=0; i<N; i++) {
+                //    for (int j=0; j < N-i-1; j++)
+                //    {
+                //        const float2 tmp = payloadBuffer[BufIndex(i)];
+                //        float3 vi = eval_pos - volPhotonBuffer[uint(payloadBuffer[BufIndex(i)].y)].position;
+                //        float3 vj = eval_pos - volPhotonBuffer[uint(payloadBuffer[BufIndex(j)].y)].position;
+                //        if (dot(vi, vi) < dot(vj, vj)) {
+                //            payloadBuffer[BufIndex(i)] = payloadBuffer[BufIndex(j)];
+                //            payloadBuffer[BufIndex(j)] = tmp;
+                //        }
+                //    }
+                //}
+
+                float3 sample_color = 0.f;
+                for (i=0; i<N; i++) {
+                    float trbf = payloadBuffer[BufIndex(i)].x;
+                    uint photon_idx = uint(payloadBuffer[BufIndex(i)].y);
+
+                    Photon photon = volPhotonBuffer[photon_idx];
+                    photon.direction = spherical_to_unitvec(photon.direction);
+                    photon.normal = spherical_to_unitvec(photon.normal);
+
+                    float dist = length(eval_pos - photon.position);
+
+                    MaterialParams mat = matParams[photon.materialIndex];
+                    collectMaterialParams1(mat, volPhotonPosObj[photon_idx].xyz);
+                    VolumeParams vol = getVolumeParams(mat);
+                    float3 emission = vol.emission;
+                    float absorption = vol.absorption;
+                    float scattering = vol.scattering;
+                    float extinction = absorption + scattering;
+                    float albedo = scattering / extinction;
+                    float phase_factor = evalPhaseFuncPdf(vol.phase_func_type, photon.direction, ray.Direction);
+
+                    float diff_volume = (4.f/3.f)*M_PI * pow(fixed_radius, 3);
+                    float volume_factor = 1.f / diff_volume;
+
+                    // Engelhardt section 4.2
+                    float throughput = exp(-extinction * dist);
+                    sample_color += phase_factor * throughput * photon.power * volume_factor; // no emission added
+                    result_alpha *= throughput;
+                }
+                result += sample_color * result_alpha;
+#endif
             }
 
             tbuf += slab_spacing;

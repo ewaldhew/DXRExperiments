@@ -157,7 +157,7 @@ float3 shade(float3 position, float3 normal, uint currentDepth)
             }
 
             // attenuate by albedo = scattering / extinction
-            throughput *= params.y / (params.x + params.y);
+            throughput *= params.y / params.x;//(params.x + params.y);
 
             // Russian roulette absorption
             if (throughput < 0.2) {
