@@ -88,9 +88,9 @@ kernel_output kernel_modification_for_vertex_position(float3 vertex, float3 n, f
     float3 scaled_n = projected_v_to_n * SPLAT_PARAMS.kernelCompressFactor * o.scaling_uniform;
     o.vertex_position = scaled_u + scaled_t + scaled_n;
 
-    float min_scale = SPLAT_PARAMS.kernelScaleMin * .1f;
-    float min_area = min_scale * min_scale * 1.0f;
-    o.ellipse_area = o.scaling_uniform  * o.scaling_uniform * o.light_shaping_scale;
+    float min_scale = SPLAT_PARAMS.kernelScaleMin * SPLAT_PARAMS.uniformScaleStrength * .1f;
+    float min_area = min_scale * min_scale * min_scale * 1.0f;
+    o.ellipse_area = o.scaling_uniform  * o.scaling_uniform * o.scaling_uniform * o.light_shaping_scale;
     o.ellipse_area /= min_area;
 
     return o;

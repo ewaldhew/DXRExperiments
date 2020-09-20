@@ -88,6 +88,7 @@ void RayGen()
     const float fixed_radius = photonMapConsts.volumeSplatPhotonSize;
     float slab_spacing = fixed_radius;//PARTICLE_BUFFER_SIZE * fixed_radius;
 
+    int num_hits = 0;
     float3 result_direction = 0.f;
     float3 result = 0.f;
     float result_alpha = 1.f; // throughput
@@ -115,7 +116,12 @@ void RayGen()
                 int N = prd.tail;
                 int i;
 
-#if 1
+#define GPUGEMS 1
+#define ENGELHARDT 2
+#define NTNU 3
+#define METHOD 3
+
+#if METHOD == GPUGEMS || METHOD == NTNU
                 //bubble sort
                 for (i=0; i<N; i++) {
                     for (int j=0; j < N-i-1; j++)
@@ -127,9 +133,30 @@ void RayGen()
                         }
                     }
                 }
+#elif METHOD == ENGELHARDT
+                // randomly pick a point along this slab to integrate over N nearest photons
+                float eval_t = lerp(ray.TMin, ray.TMax, nextRand(randSeed));
+                float3 eval_pos = ray.Origin + ray.Direction * eval_t;
+
+                //bubble sort
+                for (i=0; i<N; i++) {
+                    for (int j=0; j < N-i-1; j++)
+                    {
+                        const float2 tmp = payloadBuffer[BufIndex(i)];
+                        float3 vi = eval_pos - volPhotonBuffer[uint(payloadBuffer[BufIndex(i)].y)].position;
+                        float3 vj = eval_pos - volPhotonBuffer[uint(payloadBuffer[BufIndex(j)].y)].position;
+                        if (dot(vi, vi) < dot(vj, vj)) {
+                            payloadBuffer[BufIndex(i)] = payloadBuffer[BufIndex(j)];
+                            payloadBuffer[BufIndex(j)] = tmp;
+                        }
+                    }
+                }
+
+                float3 sample_color = 0.f;
+#endif
 
                 //integrate depth-sorted list of particles
-                float3 prev_pos = prd.tail ? ray.Origin + ray.Direction * payloadBuffer[BufIndex(0)].x : 0.f;
+                float3 prev_trbf = payloadBuffer[BufIndex(0)].x;
                 for (i=0; i<prd.tail; i++) {
                     float trbf = payloadBuffer[BufIndex(i)].x;
                     uint photon_idx = uint(payloadBuffer[BufIndex(i)].y);
@@ -138,67 +165,13 @@ void RayGen()
                     photon.direction = spherical_to_unitvec(photon.direction);
                     photon.normal = spherical_to_unitvec(photon.normal);
 
+#if METHOD == GPUGEMS
                     float3 sample_pos = ray.Origin + ray.Direction * trbf;
                     float3 sample_n = photon.position - sample_pos;
-                    float dist = max(length(sample_pos - prev_pos), 0.01);
-
-                    MaterialParams mat = matParams[photon.materialIndex];
-                    collectMaterialParams1(mat, volPhotonPosObj[photon_idx].xyz);
-                    VolumeParams vol = getVolumeParams(mat);
-                    float3 emission = vol.emission;
-                    float absorption = vol.absorption;
-                    float scattering = vol.scattering;
-                    float extinction = absorption + scattering;
-                    float albedo = scattering / extinction;
-                    float phase_factor = evalPhaseFuncPdf(vol.phase_func_type, photon.direction, ray.Direction);
-
-                    float diff_volume = (4.f/3.f)*M_PI * pow(fixed_radius, 3);
-                    float kernel_scale = kernel_size(photon.normal, -photon.direction, photon.position.z, photon.distTravelled);
-                    //float volume_factor = 1.f / diff_volume;
-                    const float volume_factor = M_PI * fixed_radius * fixed_radius;
-
-                    //float3 power = photon.power * volume_factor * phase_factor;
-                    float3 power = photon.power * phase_factor * exp(-extinction * trbf) / volume_factor;
-                    float3 direction = -photon.direction;
-                    float total_power = dot(power.xyz, float3(1.0f, 1.0f, 1.0f));
-                    float3 weighted_direction = total_power * direction;
-                    result_direction += weighted_direction;
-
-                    //float3 sample_color = (absorption * emission + albedo * power) * dist;
-                    float3 sample_color = absorption * emission + power;
-                    //float alpha = max(exp(-extinction * dist), 0.9);
-                    result += sample_color.rgb;// * result_alpha;
-                    //result_alpha *= alpha;
-                }
-#else
-                // randomly pick a point along this slab to integrate over N nearest photons
-                float eval_t = lerp(ray.TMin, ray.TMax, nextRand(randSeed));
-                float3 eval_pos = ray.Origin + ray.Direction * eval_t;
-
-                ////bubble sort
-                //for (i=0; i<N; i++) {
-                //    for (int j=0; j < N-i-1; j++)
-                //    {
-                //        const float2 tmp = payloadBuffer[BufIndex(i)];
-                //        float3 vi = eval_pos - volPhotonBuffer[uint(payloadBuffer[BufIndex(i)].y)].position;
-                //        float3 vj = eval_pos - volPhotonBuffer[uint(payloadBuffer[BufIndex(j)].y)].position;
-                //        if (dot(vi, vi) < dot(vj, vj)) {
-                //            payloadBuffer[BufIndex(i)] = payloadBuffer[BufIndex(j)];
-                //            payloadBuffer[BufIndex(j)] = tmp;
-                //        }
-                //    }
-                //}
-
-                float3 sample_color = 0.f;
-                for (i=0; i<N; i++) {
-                    float trbf = payloadBuffer[BufIndex(i)].x;
-                    uint photon_idx = uint(payloadBuffer[BufIndex(i)].y);
-
-                    Photon photon = volPhotonBuffer[photon_idx];
-                    photon.direction = spherical_to_unitvec(photon.direction);
-                    photon.normal = spherical_to_unitvec(photon.normal);
-
+                    float dist = max(trbf - prev_trbf, 0.01);
+#elif METHOD == ENGELHARDT
                     float dist = length(eval_pos - photon.position);
+#endif
 
                     MaterialParams mat = matParams[photon.materialIndex];
                     collectMaterialParams1(mat, volPhotonPosObj[photon_idx].xyz);
@@ -210,14 +183,42 @@ void RayGen()
                     float albedo = scattering / extinction;
                     float phase_factor = evalPhaseFuncPdf(vol.phase_func_type, photon.direction, ray.Direction);
 
+#if METHOD == GPUGEMS
+                    float diff_volume = (4.f/3.f)*M_PI * pow(length(sample_n), 3);
+                    //float kernel_scale = kernel_size(photon.normal, -photon.direction, photon.position.z, photon.distTravelled);
+                    float volume_factor = 1.f / diff_volume;
+
+                    float3 power = photon.power * volume_factor * phase_factor;
+                    float alpha = max(exp(-extinction * dist), 0.1f);
+                    float3 sample_color = (absorption * emission + albedo * power) * dist;
+                    result += sample_color.rgb * result_alpha;
+                    result_alpha *= alpha;
+                    num_hits++;
+#elif METHOD == ENGELHARDT
                     float diff_volume = (4.f/3.f)*M_PI * pow(fixed_radius, 3);
+                    //float kernel_scale = kernel_size(photon.normal, -photon.direction, photon.position.z, photon.distTravelled);
                     float volume_factor = 1.f / diff_volume;
 
                     // Engelhardt section 4.2
                     float throughput = exp(-extinction * dist);
-                    sample_color += phase_factor * throughput * photon.power * volume_factor; // no emission added
+                    float3 power = phase_factor * throughput * photon.power * volume_factor; // no emission added
+                    sample_color += power;
                     result_alpha *= throughput;
+                    num_hits++;
+#elif METHOD == NTNU
+                    const float volume_factor = fixed_radius * fixed_radius * 100*100;
+
+                    float3 power = photon.power * phase_factor * exp(-extinction * trbf) / volume_factor;
+                    float3 sample_color = absorption * emission + power;
+                    result += sample_color.rgb;
+#endif
+
+                    float3 direction = -photon.direction;
+                    float total_power = dot(power.xyz, float3(1.0f, 1.0f, 1.0f));
+                    float3 weighted_direction = total_power * direction;
+                    result_direction += weighted_direction;
                 }
+#if METHOD == ENGELHARDT
                 result += sample_color * result_alpha;
 #endif
             }
@@ -226,7 +227,7 @@ void RayGen()
         }
     }
 
-    ColorXYZAndDirectionX[launchIndex].rgb = result + ColorXYZAndDirectionX[launchIndex].rgb * result_alpha;
+    ColorXYZAndDirectionX[launchIndex].rgb = result + ColorXYZAndDirectionX[launchIndex].rgb * result_alpha / max(num_hits, 1);
     ColorXYZAndDirectionX[launchIndex].w += result_direction.x;
     DirectionYZ[launchIndex] += result_direction.yz;
 }
