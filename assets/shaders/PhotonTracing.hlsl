@@ -65,6 +65,8 @@ void validate_and_add_photon(float3 normal, float3 position, float3 power, float
         switch (map_idx) {
         case PhotonMapID::Surface:
             gPhotonMapSurface[photon_index] = stored_photon;
+            // Tile-based photon density estimation
+            InterlockedAdd(gPhotonDensityMap[tile.xy], 1);
             break;
         case PhotonMapID::Volume:
         {
@@ -81,9 +83,6 @@ void validate_and_add_photon(float3 normal, float3 position, float3 power, float
             break;
         }
         }
-
-        // Tile-based photon density estimation
-        InterlockedAdd(gPhotonDensityMap[tile.xy], 1);
     }
 }
 
