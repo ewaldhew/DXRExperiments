@@ -11,9 +11,22 @@ Texture2D<uint> photonDensity : register(t0, space1);
 StructuredBuffer<Photon> volPhotonBuffer : register(t1, space1);
 Buffer<float4> volPhotonPosObj : register(t2, space1);
 
+Texture2D<float> DepthTexture : register(t0, space2);
+
 RWTexture3D<float2> payloadBuffer : register(u0, space1);
 
 ConstantBuffer<PhotonMappingConstants> photonMapConsts : register(b1);
+
+float GetMaxT(float3 rayDir)
+{
+    uint2 launchIndex = DispatchRaysIndex().xy;
+    float depth = DepthTexture[launchIndex];
+    float zNear = perFrameConstants.cameraParams.frustumNearFar.x;
+    float zFar = perFrameConstants.cameraParams.frustumNearFar.y;
+    float zClip = depth * 2.f - 1.f;
+    float linDepth = (2.0f * zFar * zNear) / (zFar + zNear - zClip * (zFar - zNear));
+    return -linDepth / rayDir.z;
+}
 
 // Simplified version of the one in PhotonSplatting.vs
 float kernel_size(float3 n, float3 light, float pos_z, float ray_length)
@@ -70,6 +83,8 @@ void RayGen()
     ray.Direction = normalize(d.x * perFrameConstants.cameraParams.U + (-d.y) * perFrameConstants.cameraParams.V + perFrameConstants.cameraParams.W).xyz;
     ray.TMin = 0;
     ray.TMax = RAY_MAX_T;
+    /ColorXYZAndDirectionX[launchIndex].rgb = GetMaxT(ray.Direction);
+    return;
 
     PhotonSplatPayload prd;
 
@@ -83,7 +98,7 @@ void RayGen()
     tmax = max(t0, t1);
     tmin = min(t0, t1);
     float tenter = max(0.f, max(tmin.x, max(tmin.y, tmin.z)));
-    float texit = min(tmax.x, min(tmax.y, tmax.z));
+    float texit = min(min(tmax.x, min(tmax.y, tmax.z)), GetMaxT(ray.Direction));
 
     const float fixed_radius = photonMapConsts.volumeSplatPhotonSize;
     float slab_spacing = fixed_radius;//PARTICLE_BUFFER_SIZE * fixed_radius;

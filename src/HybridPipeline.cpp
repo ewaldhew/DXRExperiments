@@ -301,6 +301,8 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context, DXGI_FORMAT outputF
             config.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_CBV, 1 /* b1 */, 0, 1); // mapping consts
 
             config.AddHeapRangesParameter({{0 /* u0 */, 1, 1 /* space1 */, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0}}); // rt buffer
+
+            config.AddHeapRangesParameter({{0 /* t0 */, 1, 2 /* space2 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // gbuffer depth
         });
     }
     mRtPhotonSplattingVolumePass.mRtProgram = RtProgram::create(context, photonSplatVolume);
@@ -1479,6 +1481,8 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
         commandList->SetComputeRootConstantBufferView(9, mPhotonMappingConstants.GpuVirtualAddress());
 
         commandList->SetComputeRootDescriptorTable(10, mPhotonSplatRtBuffer.Uav.gpuHandle);
+
+        commandList->SetComputeRootDescriptorTable(11, mGBuffer[GBufferID::Depth].Srv.gpuHandle);
 
         mRtContext->raytrace(mRtBindings, mRtState, width, height, 1);
 
