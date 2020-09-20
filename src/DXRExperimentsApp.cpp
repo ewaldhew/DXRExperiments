@@ -119,11 +119,11 @@ void DXRExperimentsApp::InitRaytracing()
         };
         mRtScene->addModel(RtMesh::create(mRtContext, squareVerts, { 0, 1, 3, 1, 2, 3 }, 3), lightMeshTransform, MaterialSceneFlags::Emissive);
 
-#if 1
+#if 0
         auto volumeTransform = XMMatrixScaling(20, 20, 20) * XMMatrixTranslation(-10., -10., -10.);
         mRtScene->addModel(RtProcedural::create(mRtContext, PrimitiveType::AnalyticPrimitive_Spheres, XMFLOAT3(), XMFLOAT3(1, 1, 1), 5), volumeTransform, MaterialSceneFlags::Volume);
 #else
-        auto volumeTransform = XMMatrixScaling(10, 9.90, 10) * XMMatrixTranslation(-10., -10., -10.);
+        auto volumeTransform = XMMatrixScaling(9.10, 9.10, 9.10) * XMMatrixTranslation(-10., -10., -10.);
         mRtScene->addModel(RtProcedural::create(mRtContext, PrimitiveType::AnalyticPrimitive_AABB, XMFLOAT3(), XMFLOAT3(2, 2, 2), 5), volumeTransform, MaterialSceneFlags::Volume);
 #endif
     }
@@ -185,9 +185,9 @@ void DXRExperimentsApp::InitRaytracing()
             for (UINT j = 0; j < tex.height; j++) {
                 for (UINT k = 0; k < tex.width; k++) {
                     float absorption = (noise.eval(i / (double)tex.depth, j/ (double)tex.height, k/ (double)tex.width) + 0.23) ;
-                    absorption = 0.6;//(j + k) % 2 ? 0.8 : 0.4;
+                    absorption = 0.02;//(j + k) % 2 ? 0.8 : 0.4;
                     //absorption = min(max(absorption, 0.1), 0.8);
-                    tex.data[i*tex.height*tex.width + j*tex.width + k] = XMFLOAT4(absorption, (1.0 - absorption) * 0.8, 0, 1);
+                    tex.data[i*tex.height*tex.width + j*tex.width + k] = XMFLOAT4(absorption, min(absorption * 0.8, (1.0 - absorption) * 0.8), 0, 1);
                 }
             }
         }
