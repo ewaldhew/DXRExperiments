@@ -680,5 +680,8 @@
     <FxCompile Include="..\assets\shaders\PhotonSplattingVolume.hlsl">
       <Filter>Assets\Shaders\Passes\Hybrid Pipeline</Filter>
     </FxCompile>
+    <FxCompile Include="..\assets\shaders\PhotonSplattingVoxels.hlsl">
+      <Filter>Assets\Shaders\Passes\Hybrid Pipeline</Filter>
+    </FxCompile>
   </ItemGroup>
 </Project>

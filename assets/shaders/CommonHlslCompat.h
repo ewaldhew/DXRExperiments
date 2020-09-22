@@ -167,6 +167,8 @@ struct PhotonMappingConstants
     float maxRayLength;
     XMUINT4 counts[PhotonMapID::Count];
 
+    XMMATRIX worldToObjMatrix;
+
     // Splatting options
     XMFLOAT3 volumeBboxMin;
     float kernelScaleMin;

@@ -10,9 +10,17 @@ using namespace DirectX;
 
 #include "CommonHlslCompat.h"
 
+namespace SplatMethod {
+    static const UINT
+        Raster = 0,
+        Raytrace = 1,
+        Voxels = 2,
+        COUNT = Voxels + 1;
+}
+
 struct HybridPipelineOptions
 {
-    UINT useRaytracedVolumeSplatting;
+    UINT volumeSplattingMethod;
     UINT skipPhotonTracing;
     UINT showRawSplattingResult;
     UINT showVolumePhotonsOnly;
@@ -31,7 +39,8 @@ struct PerObjectConstants
     XMMATRIX worldMatrix;
     XMMATRIX invWorldMatrix;
     UINT isProcedural;
-    XMFLOAT3 padding;
+    UINT isVolume;
+    XMFLOAT2 padding;
 };
 
 #endif // RASTERHLSLCOMPAT_H
