@@ -51,7 +51,7 @@ float evaluateBrdf(float3 InDir, float3 OutDir, float3 N)
 float3 raymarch(float3 origin, float3 dir, float2 screen_pos)
 {
     float z_factor = dot(dir, normalize(perFrameConstants.cameraParams.W.xyz));
-    float gbuffer_linear_depth = LinearDepth(gbufferDepth[screen_pos]);
+    float gbuffer_linear_depth = -LinearDepth(gbufferDepth[screen_pos]);
 
     uint3 tex_size;
     voxColorAndCount.GetDimensions(tex_size.x, tex_size.y, tex_size.z);
@@ -112,7 +112,10 @@ void main(
 
     float lightFactor = saturate(dot(normal, lightDir)) / M_PI; //evaluateBrdf(lightDir, viewDir, normal);
 
-    float3 volumeColor = gbufferVolumeMask.Load(int3(Pos.xy, 0)) * raymarch(perFrameConstants.cameraParams.worldEyePos.xyz, viewDir, Tex);
+    bool shouldRaymarch = perFrameConstants.options.volumeSplattingMethod == SplatMethod::Voxels;
+    float3 volumeColor = shouldRaymarch * gbufferVolumeMask.Load(int3(Pos.xy, 0)) * raymarch(perFrameConstants.cameraParams.worldEyePos.xyz, viewDir, Tex);
+    float3 surfaceColor = photonSplatColorXYZDirX.Sample(lightSampler, Tex).xyz;
+    float3 totalColor = volumeColor + surfaceColor;
 
-    Color = float4(photonSplatColorXYZDirX.Sample(lightSampler, Tex).xyz, 1); //* lerp(lightFactor, 1.0, perFrameConstants.options.showRawSplattingResult);
+    Color = float4(totalColor, 1); //* lerp(lightFactor, 1.0, perFrameConstants.options.showRawSplattingResult);
 }
