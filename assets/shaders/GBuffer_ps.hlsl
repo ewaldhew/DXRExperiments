@@ -15,7 +15,7 @@ struct PixelShaderInput
 struct PixelShaderOutput
 {
     float4 gbNormal : SV_TARGET0;
-    //float4 gbAlbedo : SV_TARGET1;
+    float gbVolMask : SV_TARGET1;
     float depth : SV_Depth;
 };
 
@@ -90,11 +90,13 @@ PixelShaderOutput main(PixelShaderInput IN)
 
         OUT.depth = position.z / position.w;
         OUT.gbNormal = float4(attr.normal.xyz, 0.0f);
+        OUT.gbVolMask = float(obj.isVolume);
     }
     else
     {
         OUT.depth = IN.position.z;
         OUT.gbNormal = float4(normalize(IN.normal), 0.0f);
+        OUT.gbVolMask = 0.f;
     }
 
     //OUT.gbAlbedo = float4(albedo.xyz * albedo.a, 1.0f);

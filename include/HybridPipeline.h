@@ -16,7 +16,7 @@
 #include <vector>
 #include <random>
 
-namespace GBufferID { enum Value { Normal = 0, Albedo, Depth, Count }; };
+namespace GBufferID { enum Value { Normal = 0, Albedo, VolMask, Depth, Count }; };
 
 class HybridPipeline : public RaytracingPipeline
 {
@@ -68,6 +68,7 @@ private:
     RtPass mRtPhotonEmissionPass;
     RtPass mRtPhotonMappingPass;
     RtPass mRtPhotonSplattingVolumePass;
+    RasterPass mPhotonSplattingVoxelPass; // compute shaders
     RasterPass mPhotonSplattingPass;
     RasterPass mGBufferPass;
     RasterPass mCombinePass;
@@ -115,16 +116,20 @@ private:
 
     OutputResourceView mPhotonDensity;
 
-    DXTKExtend::GeometricModel::SharedPtr mPhotonSplatKernelShape;
-    OutputResourceView mPhotonSplat[2];
-    ResourceView mPhotonSplatUav[2];
+    DXTKExtend::GeometricModel::SharedPtr mPhotonSplatKernelShape; // method 1 - billboard splatting
 
-    OutputResourceView mPhotonSplatRtBuffer;
+    OutputResourceView mPhotonSplatRtBuffer; // method 2 - raytracing (payload buffer)
+
+    OutputResourceView mPhotonSplatVoxels[2]; // method 3 - splat into voxels
+
+    OutputResourceView mPhotonSplat[2]; // photon splat output targets - raster
+    ResourceView mPhotonSplatUav[2];    // - RT / compute
 
     const std::unordered_map<GBufferID::Value, DXGI_FORMAT> mGBufferFormats =
     {
         { GBufferID::Normal, DXGI_FORMAT_R32G32B32A32_FLOAT },
         { GBufferID::Albedo, DXGI_FORMAT_R32G32B32A32_FLOAT },
+        { GBufferID::VolMask, DXGI_FORMAT_R8_UNORM },
     };
     OutputResourceView mGBuffer[GBufferID::Count];
 
