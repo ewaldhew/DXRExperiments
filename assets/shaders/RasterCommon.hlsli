@@ -67,6 +67,21 @@ void collectMaterialParams(inout MaterialParams mat, float3 positionObjSpace)
     }
 }
 
+// screen-space depth [0,1] to view-space depth [0, inf]
+float LinearDepth(float depth)
+{
+    float zNear = perFrameConstants.cameraParams.frustumNearFar.x;
+    float zFar = perFrameConstants.cameraParams.frustumNearFar.y;
+
+/*
+    posView = projMatrixInv * (0,0,zClip,1)
+    -> zView = -1, wView = ( f + n - zClip(f-n) ) / 2fn
+*/
+    float zClip = depth * 2.f - 1.f;
+    float linDepth = (2.0f * zFar * zNear) / (zFar + zNear - zClip * (zFar - zNear));
+    return linDepth; // should be -linDepth but we only use the abs val
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // Dummy raytracing intrinsics
 ////////////////////////////////////////////////////////////////////////////////

@@ -1,7 +1,7 @@
 #define HLSL
 #include "RasterHlslCompat.h"
+#include "RasterCommon.hlsli"
 
-ConstantBuffer<PerFrameConstantsRaster> perFrameConstants : register(b0);
 ConstantBuffer<PhotonMappingConstants> photonMapConsts : register(b1);
 
 Texture2D<float> DepthTexture : register(t0, space1);
@@ -20,20 +20,6 @@ struct PSOutput
     float2 DirectionYZ : SV_Target1;
 };
 
-float LinearDepth(float depth)
-{
-    float zNear = perFrameConstants.cameraParams.frustumNearFar.x;
-    float zFar = perFrameConstants.cameraParams.frustumNearFar.y;
-
-/*
-    posView = projMatrixInv * (0,0,zClip,1)
-    -> zView = -1, wView = ( f + n - zClip(f-n) ) / 2fn
-*/
-    float zClip = depth * 2.f - 1.f;
-    float linDepth = (2.0f * zFar * zNear) / (zFar + zNear - zClip * (zFar - zNear));
-    return linDepth; // should be -linDepth but we only use the abs val
-}
-
 [earlydepthstencil]
 void main(VSOutput IN, out PSOutput OUT)
 {
@@ -44,6 +30,8 @@ void main(VSOutput IN, out PSOutput OUT)
     if (IN.photonID < photonMapConsts.counts[PhotonMapID::Volume - 1].x) {
         if(perFrameConstants.options.showVolumePhotonsOnly) discard;
         clip(photonMapConsts.kernelCompressFactor * 1e-3 - d);
+    } else {
+        clip(gbuffer_linear_depth - kernel_linear_depth);
     }
 
     float3 power = IN.power;
