@@ -78,8 +78,6 @@ void RayGen()
     ray.Direction = normalize(d.x * perFrameConstants.cameraParams.U + (-d.y) * perFrameConstants.cameraParams.V + perFrameConstants.cameraParams.W).xyz;
     ray.TMin = 0;
     ray.TMax = RAY_MAX_T;
-    ColorXYZAndDirectionX[launchIndex].rgb = GetMaxT(ray.Direction);
-    return;
 
     PhotonSplatPayload prd;
 

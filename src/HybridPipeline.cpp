@@ -878,7 +878,7 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
     CreateTextureRTV(device, mRtvDescriptorHeap.get(), mGBuffer[GBufferID::Albedo]);
     CreateTextureSRV(mRtContext, mGBuffer[GBufferID::Albedo]);
 
-    AllocateRTVTexture(device, mGBufferFormats.at(GBufferID::VolMask), width, height, mGBuffer[GBufferID::VolMask].Resource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, L"G buffer flux");
+    AllocateRTVTexture(device, mGBufferFormats.at(GBufferID::VolMask), width, height, mGBuffer[GBufferID::VolMask].Resource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, L"G buffer volume mask");
     CreateTextureRTV(device, mRtvDescriptorHeap.get(), mGBuffer[GBufferID::VolMask]);
     CreateTextureSRV(mRtContext, mGBuffer[GBufferID::VolMask]);
 
