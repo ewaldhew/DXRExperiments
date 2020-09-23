@@ -16,7 +16,7 @@
 #include <vector>
 #include <random>
 
-namespace GBufferID { enum Value { Normal = 0, Albedo, VolMask, Depth, Count }; };
+namespace GBufferID { enum Value { Normal = 0, Albedo, VolMask, LinDepth, Depth, Count }; };
 
 class HybridPipeline : public RaytracingPipeline
 {
@@ -130,6 +130,7 @@ private:
         { GBufferID::Normal, DXGI_FORMAT_R32G32B32A32_FLOAT },
         { GBufferID::Albedo, DXGI_FORMAT_R32G32B32A32_FLOAT },
         { GBufferID::VolMask, DXGI_FORMAT_R8_UNORM },
+        { GBufferID::LinDepth, DXGI_FORMAT_R32_FLOAT },
     };
     OutputResourceView mGBuffer[GBufferID::Count];
 

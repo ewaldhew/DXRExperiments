@@ -8,6 +8,7 @@ ConstantBuffer<PerObjectConstants> obj : register(b1);
 struct PixelShaderInput
 {
     float4 position : SV_POSITION;
+    float3 positionVS : POSITION_VS;
     float3 positionObjSpace : POSITION_OBJ;
     float3 normal : NORMAL;
 };
@@ -16,6 +17,7 @@ struct PixelShaderOutput
 {
     float4 gbNormal : SV_TARGET0;
     float gbVolMask : SV_TARGET1;
+    float gbLinDepth : SV_TARGET2;
     float depth : SV_Depth;
 };
 
@@ -85,18 +87,22 @@ PixelShaderOutput main(PixelShaderInput IN)
         if (!Intersection(ray, thit, attr)) { discard; }
 
         float3 hitPositionObj = camPosObj + thit * rayDir;
+        float4x4 mv = mul(perFrameConstants.WorldToViewMatrix, (float4x4) obj.worldMatrix);
         float4x4 mvp = mul(perFrameConstants.WorldToViewClipMatrix, (float4x4) obj.worldMatrix);
         float4 position = mul(mvp, float4(hitPositionObj, 1.0f));
+        float4 positionVS = mul(mv, float4(hitPositionObj, 1.0f));
 
         OUT.depth = position.z / position.w;
+        OUT.gbLinDepth = -positionVS.z;
         OUT.gbNormal = float4(attr.normal.xyz, 0.0f);
         OUT.gbVolMask = float(obj.isVolume);
     }
     else
     {
         OUT.depth = IN.position.z;
+        OUT.gbLinDepth = -IN.positionVS.z;
         OUT.gbNormal = float4(normalize(IN.normal), 0.0f);
-        OUT.gbVolMask = 0.f;
+        OUT.gbVolMask = float(obj.isVolume);
     }
 
     //OUT.gbAlbedo = float4(albedo.xyz * albedo.a, 1.0f);
