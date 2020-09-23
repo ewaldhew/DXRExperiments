@@ -50,9 +50,9 @@ void RayGen()
 void storePhoton(float3 position, float3 normal, inout Payload payload, inout uint randSeed)
 {
     uint lightIndex = DispatchRaysIndex().y;
-    float proportion = float(emitters[lightIndex].samplesToTake) / MAX_PHOTON_SEED_SAMPLES;
+    float proportion = 1 / float(emitters[lightIndex].samplesToTake);
     float3 power = materialParams.emissive.rgb * materialParams.emissive.a * proportion;
-    float3 direction = getCosHemisphereSample1(randSeed, normal);
+    float3 direction = getUniformHemisphereSample(randSeed, normal);
 
     payload.power = power;
     payload.position = position;

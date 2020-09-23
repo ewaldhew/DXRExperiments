@@ -70,7 +70,7 @@ namespace MaterialSceneFlags
     };
 }
 
-#define MAX_PHOTON_SEED_SAMPLES 2000000
+#define MAX_PHOTON_SEED_SAMPLES 500000
 #define PHOTON_EMISSION_GROUP_SIZE 64
 #define MAX_PHOTONS (MAX_PHOTON_SEED_SAMPLES * 10)
 
@@ -84,7 +84,7 @@ struct PhotonEmitter
     XMFLOAT3 pad;
 };
 
-#define PARTICLE_BUFFER_SIZE 64
+#define PARTICLE_BUFFER_SIZE 32
 struct PhotonSplatPayload
 {
     XMFLOAT3 result;

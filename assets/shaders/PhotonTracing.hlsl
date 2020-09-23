@@ -93,7 +93,7 @@ void RayGen()
     uint sampleIndex = DispatchRaysIndex().x;
 
     PhotonPayload payload;
-    payload.random = photonSeed[sampleIndex].randSeed;
+    payload.random = initRand(photonSeed[sampleIndex].randSeed, sampleIndex, perFrameConstants.cameraParams.frameCount);
     payload.power = photonSeed[sampleIndex].power;
     payload.distTravelled = photonSeed[sampleIndex].distTravelled;
     payload.bounce = 0;
@@ -232,7 +232,7 @@ bool russian_roulette(float3 in_power, float3 in_direction, float3 normal, inout
 
             dist += t;
             float3 stored_power = in_power * throughput;
-            validate_and_add_photon(rayDir, prevPosition, stored_power, rayDirPrev, dist, PhotonMapID::Volume);
+            validate_and_add_photon(rayDir, position, stored_power, rayDirPrev, dist, PhotonMapID::Volume);
 
             prevPosition = position;
         }
