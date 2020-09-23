@@ -379,9 +379,10 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context, DXGI_FORMAT outputF
         psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_GREATER;
         psoDesc.InputLayout = { inputDescs, ARRAYSIZE(inputDescs) };
         psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-        psoDesc.NumRenderTargets = 2; //GBufferID::Count - 1; // exclude depth buffer from count
+        psoDesc.NumRenderTargets = 3; //GBufferID::Count - 1; // exclude depth buffer from count
         psoDesc.RTVFormats[0] = mGBufferFormats.at(GBufferID::Normal);
         psoDesc.RTVFormats[1] = mGBufferFormats.at(GBufferID::VolMask);
+        psoDesc.RTVFormats[2] = mGBufferFormats.at(GBufferID::LinDepth);
         psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
         psoDesc.SampleMask = 1;
         psoDesc.SampleDesc = { 1, 0 };
@@ -881,6 +882,10 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
     CreateTextureRTV(device, mRtvDescriptorHeap.get(), mGBuffer[GBufferID::VolMask]);
     CreateTextureSRV(mRtContext, mGBuffer[GBufferID::VolMask]);
 
+    AllocateRTVTexture(device, mGBufferFormats.at(GBufferID::LinDepth), width, height, mGBuffer[GBufferID::LinDepth].Resource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, L"G buffer linear depth", D3D12_RESOURCE_FLAG_NONE, { FLT_MAX, FLT_MAX, FLT_MAX, FLT_MAX });
+    CreateTextureRTV(device, mRtvDescriptorHeap.get(), mGBuffer[GBufferID::LinDepth]);
+    CreateTextureSRV(mRtContext, mGBuffer[GBufferID::LinDepth]);
+
     AllocateDepthTexture(device, width, height, mGBuffer[GBufferID::Depth].Resource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, L"G buffer depth");
 
     {
@@ -1291,6 +1296,7 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
         {
             CD3DX12_RESOURCE_BARRIER::Transition(mGBuffer[GBufferID::Normal].Resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET),
             CD3DX12_RESOURCE_BARRIER::Transition(mGBuffer[GBufferID::VolMask].Resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET),
+            CD3DX12_RESOURCE_BARRIER::Transition(mGBuffer[GBufferID::LinDepth].Resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET),
             CD3DX12_RESOURCE_BARRIER::Transition(mGBuffer[GBufferID::Depth].Resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE),
         };
         auto transitions = ScopedBarrier(commandList, barriers);
@@ -1299,12 +1305,15 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
         {
             mGBuffer[GBufferID::Normal].Rtv.cpuHandle,
             mGBuffer[GBufferID::VolMask].Rtv.cpuHandle,
+            mGBuffer[GBufferID::LinDepth].Rtv.cpuHandle, // must be last
         };
 
         clearRtv(commandList, mGBuffer[GBufferID::Normal]);
+        clearRtv(commandList, mGBuffer[GBufferID::VolMask]);
         //clearRtv(commandList, mGBufferTargetCpuHandle[GBufferID::Albedo]);
+        const float clear[4] = { FLT_MAX, FLT_MAX, FLT_MAX, FLT_MAX };
+        commandList->ClearRenderTargetView(mGBuffer[GBufferID::LinDepth].Rtv.cpuHandle, clear, 0, nullptr);
         commandList->ClearDepthStencilView(mGBuffer[GBufferID::Depth].Dsv.cpuHandle, D3D12_CLEAR_FLAG_DEPTH, 0.0f, 0, 0, nullptr);
-        commandList->OMSetRenderTargets(ARRAYSIZE(targets), targets, FALSE, &mGBuffer[GBufferID::Depth].Dsv.cpuHandle);
 
         // Set necessary state.
         mRtContext->bindDescriptorHeap();
@@ -1323,9 +1332,11 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
 
             auto model = mRtScene->getModel(instance);
             if (mMaterials[model->mMaterialIndex].params.type == MaterialType::ParticipatingMedia) {
+                commandList->OMSetRenderTargets(ARRAYSIZE(targets) - 1, targets, FALSE, &mGBuffer[GBufferID::Depth].Dsv.cpuHandle);
                 commandList->SetPipelineState(mGBufferVolumeStateObject.Get());
                 constants.isVolume = TRUE;
             } else {
+                commandList->OMSetRenderTargets(ARRAYSIZE(targets), targets, FALSE, &mGBuffer[GBufferID::Depth].Dsv.cpuHandle);
                 commandList->SetPipelineState(mGBufferPass.stateObject.Get());
             }
 
@@ -1509,7 +1520,7 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
         commandList->SetGraphicsRootDescriptorTable(1, mPhotonMap.Srv.gpuHandle);
         commandList->SetGraphicsRootConstantBufferView(2, mRasterConstantsBuffer.GpuVirtualAddress(frameIndex));
         commandList->SetGraphicsRootConstantBufferView(3, mPhotonMappingConstants.GpuVirtualAddress());
-        commandList->SetGraphicsRootDescriptorTable(4, mGBuffer[GBufferID::Depth].Srv.gpuHandle);
+        commandList->SetGraphicsRootDescriptorTable(4, mGBuffer[GBufferID::LinDepth].Srv.gpuHandle);
 
         D3D12_CPU_DESCRIPTOR_HANDLE targets[] =
         {
@@ -1584,7 +1595,7 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
 
         commandList->SetComputeRootDescriptorTable(10, mPhotonSplatRtBuffer.Uav.gpuHandle);
 
-        commandList->SetComputeRootDescriptorTable(11, mGBuffer[GBufferID::Depth].Srv.gpuHandle);
+        commandList->SetComputeRootDescriptorTable(11, mGBuffer[GBufferID::LinDepth].Srv.gpuHandle);
 
         mRtContext->raytrace(mRtBindings, mRtState, width, height, 1);
 
@@ -1657,7 +1668,7 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
         commandList->SetGraphicsRootConstantBufferView(3, mRasterConstantsBuffer.GpuVirtualAddress(frameIndex));
         commandList->SetGraphicsRootConstantBufferView(4, mPhotonMappingConstants.GpuVirtualAddress());
 
-        commandList->SetGraphicsRootDescriptorTable(5, mGBuffer[GBufferID::Depth].Srv.gpuHandle);
+        commandList->SetGraphicsRootDescriptorTable(5, mGBuffer[GBufferID::LinDepth].Srv.gpuHandle);
         commandList->SetGraphicsRootDescriptorTable(6, mGBuffer[GBufferID::VolMask].Srv.gpuHandle);
         commandList->SetGraphicsRootDescriptorTable(7, mPhotonSplatVoxels[0].Srv.gpuHandle);
 

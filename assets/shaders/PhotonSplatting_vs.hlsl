@@ -18,6 +18,7 @@ struct VSOutput
 {
     uint photonID : PHOTON_ID;
     float4 position : SV_Position;
+    float4 positionVS : Position_VS;
     float3 power : COLOR;
     float3 direction : DIRECTION_WS;
 };
@@ -129,6 +130,7 @@ void main(in VSInput IN, out VSOutput OUT)
 
     OUT.photonID = IN.instanceID;
     OUT.position = mul(perFrameConstants.WorldToViewClipMatrix, float4(position, 1));
+    OUT.positionVS = mul(perFrameConstants.WorldToViewMatrix, float4(position, 1));
     OUT.power = up.power / o.ellipse_area;
     OUT.direction = -up.direction;
 }

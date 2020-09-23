@@ -20,12 +20,7 @@ ConstantBuffer<PhotonMappingConstants> photonMapConsts : register(b1);
 float GetMaxT(float3 rayDir)
 {
     uint2 launchIndex = DispatchRaysIndex().xy;
-    float depth = DepthTexture[launchIndex];
-    float zNear = perFrameConstants.cameraParams.frustumNearFar.x;
-    float zFar = perFrameConstants.cameraParams.frustumNearFar.y;
-    float zClip = depth * 2.f - 1.f;
-    float linDepth = (2.0f * zFar * zNear) / (zFar + zNear - zClip * (zFar - zNear));
-    return -linDepth / rayDir.z;
+    return DepthTexture[launchIndex] / dot(rayDir, normalize(perFrameConstants.cameraParams.W.xyz));
 }
 
 // Simplified version of the one in PhotonSplatting.vs

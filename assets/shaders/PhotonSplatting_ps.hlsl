@@ -10,6 +10,7 @@ struct VSOutput
 {
     uint photonID : PHOTON_ID;
     float4 position : SV_Position;
+    float4 positionVS : Position_VS;
     float3 power : COLOR;
     float3 direction : DIRECTION_WS;
 };
@@ -23,8 +24,8 @@ struct PSOutput
 [earlydepthstencil]
 void main(VSOutput IN, out PSOutput OUT)
 {
-    float gbuffer_linear_depth = LinearDepth(DepthTexture[IN.position.xy]);
-    float kernel_linear_depth = LinearDepth(IN.position.z);
+    float gbuffer_linear_depth = DepthTexture[IN.position.xy];
+    float kernel_linear_depth = -IN.positionVS.z;
     float d = abs(gbuffer_linear_depth - kernel_linear_depth);
 
     if (IN.photonID < photonMapConsts.counts[PhotonMapID::Volume - 1].x) {
