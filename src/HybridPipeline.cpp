@@ -859,6 +859,7 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
 
         mPhotonSplatVoxels[0].Uav.gpuHandle = mRtContext->getDescriptorGPUHandle(mPhotonSplatVoxels[0].Uav.heapIndex);
         mPhotonSplatVoxels[0].Uav.cpuHandle = uavCpuHandle;
+        CreateClearableUAV(device, mCpuOnlyDescriptorHeap.get(), mPhotonSplatVoxels[0], uavDesc);
     }
 
     {
@@ -872,6 +873,7 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
 
         mPhotonSplatVoxels[1].Uav.gpuHandle = mRtContext->getDescriptorGPUHandle(mPhotonSplatVoxels[1].Uav.heapIndex);
         mPhotonSplatVoxels[1].Uav.cpuHandle = uavCpuHandle;
+        CreateClearableUAV(device, mCpuOnlyDescriptorHeap.get(), mPhotonSplatVoxels[1], uavDesc);
     }
 
     AllocateRTVTexture(device, mGBufferFormats.at(GBufferID::Normal), width, height, mGBuffer[GBufferID::Normal].Resource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, L"G buffer normals");
@@ -1620,6 +1622,9 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
             CD3DX12_RESOURCE_BARRIER::Transition(mPhotonSplatVoxels[1].Resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
         };
         auto transitions = ScopedBarrier(commandList, barriers);
+
+        clearUav(commandList, mPhotonSplatVoxels[0]);
+        clearUav(commandList, mPhotonSplatVoxels[1]);
 
         // Set global root arguments
         mRtContext->bindDescriptorHeap();
