@@ -30,7 +30,7 @@ void main(VSOutput IN, out PSOutput OUT)
 
     if (IN.photonID < photonMapConsts.counts[PhotonMapID::Volume - 1].x) {
         if(perFrameConstants.options.showVolumePhotonsOnly) discard;
-        clip(photonMapConsts.kernelCompressFactor * 1e-3 - d);
+        clip(photonMapConsts.kernelCompressFactor * .5f - d);
     } else {
         clip(gbuffer_linear_depth - kernel_linear_depth);
     }

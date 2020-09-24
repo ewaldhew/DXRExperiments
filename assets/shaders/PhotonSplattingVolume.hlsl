@@ -54,7 +54,7 @@ float kernel_size(float3 n, float3 light, float pos_z, float ray_length)
     float min_area = min_scale * min_scale * 1.0f;
     float ellipse_area = scaling_uniform  * scaling_uniform * light_shaping_scale;
 
-    return ellipse_area / min_area;
+    return ellipse_area;
 }
 
 // get index of payload data in global payload buffer
@@ -214,7 +214,7 @@ void RayGen()
                     result_alpha *= throughput;
                     num_hits++;
 #elif METHOD == NTNU
-                    const float volume_factor = fixed_radius * fixed_radius * 100*100;
+                    const float volume_factor = fixed_radius * fixed_radius;
 
                     float3 power = photon.power * phase_factor * exp(-extinction * trbf) / volume_factor;
                     float3 sample_color = absorption * emission + power;

@@ -23,7 +23,7 @@ using namespace DXRFramework;
 
 #define NUM_POINT_LIGHTS 1
 #define NUM_DIR_LIGHTS 1
-static XMFLOAT4 pointLightColor = XMFLOAT4(0.2f, 0.8f, 0.6f, 2.0f);
+static XMFLOAT4 pointLightColor = XMFLOAT4(0.2f, 0.8f, 0.6f, 0.0f);
 static XMFLOAT4 dirLightColor = XMFLOAT4(0.9f, 0.9f, 0.9f, 1.0f);
 
 static const D3D12_STATIC_SAMPLER_DESC linearMipPointSampler = CD3DX12_STATIC_SAMPLER_DESC(0,
