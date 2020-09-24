@@ -468,7 +468,7 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context, DXGI_FORMAT outputF
     // Create descriptor heaps for UAV CPU descriptors and render target views
     {
         D3D12_DESCRIPTOR_HEAP_DESC descriptorHeapDesc = {};
-        descriptorHeapDesc.NumDescriptors = 4;
+        descriptorHeapDesc.NumDescriptors = 8;
         descriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
         mCpuOnlyDescriptorHeap = std::make_unique<DescriptorPile>(device, &descriptorHeapDesc);
         SetName(mCpuOnlyDescriptorHeap->Heap(), L"CPU-only descriptor heap");
@@ -640,8 +640,8 @@ inline void CreateTextureRTV(ID3D12Device* device, DescriptorPile* heap, OutputR
     D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
     rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
 
-    size_t rtvHeapIndex = heap->Allocate();
-    view.Rtv.cpuHandle = heap->GetCpuHandle(rtvHeapIndex);
+    view.Rtv.heapIndex = view.Rtv.heapIndex == UINT_MAX ? heap->Allocate() : view.Rtv.heapIndex;
+    view.Rtv.cpuHandle = heap->GetCpuHandle(view.Rtv.heapIndex);
     device->CreateRenderTargetView(view.Resource.Get(), &rtvDesc, view.Rtv.cpuHandle);
 }
 
@@ -682,6 +682,9 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
     auto device = mRtContext->getDevice();
 
     mRtvDescriptorHeap = std::make_unique<DescriptorPile>(mRtvDescriptorHeap->Heap());
+    mCpuOnlyDescriptorHeap = std::make_unique<DescriptorPile>(mCpuOnlyDescriptorHeap->Heap());
+
+    mNeedPhotonMap = true;
 
     // Final output resource
 
