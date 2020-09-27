@@ -141,7 +141,7 @@ private:
     // Rendering states
     bool mActive;
     bool mNeedPhotonMap;
-    bool mNeedPhotonAS;
+    bool mIsTracingFrame; // is the first frame during which photons were traced
     UINT mSamplesCpu;
     UINT mSamplesGpu;
     UINT mNumPhotons; // after tracing
