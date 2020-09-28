@@ -1,6 +1,7 @@
 #define HLSL
 #include "RasterHlslCompat.h"
 #include "RaytracingUtils.hlsli"
+#undef RASTER_PIPELINE
 #include "ParticipatingMediaUtil.hlsli"
 
 ConstantBuffer<PhotonMappingConstants> photonMapConsts : register(b1);
@@ -29,7 +30,7 @@ struct unpacked_photon
 float3 raymarch(float3 origin, float3 dir, float2 screen_pos, inout uint randSeed)
 {
     float z_factor = dot(dir, normalize(perFrameConstants.cameraParams.W.xyz));
-    float gbuffer_linear_depth = gbufferDepth.Sample(linearSampler, screen_pos);
+    float gbuffer_linear_depth = gbufferDepth.SampleLevel(linearSampler, screen_pos, 0.0);
 
     uint3 tex_size;
     voxColorAndCount.GetDimensions(tex_size.x, tex_size.y, tex_size.z);
@@ -87,21 +88,6 @@ float3 raymarch(float3 origin, float3 dir, float2 screen_pos, inout uint randSee
     return result * result_alpha;
 }
 
-unpacked_photon get_photon(uint index)
-{
-    Photon photon = volPhotonBuffer[index];
-
-    unpacked_photon result;
-    result.position = photon.position;
-    result.power = photon.power;
-    result.direction = spherical_to_unitvec(photon.direction);
-    result.normal = spherical_to_unitvec(photon.normal);
-    result.distTravelled = photon.distTravelled;
-    result.materialIndex = photon.materialIndex;
-
-    return result;
-}
-
 [numthreads(8, 8, 1)]
 void main( uint3 tid : SV_DispatchThreadID )
 {
@@ -114,5 +100,5 @@ void main( uint3 tid : SV_DispatchThreadID )
     float3 volumeColor = gbufferVolumeMask.Load(int3(Pos, 0)) * raymarch(perFrameConstants.cameraParams.worldEyePos.xyz, viewDir, Tex, randSeed);
 
     photonSplatColorXYZDirX[Pos] += float4(volumeColor, viewDir.x);
-    photonSplatDirYZ += viewDir.yz;
+    photonSplatDirYZ[Pos] += viewDir.yz;
 }

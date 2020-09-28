@@ -6,6 +6,8 @@
 // referenced by the GPU.
 using Microsoft::WRL::ComPtr;
 
+namespace DXTKExtend {
+
 class HrException : public std::runtime_error
 {
     inline std::string HrToString(HRESULT hr)
@@ -251,4 +253,6 @@ inline size_t SizeOfInBits(DXGI_FORMAT fmt)
 inline size_t SizeOfInBytes(DXGI_FORMAT fmt)
 {
     return (SizeOfInBits(fmt) + 7U) / 8U; // round up to nearest byte
+}
+
 }

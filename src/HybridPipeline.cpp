@@ -329,17 +329,14 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context, DXGI_FORMAT outputF
         D3D12_STATIC_SAMPLER_DESC materialSampler = pointClampSampler;
         materialSampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
         materialSampler.ShaderRegister = 1;
-        materialSampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
         D3D12_STATIC_SAMPLER_DESC lightSampler = anisotropicSampler;
         lightSampler.ShaderRegister = 0;
         lightSampler.RegisterSpace = 1;
-        lightSampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
         D3D12_STATIC_SAMPLER_DESC voxelSampler = linearSampler;
         voxelSampler.ShaderRegister = 1;
         voxelSampler.RegisterSpace = 1;
-        voxelSampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
         RootSignatureGenerator rsConfig;
         rsConfig.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_CBV, 0 /* b0 */, 0, 1); // per frame constants
@@ -882,7 +879,7 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
         CreateClearableUAV(device, mCpuOnlyDescriptorHeap.get(), mPhotonSplatVoxels[1], uavDesc);
     }
 
-    const UINT64 voxelBufSize = VOXEL_GRID_DIMS * VOXEL_GRID_DIMS * VOXEL_GRID_DIMS * SizeOfInBytes(DXGI_FORMAT_R32G32B32A32_FLOAT);
+    const UINT64 voxelBufSize = VOXEL_GRID_DIMS * VOXEL_GRID_DIMS * VOXEL_GRID_DIMS * DXTKExtend::SizeOfInBytes(DXGI_FORMAT_R32G32B32A32_FLOAT);
     *(mPhotonSplatVoxelsStaging[0].ReleaseAndGetAddressOf()) = CreateBuffer(device, voxelBufSize, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
     *(mPhotonSplatVoxelsStaging[1].ReleaseAndGetAddressOf()) = CreateBuffer(device, voxelBufSize, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
 
