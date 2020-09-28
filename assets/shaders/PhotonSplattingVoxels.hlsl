@@ -60,7 +60,7 @@ float3 raymarch(float3 origin, float3 dir, float2 screen_pos, inout uint randSee
             float3 color = color_count.rgb;
             uint count = uint(round(color_count.w));
             float4 light_dir_mat_id = voxDirectionAndMatId.SampleLevel(linearSampler, tex_coords, 0.0);
-            float3 light_dir = light_dir_mat_id.xyz;
+            float3 light_dir = normalize(light_dir_mat_id.xyz);
             uint mat_id = uint(round(light_dir_mat_id.w));
 
             float3 curr_pos_obj = mul(photonMapConsts.worldToObjMatrix, float4(curr_pos, 1.0f)).xyz;
@@ -105,33 +105,6 @@ unpacked_photon get_photon(uint index)
 [numthreads(8, 8, 1)]
 void main( uint3 tid : SV_DispatchThreadID )
 {
-/*    uint photon_idx = tid.x;
-    unpacked_photon photon = get_photon(photon_idx);
-
-    float3 color = photon.power;
-    float3 direction = photon.direction;
-
-    uint3 tex_size;
-    voxColorAndCount.GetDimensions(tex_size.x, tex_size.y, tex_size.z);
-    float3 vol_bbox_size = photonMapConsts.volumeBboxMax.xyz - photonMapConsts.volumeBboxMin.xyz;
-    float3 tex_coords = (photon.position - photonMapConsts.volumeBboxMin.xyz) / vol_bbox_size;
-    uint3 tex_idx = uint3(tex_coords * tex_size);
-//    float3 cell_size = vol_bbox_size / tex_size;
-
-    const int SPLAT_WIDTH = 2;
-    for (int i = -SPLAT_WIDTH; i <= SPLAT_WIDTH; i++) {
-        for (int j = -SPLAT_WIDTH; j <= SPLAT_WIDTH; j++) {
-            for (int k = -SPLAT_WIDTH; k <= SPLAT_WIDTH; k++) {
-                if (abs(i)+abs(j)+abs(k) > SPLAT_WIDTH) continue;
-                uint3 tex = tex_idx + uint3(i, j, k);
-                voxColorAndCount[tex] += float4(color, 1);
-                voxDirectionAndMatId[tex].xyz += direction;
-                voxDirectionAndMatId[tex].w = photon.materialIndex;
-            }
-        }
-    }
-    */
-
     uint2 Pos = tid.xy;
     float2 Tex = Pos / float2(perFrameConstants.cameraParams.vpSize.xy);
     float2 d = Tex.xy * 2.f - 1.f;
@@ -140,6 +113,6 @@ void main( uint3 tid : SV_DispatchThreadID )
 
     float3 volumeColor = gbufferVolumeMask.Load(int3(Pos, 0)) * raymarch(perFrameConstants.cameraParams.worldEyePos.xyz, viewDir, Tex, randSeed);
 
-    photonSplatColorXYZDirX[Pos] += float4(volumeColor, direction.x);
-    photonSplatDirYZ += direction.yz;
+    photonSplatColorXYZDirX[Pos] += float4(volumeColor, viewDir.x);
+    photonSplatDirYZ += viewDir.yz;
 }

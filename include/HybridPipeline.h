@@ -14,6 +14,7 @@
 #include "DescriptorHeap.h"
 #include "GeometricModel.h"
 #include <vector>
+#include <future>
 #include <random>
 
 namespace GBufferID { enum Value { Normal = 0, Albedo, VolMask, LinDepth, Depth, Count }; };
@@ -50,6 +51,9 @@ private:
 
     void collectEmitters(UINT& numLights, UINT& maxSamples);
     void buildVolumePhotonAccelerationStructure(UINT buildStrategy);
+    void splatVolumePhotonsIntoVoxelGrid();
+
+    std::future<void> mAsyncVolumeSplatPrepare;
 
     // Pipeline components
     struct RtPass
@@ -109,6 +113,7 @@ private:
     OutputResourceView mVolumePhotonAabbs;
     OutputResourceView mVolumePhotonPositions;
     OutputResourceView mVolumePhotonPositionsObjSpace;
+    ComPtr<ID3D12Resource> mVolumePhotonMapReadback;
     ComPtr<ID3D12Resource> mVolumePhotonPositionsReadback;
     ComPtr<ID3D12Resource> mVolumePhotonBlas;
     ComPtr<ID3D12Resource> mVolumePhotonTlas;
@@ -121,6 +126,7 @@ private:
     OutputResourceView mPhotonSplatRtBuffer; // method 2 - raytracing (payload buffer)
 
     OutputResourceView mPhotonSplatVoxels[2]; // method 3 - splat into voxels
+    ComPtr<ID3D12Resource> mPhotonSplatVoxelsStaging[2];
 
     OutputResourceView mPhotonSplat[2]; // photon splat output targets - raster
     ResourceView mPhotonSplatUav[2];    // - RT / compute

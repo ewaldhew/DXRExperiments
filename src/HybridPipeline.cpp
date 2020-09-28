@@ -15,6 +15,7 @@
 #include "ResourceUploadBatch.h"
 #include "DirectXHelpers.h"
 #include "ImGuiRendererDX.h"
+#include "Util/DirectXHelper.h"
 #include "Helpers/BottomLevelASGenerator.h"
 #include "Helpers/TopLevelASGenerator.h"
 #include <chrono>
@@ -325,13 +326,37 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context, DXGI_FORMAT outputF
     mRtPhotonSplattingVolumePass.mRtState->setMaxPayloadSize(sizeof(PhotonSplatPayload));
 
     {
+        D3D12_STATIC_SAMPLER_DESC materialSampler = pointClampSampler;
+        materialSampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+        materialSampler.ShaderRegister = 1;
+        materialSampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+        D3D12_STATIC_SAMPLER_DESC lightSampler = anisotropicSampler;
+        lightSampler.ShaderRegister = 0;
+        lightSampler.RegisterSpace = 1;
+        lightSampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+        D3D12_STATIC_SAMPLER_DESC voxelSampler = linearSampler;
+        voxelSampler.ShaderRegister = 1;
+        voxelSampler.RegisterSpace = 1;
+        voxelSampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
         RootSignatureGenerator rsConfig;
-        rsConfig.AddHeapRangesParameter({{0 /* t0 */, 1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // density
-        rsConfig.AddHeapRangesParameter({{1 /* t1 */, 1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // photons
-        rsConfig.AddHeapRangesParameter({{2 /* t2 */, 1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // photon object space positions
-        rsConfig.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_CBV, 0 /* b0 */, 0, 1);
-        rsConfig.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_CBV, 1 /* b1 */, 0, 1);
-        rsConfig.AddHeapRangesParameter({{0 /* u0 */, 2 /* ~u1 */, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0}}); // voxel maps x2
+        rsConfig.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_CBV, 0 /* b0 */, 0, 1); // per frame constants
+        rsConfig.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_CBV, 1 /* b1 */, 0, 1); // photon map constants
+        rsConfig.AddHeapRangesParameter({{0 /* u0 */, 2 /* ~u1 */, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0}}); // color and dir
+
+        rsConfig.AddHeapRangesParameter({{0 /* t0 */, 1, 2 /* space2 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // depth
+        rsConfig.AddHeapRangesParameter({{1 /* t1 */, 1, 2 /* space2 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // volmask
+        rsConfig.AddHeapRangesParameter({{2 /* t2 */, 2 /* ~t3 */, 2 /* space2 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // voxel maps x2
+
+        rsConfig.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 0 /* t0 */, 9 /* space9 */); // material params
+        rsConfig.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 1 /* t1 */, 9 /* space9 */); // material texture params
+        rsConfig.AddHeapRangesParameter({{2 /* t2 */, -1 /* unbounded */, 9 /* space9 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // material textures
+
+        rsConfig.AddStaticSampler(materialSampler);
+        rsConfig.AddStaticSampler(lightSampler);
+        rsConfig.AddStaticSampler(voxelSampler);
 
         mPhotonSplattingVoxelPass.rootSignature = rsConfig.Generate(device, false);
 
@@ -401,20 +426,10 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context, DXGI_FORMAT outputF
      *  Combine Pass
      *******************************/
     {
-        D3D12_STATIC_SAMPLER_DESC materialSampler = pointClampSampler;
-        materialSampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
-        materialSampler.ShaderRegister = 1;
-        materialSampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
         D3D12_STATIC_SAMPLER_DESC lightSampler = anisotropicSampler;
         lightSampler.ShaderRegister = 0;
         lightSampler.RegisterSpace = 1;
         lightSampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-        D3D12_STATIC_SAMPLER_DESC voxelSampler = linearSampler;
-        voxelSampler.ShaderRegister = 1;
-        voxelSampler.RegisterSpace = 1;
-        voxelSampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
         RootSignatureGenerator rsConfig;
         rsConfig.AddHeapRangesParameter({{0 /* t0 */, 1, 1 /* space1 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // normals
@@ -422,19 +437,8 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context, DXGI_FORMAT outputF
         rsConfig.AddHeapRangesParameter({{2 /* t2 */, 1, 1 /* space1 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // splat1
 
         rsConfig.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_CBV, 0 /* b0 */); // per frame constants
-        rsConfig.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_CBV, 1 /* b1 */); // photon map constants
 
-        rsConfig.AddHeapRangesParameter({{0 /* t0 */, 1, 2 /* space2 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // depth
-        rsConfig.AddHeapRangesParameter({{1 /* t1 */, 1, 2 /* space2 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // volmask
-        rsConfig.AddHeapRangesParameter({{2 /* t2 */, 2 /* ~t3 */, 2 /* space2 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // voxel maps x2
-
-        rsConfig.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 0 /* t0 */, 9 /* space9 */); // material params
-        rsConfig.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 1 /* t1 */, 9 /* space9 */); // material texture params
-        rsConfig.AddHeapRangesParameter({{2 /* t2 */, -1 /* unbounded */, 9 /* space9 */, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0}}); // material textures
-
-        rsConfig.AddStaticSampler(materialSampler);
         rsConfig.AddStaticSampler(lightSampler);
-        rsConfig.AddStaticSampler(voxelSampler);
 
         mCombinePass.rootSignature = rsConfig.Generate(device, false);
 
@@ -739,6 +743,7 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
     CreateStructuredBufferUAV(device, mRtContext, mVolumePhotonMap, sizeof(Photon), MAX_PHOTONS);
     ThrowIfFalse(mPhotonMapCounters.Uav.heapIndex + 1 == mPhotonMap.Uav.heapIndex);
     ThrowIfFalse(mPhotonMapCounters.Uav.heapIndex + 2 == mVolumePhotonMap.Uav.heapIndex);
+    AllocateReadbackBuffer(device, MAX_PHOTONS * sizeof(Photon), mVolumePhotonMapReadback.ReleaseAndGetAddressOf(), L"photon map readback");
 
     AllocateUAVBuffer(device, MAX_PHOTONS * sizeof(PhotonAABB), mVolumePhotonAabbs.Resource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     AllocateUAVBuffer(device, MAX_PHOTONS * sizeof(XMVECTOR), mVolumePhotonPositions.Resource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -876,6 +881,10 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
         mPhotonSplatVoxels[1].Uav.cpuHandle = uavCpuHandle;
         CreateClearableUAV(device, mCpuOnlyDescriptorHeap.get(), mPhotonSplatVoxels[1], uavDesc);
     }
+
+    const UINT64 voxelBufSize = VOXEL_GRID_DIMS * VOXEL_GRID_DIMS * VOXEL_GRID_DIMS * SizeOfInBytes(DXGI_FORMAT_R32G32B32A32_FLOAT);
+    *(mPhotonSplatVoxelsStaging[0].ReleaseAndGetAddressOf()) = CreateBuffer(device, voxelBufSize, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
+    *(mPhotonSplatVoxelsStaging[1].ReleaseAndGetAddressOf()) = CreateBuffer(device, voxelBufSize, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
 
     AllocateRTVTexture(device, mGBufferFormats.at(GBufferID::Normal), width, height, mGBuffer[GBufferID::Normal].Resource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, L"G buffer normals");
     CreateTextureRTV(device, mRtvDescriptorHeap.get(), mGBuffer[GBufferID::Normal]);
@@ -1284,6 +1293,84 @@ void HybridPipeline::buildVolumePhotonAccelerationStructure(UINT buildStrategy)
     }
 }
 
+void HybridPipeline::splatVolumePhotonsIntoVoxelGrid()
+{
+    auto context = mRtContext;
+    auto device = context->getDevice();
+    auto commandList = context->getCommandList();
+
+    XMVECTOR *voxColorAndCount;
+    XMVECTOR *voxDirectionAndMatId;
+
+    ThrowIfFailed(mPhotonSplatVoxelsStaging[0]->Map(0, nullptr, reinterpret_cast<void**>(&voxColorAndCount)));
+    ThrowIfFailed(mPhotonSplatVoxelsStaging[1]->Map(0, nullptr, reinterpret_cast<void**>(&voxDirectionAndMatId)));
+
+    Photon* photons;
+    ThrowIfFailed(mVolumePhotonMapReadback->Map(0, nullptr, reinterpret_cast<void**>(&photons)));
+
+    auto bufSize = mPhotonSplatVoxelsStaging[0]->GetDesc().Width;
+    memset(voxColorAndCount, 0, bufSize);
+    memset(voxDirectionAndMatId, 0, bufSize);
+
+    for (int i = 0; i < mPhotonMappingConstants->counts[PhotonMapID::Volume].x; i++) {
+        auto photon = photons[i];
+
+        // convert vector if packed
+        auto power = photon.power;
+        auto direction = photon.direction;
+
+        auto volMin = XMLoadFloat3(&mPhotonMappingConstants->volumeBboxMin);
+        auto volMax = XMLoadFloat3(&mPhotonMappingConstants->volumeBboxMax);
+        auto volBboxSize = volMax - volMin;
+
+        XMFLOAT3 texCoords;
+        XMStoreFloat3(&texCoords, (XMLoadFloat3(&photon.position) - volMin) / volBboxSize);
+
+        XMUINT3 texSize = XMUINT3(
+            mPhotonSplatVoxels->Resource->GetDesc().Width,
+            mPhotonSplatVoxels->Resource->GetDesc().Height,
+            mPhotonSplatVoxels->Resource->GetDesc().DepthOrArraySize
+        );
+        XMUINT3 texIdx = XMUINT3(
+            texCoords.x * texSize.x,
+            texCoords.y * texSize.y,
+            texCoords.z * texSize.z
+        );
+
+        const int SPLAT_WIDTH = 2;
+        for (int i = -SPLAT_WIDTH; i <= SPLAT_WIDTH; i++) {
+            for (int j = -SPLAT_WIDTH; j <= SPLAT_WIDTH; j++) {
+                for (int k = -SPLAT_WIDTH; k <= SPLAT_WIDTH; k++) {
+                    if (abs(i) + abs(j) + abs(k) > SPLAT_WIDTH) continue;
+
+                    int tex = (texIdx.z + i)*texSize.y*texSize.x + (texIdx.y + j)*texSize.x + (texIdx.x + k);
+
+                    voxColorAndCount[tex] += XMLoadFloat4(&XMFLOAT4(power.x, power.y, power.z, 1));
+                    voxDirectionAndMatId[tex] += XMLoadFloat4(&XMFLOAT4(direction.x, direction.y, direction.z, 0));
+                    voxDirectionAndMatId[tex] = XMVectorMax(voxDirectionAndMatId[tex], XMLoadFloat4(&XMFLOAT4(-FLT_MAX, -FLT_MAX, -FLT_MAX, photon.materialIndex)));
+                }
+            }
+        }
+    }
+
+    mVolumePhotonMapReadback->Unmap(0, &CD3DX12_RANGE(0, 0));
+
+    mPhotonSplatVoxelsStaging[0]->Unmap(0, nullptr);
+    mPhotonSplatVoxelsStaging[1]->Unmap(0, nullptr);
+
+    std::initializer_list<D3D12_RESOURCE_BARRIER> barriers =
+    {
+        CD3DX12_RESOURCE_BARRIER::Transition(mPhotonSplatVoxels[0].Resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST),
+        CD3DX12_RESOURCE_BARRIER::Transition(mPhotonSplatVoxels[1].Resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST),
+        CD3DX12_RESOURCE_BARRIER::Transition(mPhotonSplatVoxelsStaging[0].Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_COPY_SOURCE),
+        CD3DX12_RESOURCE_BARRIER::Transition(mPhotonSplatVoxelsStaging[1].Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_COPY_SOURCE),
+    };
+    auto transitions = ScopedBarrier(commandList, barriers);
+
+    commandList->CopyResource(mPhotonSplatVoxels[0].Resource.Get(), mPhotonSplatVoxelsStaging[0].Get());
+    commandList->CopyResource(mPhotonSplatVoxels[1].Resource.Get(), mPhotonSplatVoxelsStaging[1].Get());
+}
+
 void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIndex, UINT width, UINT height, UINT& pass)
 {
     auto viewport = CD3DX12_VIEWPORT(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height));
@@ -1515,14 +1602,18 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
                 mPhotonMapCounterReadback->Unmap(0, &CD3DX12_RANGE(0, 0));
             }
 
+            // async compute
+
             if (mShaderOptions.volumeSplattingMethod == SplatMethod::Raytrace) {
-                buildVolumePhotonAccelerationStructure(mPhotonMappingConstants->photonGeometryBuildStrategy);
+                mAsyncVolumeSplatPrepare = std::async(std::launch::async, [&]() {
+                    buildVolumePhotonAccelerationStructure(mPhotonMappingConstants->photonGeometryBuildStrategy);
+                });
             }
-
-            if (mShaderOptions.volumeSplattingMethod == SplatMethod::Voxels) {
-
+            else if (mShaderOptions.volumeSplattingMethod == SplatMethod::Voxels) {
+                mAsyncVolumeSplatPrepare = std::async(std::launch::async, [&]() {
+                    splatVolumePhotonsIntoVoxelGrid();
+                });
             }
-
         }
 
         pass = Pass::PhotonSplattingRaster;
@@ -1573,15 +1664,11 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
         switch (mShaderOptions.volumeSplattingMethod) {
         case SplatMethod::Raytrace: {
             pass = Pass::PhotonSplattingVolume;
-            break;
+            return;
         }
         case SplatMethod::Voxels: {
-            if (mIsTracingFrame) {
-                pass = Pass::PhotonSplattingVoxels;
-                break;
-            } else {
-                // fallthrough
-            }
+            pass = Pass::PhotonSplattingVoxels;
+            return;
         }
         default: {
             pass = Pass::Combine;
@@ -1592,6 +1679,9 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
 
     if (pass == Pass::PhotonSplattingVolume)
     {
+        // wait for async compute from PhotonSplatting
+        mAsyncVolumeSplatPrepare.wait();
+
         auto mRtBindings = mRtPhotonSplattingVolumePass.mRtBindings;
         auto mRtState = mRtPhotonSplattingVolumePass.mRtState;
         auto program = mRtBindings->getProgram();
@@ -1637,40 +1727,42 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
         return;
     }
 
-    if (pass == Pass::PhotonSplattingVoxels) {
+    if (pass == Pass::PhotonSplattingVoxels)
+    {
+        // wait for async compute from PhotonSplatting
+        mAsyncVolumeSplatPrepare.wait();
+
         std::initializer_list<D3D12_RESOURCE_BARRIER> barriers =
         {
-            CD3DX12_RESOURCE_BARRIER::Transition(mVolumePhotonMap.Resource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
-            CD3DX12_RESOURCE_BARRIER::Transition(mVolumePhotonPositionsObjSpace.Resource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
-            CD3DX12_RESOURCE_BARRIER::Transition(mPhotonDensity.Resource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
-            CD3DX12_RESOURCE_BARRIER::Transition(mPhotonSplatVoxels[0].Resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
-            CD3DX12_RESOURCE_BARRIER::Transition(mPhotonSplatVoxels[1].Resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
+            CD3DX12_RESOURCE_BARRIER::Transition(mPhotonSplat[0].Resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
+            CD3DX12_RESOURCE_BARRIER::Transition(mPhotonSplat[1].Resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
         };
         auto transitions = ScopedBarrier(commandList, barriers);
-
-        clearUav(commandList, mPhotonSplatVoxels[0]);
-        clearUav(commandList, mPhotonSplatVoxels[1]);
 
         // Set global root arguments
         mRtContext->bindDescriptorHeap();
         commandList->SetPipelineState(mPhotonSplattingVoxelPass.stateObject.Get());
         commandList->SetComputeRootSignature(mPhotonSplattingVoxelPass.rootSignature.Get());
 
-        commandList->SetComputeRootDescriptorTable(0, mPhotonDensity.Srv.gpuHandle);
-        commandList->SetComputeRootDescriptorTable(1, mVolumePhotonMap.Srv.gpuHandle);
-        commandList->SetComputeRootDescriptorTable(2, mVolumePhotonPositionsObjSpace.Srv.gpuHandle);
+        commandList->SetComputeRootConstantBufferView(0, mConstantBuffer.GpuVirtualAddress(frameIndex));
+        commandList->SetComputeRootConstantBufferView(1, mPhotonMappingConstants.GpuVirtualAddress());
+        commandList->SetComputeRootDescriptorTable(2, mPhotonSplatUav[0].gpuHandle);
 
-        commandList->SetComputeRootConstantBufferView(3, mConstantBuffer.GpuVirtualAddress(frameIndex));
-        commandList->SetComputeRootConstantBufferView(4, mPhotonMappingConstants.GpuVirtualAddress());
+        commandList->SetComputeRootDescriptorTable(3, mGBuffer[GBufferID::LinDepth].Srv.gpuHandle);
+        commandList->SetComputeRootDescriptorTable(4, mGBuffer[GBufferID::VolMask].Srv.gpuHandle);
+        commandList->SetComputeRootDescriptorTable(5, mPhotonSplatVoxels[0].Srv.gpuHandle);
 
-        commandList->SetComputeRootDescriptorTable(5, mPhotonSplatVoxels[0].Uav.gpuHandle);
+        commandList->SetComputeRootShaderResourceView(6, mMaterialParamsBuffer.GpuVirtualAddress());
+        commandList->SetComputeRootShaderResourceView(7, mTextureParams.GpuVirtualAddress());
+        commandList->SetComputeRootDescriptorTable(8, mTextureSrvGpuHandles[2]);
 
-        commandList->Dispatch(mPhotonMappingConstants->counts[PhotonMapID::Volume].x, 1, 1);
+        commandList->Dispatch(width, height, 1);
 
-        mRtContext->insertUAVBarrier(mPhotonSplatVoxels[0].Resource.Get());
-        mRtContext->insertUAVBarrier(mPhotonSplatVoxels[1].Resource.Get());
+        mRtContext->insertUAVBarrier(mPhotonSplat[0].Resource.Get());
+        mRtContext->insertUAVBarrier(mPhotonSplat[1].Resource.Get());
 
         pass = Pass::Combine;
+        return;
     }
 
     // final render pass
@@ -1700,15 +1792,6 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
         commandList->SetGraphicsRootDescriptorTable(2, mPhotonSplat[1].Srv.gpuHandle);
 
         commandList->SetGraphicsRootConstantBufferView(3, mRasterConstantsBuffer.GpuVirtualAddress(frameIndex));
-        commandList->SetGraphicsRootConstantBufferView(4, mPhotonMappingConstants.GpuVirtualAddress());
-
-        commandList->SetGraphicsRootDescriptorTable(5, mGBuffer[GBufferID::LinDepth].Srv.gpuHandle);
-        commandList->SetGraphicsRootDescriptorTable(6, mGBuffer[GBufferID::VolMask].Srv.gpuHandle);
-        commandList->SetGraphicsRootDescriptorTable(7, mPhotonSplatVoxels[0].Srv.gpuHandle);
-
-        commandList->SetGraphicsRootShaderResourceView(8, mMaterialParamsBuffer.GpuVirtualAddress());
-        commandList->SetGraphicsRootShaderResourceView(9, mTextureParams.GpuVirtualAddress());
-        commandList->SetGraphicsRootDescriptorTable(10, mTextureSrvGpuHandles[2]);
 
         commandList->OMSetRenderTargets(1, &mOutput.Rtv.cpuHandle, FALSE, nullptr);
 
