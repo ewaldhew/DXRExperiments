@@ -80,6 +80,7 @@ namespace Pass
         PhotonEmission,
         PhotonTracing,
         PhotonSplatting,
+        PhotonSplattingRaster,
         PhotonSplattingVolume,
         PhotonSplattingVoxels,
         Combine,
@@ -92,7 +93,7 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context, DXGI_FORMAT outputF
     mRtContext(context),
     mAnimationPaused(true),
     mNeedPhotonMap(true),
-    mNeedPhotonAS(false),
+    mIsTracingFrame(true),
     mActive(true)
 {
     auto device = context->getDevice();
@@ -1126,8 +1127,6 @@ void HybridPipeline::buildVolumePhotonAccelerationStructure(UINT buildStrategy)
 
     const UINT numPhotons = mPhotonMapCounts[PhotonMapID::Volume];
 
-    if (!mNeedPhotonAS) return;
-
     switch (buildStrategy) {
     case 0: {
         // N AABBs at photon positions in 1 BLAS, 1 instance at origin in TLAS
@@ -1282,8 +1281,6 @@ void HybridPipeline::buildVolumePhotonAccelerationStructure(UINT buildStrategy)
         }
     } break;
     }
-
-    mNeedPhotonAS = false;
 }
 
 void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIndex, UINT width, UINT height, UINT& pass)
@@ -1482,27 +1479,46 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
         mRtContext->transitionResource(mPhotonMapCounters.Resource.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         clearUav(commandList, mPhotonMapCounters);
 
+        // photon positions for AS build
+        if (mShaderOptions.volumeSplattingMethod == SplatMethod::Raytrace) {
+            mRtContext->transitionResource(mVolumePhotonPositions.Resource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
+            commandList->CopyResource(mVolumePhotonPositionsReadback.Get(), mVolumePhotonPositions.Resource.Get());
+            mRtContext->transitionResource(mVolumePhotonPositions.Resource.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        }
+
         mNumPhotons = 0;
         mNeedPhotonMap = false;
-        mNeedPhotonAS = true;
+        mIsTracingFrame = true;
         pass = Pass::PhotonSplatting;
         return;
     }
 
     if (pass == Pass::PhotonSplatting)
     {
-        if (mNumPhotons == 0) {
-            UINT* pReadbackBufferData;
-            ThrowIfFailed(mPhotonMapCounterReadback->Map(0, nullptr, reinterpret_cast<void**>(&pReadbackBufferData)));
-            for (UINT i = 0; i < PhotonMapID::Count; i++) {
-                mNumPhotons += pReadbackBufferData[i];
-                mPhotonMapCounts[i] = pReadbackBufferData[i];
-                mPhotonMappingConstants->counts[i].x = mNumPhotons;
+        if (mIsTracingFrame) {
+            if (mNumPhotons == 0) {
+                UINT* pReadbackBufferData;
+                ThrowIfFailed(mPhotonMapCounterReadback->Map(0, nullptr, reinterpret_cast<void**>(&pReadbackBufferData)));
+                for (UINT i = 0; i < PhotonMapID::Count; i++) {
+                    mNumPhotons += pReadbackBufferData[i];
+                    mPhotonMapCounts[i] = pReadbackBufferData[i];
+                    mPhotonMappingConstants->counts[i].x = mNumPhotons;
+                }
+                mPhotonMappingConstants.CopyStagingToGpu();
+                mPhotonMapCounterReadback->Unmap(0, &CD3DX12_RANGE(0, 0));
             }
-            mPhotonMappingConstants.CopyStagingToGpu();
-            mPhotonMapCounterReadback->Unmap(0, &CD3DX12_RANGE(0, 0));
+
+            if (mShaderOptions.volumeSplattingMethod == SplatMethod::Raytrace) {
+                buildVolumePhotonAccelerationStructure(mPhotonMappingConstants->photonGeometryBuildStrategy);
+            }
+
         }
 
+        pass = Pass::PhotonSplattingRaster;
+    }
+
+    if (pass == Pass::PhotonSplattingRaster)
+    {
         UINT splatUntil = PhotonMapID::Count - 1 - static_cast<UINT>(mShaderOptions.volumeSplattingMethod != SplatMethod::Raster);
         mNumPhotons = mPhotonMappingConstants->counts[splatUntil].x;
 
@@ -1545,16 +1561,16 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
 
         switch (mShaderOptions.volumeSplattingMethod) {
         case SplatMethod::Raytrace: {
-            mRtContext->transitionResource(mVolumePhotonPositions.Resource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
-            commandList->CopyResource(mVolumePhotonPositionsReadback.Get(), mVolumePhotonPositions.Resource.Get());
-            mRtContext->transitionResource(mVolumePhotonPositions.Resource.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
             pass = Pass::PhotonSplattingVolume;
-            return;
+            break;
         }
         case SplatMethod::Voxels: {
-            pass = Pass::PhotonSplattingVoxels;
-            break;
+            if (mIsTracingFrame) {
+                pass = Pass::PhotonSplattingVoxels;
+                break;
+            } else {
+                // fallthrough
+            }
         }
         default: {
             pass = Pass::Combine;
@@ -1565,8 +1581,6 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
 
     if (pass == Pass::PhotonSplattingVolume)
     {
-        buildVolumePhotonAccelerationStructure(mPhotonMappingConstants->photonGeometryBuildStrategy);
-
         auto mRtBindings = mRtPhotonSplattingVolumePass.mRtBindings;
         auto mRtState = mRtPhotonSplattingVolumePass.mRtState;
         auto program = mRtBindings->getProgram();
@@ -1694,6 +1708,7 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
         commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         commandList->DrawInstanced(3, 1, 0, 0);
 
+        if (mIsTracingFrame) mIsTracingFrame = false;
         pass = Pass::End;
     }
 }
@@ -1729,7 +1744,7 @@ void HybridPipeline::userInterface()
         mNeedPhotonMap |= ui::Checkbox("Skip Tracing", (bool*)&mShaderOptions.skipPhotonTracing);
         frameDirty |= ui::Checkbox("Show Volume Photons Only", (bool*)&mShaderOptions.showVolumePhotonsOnly);
         frameDirty |= ui::Checkbox("Show Splatting Result Only", (bool*)&mShaderOptions.showRawSplattingResult);
-        frameDirty |= ui::SliderInt("Splatting Method", (int*)&mShaderOptions.volumeSplattingMethod, 0, SplatMethod::COUNT - 1);
+        mNeedPhotonMap |= ui::SliderInt("Splatting Method", (int*)&mShaderOptions.volumeSplattingMethod, 0, SplatMethod::COUNT - 1);
 
         ui::Separator();
         ui::Text("Splatting Parameters");

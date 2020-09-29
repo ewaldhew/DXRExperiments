@@ -71,10 +71,10 @@ void RayGen()
     float2 d = (((launchIndex.xy + 0.5f) / dims.xy) * 2.f - 1.f);
     uint randSeed = initRand(launchIndex.x + launchIndex.y * dims.x, perFrameConstants.cameraParams.frameCount);
 
-    float2 jitter = 0.0f;perFrameConstants.cameraParams.jitters * 30.0;
+    float2 jitter = perFrameConstants.cameraParams.jitters * 30.0;
 
     RayDesc ray;
-    ray.Origin = perFrameConstants.cameraParams.worldEyePos.xyz + float3(jitter.x, jitter.y, 0.0f);
+    ray.Origin = perFrameConstants.cameraParams.worldEyePos.xyz;
     ray.Direction = normalize(d.x * perFrameConstants.cameraParams.U + (-d.y) * perFrameConstants.cameraParams.V + perFrameConstants.cameraParams.W).xyz;
     ray.TMin = 0;
     ray.TMax = RAY_MAX_T;
@@ -94,7 +94,7 @@ void RayGen()
     float texit = min(min(tmax.x, min(tmax.y, tmax.z)), GetMaxT(ray.Direction));
 
     const float fixed_radius = photonMapConsts.volumeSplatPhotonSize;
-    float slab_spacing = fixed_radius;//PARTICLE_BUFFER_SIZE * fixed_radius;
+    float slab_spacing = photonMapConsts.particlesPerSlab * fixed_radius;
 
     int num_hits = 0;
     float3 result_direction = 0.f;
@@ -216,7 +216,7 @@ void RayGen()
 #elif METHOD == NTNU
                     const float volume_factor = fixed_radius * fixed_radius;
 
-                    float3 power = photon.power * phase_factor * exp(-extinction * trbf) / volume_factor;
+                    float3 power = photon.power * phase_factor * exp(-extinction * (trbf - prev_trbf)) / volume_factor;
                     float3 sample_color = absorption * emission + power;
                     result += sample_color.rgb;
 #endif
