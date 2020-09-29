@@ -15,6 +15,7 @@
 #include "GeometricModel.h"
 #include <vector>
 #include <future>
+#include <atomic>
 #include <random>
 
 namespace GBufferID { enum Value { Normal = 0, Albedo, VolMask, LinDepth, Depth, Count }; };
@@ -159,4 +160,6 @@ private:
 
     std::mt19937 mRng;
     std::uniform_real_distribution<float> mRngDist;
+
+    std::atomic_bool mWaitForMain; // synchronise async compute for command list
 };

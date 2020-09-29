@@ -95,6 +95,7 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context, DXGI_FORMAT outputF
     mAnimationPaused(true),
     mNeedPhotonMap(true),
     mIsTracingFrame(true),
+    mWaitForMain(true),
     mActive(true)
 {
     auto device = context->getDevice();
@@ -845,7 +846,7 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
         mPhotonSplatRtBuffer.Uav.gpuHandle = mRtContext->getDescriptorGPUHandle(mPhotonSplatRtBuffer.Uav.heapIndex);
     }
 
-    const UINT VOXEL_GRID_DIMS = 128;
+    const UINT VOXEL_GRID_DIMS = 2;
     AllocateUAVTexture3D(device, DXGI_FORMAT_R32G32B32A32_FLOAT, VOXEL_GRID_DIMS, VOXEL_GRID_DIMS, VOXEL_GRID_DIMS, mPhotonSplatVoxels[0].Resource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, L"Voxel map for volume photons 0");
     CreateTextureSRV(mRtContext, mPhotonSplatVoxels[0]);
     AllocateUAVTexture3D(device, DXGI_FORMAT_R32G32B32A32_FLOAT, VOXEL_GRID_DIMS, VOXEL_GRID_DIMS, VOXEL_GRID_DIMS, mPhotonSplatVoxels[1].Resource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, L"Voxel map for volume photons 1");
@@ -1296,21 +1297,21 @@ void HybridPipeline::splatVolumePhotonsIntoVoxelGrid()
     auto device = context->getDevice();
     auto commandList = context->getCommandList();
 
-    XMVECTOR *voxColorAndCount;
-    XMVECTOR *voxDirectionAndMatId;
+    XMUINT3 texSize = XMUINT3(
+        mPhotonSplatVoxels[0].Resource->GetDesc().Width,
+        mPhotonSplatVoxels[0].Resource->GetDesc().Height,
+        mPhotonSplatVoxels[0].Resource->GetDesc().DepthOrArraySize
+    );
 
-    ThrowIfFailed(mPhotonSplatVoxelsStaging[0]->Map(0, nullptr, reinterpret_cast<void**>(&voxColorAndCount)));
-    ThrowIfFailed(mPhotonSplatVoxelsStaging[1]->Map(0, nullptr, reinterpret_cast<void**>(&voxDirectionAndMatId)));
+    size_t count = texSize.x * texSize.y * texSize.z;
+    std::vector<XMVECTOR> voxColorAndCount(count);
+    std::vector<XMVECTOR> voxDirectionAndMatId(count);
 
     Photon* photons;
     ThrowIfFailed(mVolumePhotonMapReadback->Map(0, nullptr, reinterpret_cast<void**>(&photons)));
 
-    auto bufSize = mPhotonSplatVoxelsStaging[0]->GetDesc().Width;
-    memset(voxColorAndCount, 0, bufSize);
-    memset(voxDirectionAndMatId, 0, bufSize);
-
-    for (int i = 0; i < mPhotonMappingConstants->counts[PhotonMapID::Volume].x; i++) {
-        auto photon = photons[i];
+    for (int p = 0; p < mPhotonMappingConstants->counts[PhotonMapID::Volume].x; p++) {
+        auto photon = photons[p];
 
         // convert vector if packed
         auto power = photon.power;
@@ -1323,11 +1324,6 @@ void HybridPipeline::splatVolumePhotonsIntoVoxelGrid()
         XMFLOAT3 texCoords;
         XMStoreFloat3(&texCoords, (XMLoadFloat3(&photon.position) - volMin) / volBboxSize);
 
-        XMUINT3 texSize = XMUINT3(
-            mPhotonSplatVoxels->Resource->GetDesc().Width,
-            mPhotonSplatVoxels->Resource->GetDesc().Height,
-            mPhotonSplatVoxels->Resource->GetDesc().DepthOrArraySize
-        );
         XMUINT3 texIdx = XMUINT3(
             texCoords.x * texSize.x,
             texCoords.y * texSize.y,
@@ -1341,6 +1337,7 @@ void HybridPipeline::splatVolumePhotonsIntoVoxelGrid()
                     if (abs(i) + abs(j) + abs(k) > SPLAT_WIDTH) continue;
 
                     int tex = (texIdx.z + i)*texSize.y*texSize.x + (texIdx.y + j)*texSize.x + (texIdx.x + k);
+                    if (tex < 0 || count <= tex) continue;
 
                     voxColorAndCount[tex] += XMLoadFloat4(&XMFLOAT4(power.x, power.y, power.z, 1));
                     voxDirectionAndMatId[tex] += XMLoadFloat4(&XMFLOAT4(direction.x, direction.y, direction.z, 0));
@@ -1352,20 +1349,24 @@ void HybridPipeline::splatVolumePhotonsIntoVoxelGrid()
 
     mVolumePhotonMapReadback->Unmap(0, &CD3DX12_RANGE(0, 0));
 
-    mPhotonSplatVoxelsStaging[0]->Unmap(0, nullptr);
-    mPhotonSplatVoxelsStaging[1]->Unmap(0, nullptr);
+    while (std::atomic_exchange_explicit(&mWaitForMain, true, std::memory_order_acquire)); // spinlock
 
     std::initializer_list<D3D12_RESOURCE_BARRIER> barriers =
     {
         CD3DX12_RESOURCE_BARRIER::Transition(mPhotonSplatVoxels[0].Resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST),
         CD3DX12_RESOURCE_BARRIER::Transition(mPhotonSplatVoxels[1].Resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST),
-        CD3DX12_RESOURCE_BARRIER::Transition(mPhotonSplatVoxelsStaging[0].Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_COPY_SOURCE),
-        CD3DX12_RESOURCE_BARRIER::Transition(mPhotonSplatVoxelsStaging[1].Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_COPY_SOURCE),
     };
     auto transitions = ScopedBarrier(commandList, barriers);
 
-    commandList->CopyResource(mPhotonSplatVoxels[0].Resource.Get(), mPhotonSplatVoxelsStaging[0].Get());
-    commandList->CopyResource(mPhotonSplatVoxels[1].Resource.Get(), mPhotonSplatVoxelsStaging[1].Get());
+    // copy to default heap
+
+    D3D12_SUBRESOURCE_DATA subres = {};
+    subres.pData = voxColorAndCount.data();
+    subres.RowPitch = texSize.x * sizeof(XMFLOAT4);
+    subres.SlicePitch = ptrdiff_t(subres.RowPitch) * ptrdiff_t(texSize.y);
+
+    // Submit resource copy to command list
+    UpdateSubresources(commandList, mPhotonSplatVoxels[0].Resource.Get(), mPhotonSplatVoxelsStaging[0].Get(), 0, 0, 1, &subres);
 }
 
 void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIndex, UINT width, UINT height, UINT& pass)
@@ -1727,6 +1728,7 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
     if (pass == Pass::PhotonSplattingVoxels)
     {
         // wait for async compute from PhotonSplatting
+        std::atomic_store_explicit(&mWaitForMain, false, std::memory_order_release);
         mAsyncVolumeSplatPrepare.wait();
 
         std::initializer_list<D3D12_RESOURCE_BARRIER> barriers =
