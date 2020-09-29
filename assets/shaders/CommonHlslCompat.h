@@ -25,7 +25,7 @@ struct CameraParams
     XMFLOAT2 jitters;
     UINT frameCount;
     UINT accumCount;
-    XMUINT2 vpSize;
+    XMFLOAT2 padding;
 };
 
 struct ProceduralPrimitiveAttributes

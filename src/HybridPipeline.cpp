@@ -460,7 +460,7 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context, DXGI_FORMAT outputF
     mShaderOptions.showVolumePhotonsOnly = false;
     mShaderOptions.showRawSplattingResult = false;
     mShaderOptions.skipPhotonTracing = false;
-    mShaderOptions.volumeSplattingMethod = SplatMethod::Voxels;
+    mShaderOptions.volumeSplattingMethod = SplatMethod::Raster;
 
     auto now = std::chrono::high_resolution_clock::now();
     auto msTime = std::chrono::time_point_cast<std::chrono::milliseconds>(now);
@@ -978,7 +978,6 @@ void HybridPipeline::update(float elapsedTime, UINT elapsedFrames, UINT prevFram
     float yJitter = (mRngDist(mRng) - 0.5f) / float(height);
     cameraParams.jitters = XMFLOAT2(xJitter, yJitter);
     cameraParams.frameCount = elapsedFrames;
-    cameraParams.vpSize = XMUINT2(width, height);
 
     mConstantBuffer->cameraParams = cameraParams;
     mConstantBuffer->options = {};
@@ -1487,12 +1486,6 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
             mRtContext->transitionResource(mVolumePhotonPositions.Resource.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         }
 
-        if (mShaderOptions.volumeSplattingMethod == SplatMethod::Voxels) {
-            mRtContext->transitionResource(mVolumePhotonMap.Resource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
-            commandList->CopyResource(mVolumePhotonMapReadback.Get(), mVolumePhotonMap.Resource.Get());
-            mRtContext->transitionResource(mVolumePhotonMap.Resource.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        }
-
         mNumPhotons = 0;
         mNeedPhotonMap = false;
         mIsTracingFrame = true;
@@ -1517,10 +1510,6 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
 
             if (mShaderOptions.volumeSplattingMethod == SplatMethod::Raytrace) {
                 buildVolumePhotonAccelerationStructure(mPhotonMappingConstants->photonGeometryBuildStrategy);
-            }
-
-            if (mShaderOptions.volumeSplattingMethod == SplatMethod::Voxels) {
-
             }
 
         }
