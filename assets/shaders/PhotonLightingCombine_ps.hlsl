@@ -70,11 +70,11 @@ float3 raymarch(float3 origin, float3 dir, float2 screen_pos, inout uint randSee
     float texit = min(min(tmax.x, min(tmax.y, tmax.z)), gbuffer_linear_depth / z_factor);
 
     float3 result = 0.f;
-    float result_alpha = .9f;
+    float result_alpha = 1.f;
 
-    //if (tenter < texit) {
+    if (tenter < texit) {
         float t = tenter;
-        while (t <  gbuffer_linear_depth / z_factor && result_alpha > 0.03f) {
+        while (t <  texit && result_alpha > 0.03f) {
             float3 curr_pos = origin + dir * t;
             float3 tex_coords = (curr_pos - photonMapConsts.volumeBboxMin.xyz) / vol_bbox_size;
 
@@ -97,14 +97,14 @@ float3 raymarch(float3 origin, float3 dir, float2 screen_pos, inout uint randSee
             float phase_factor = evalPhaseFuncPdf(vol.phase_func_type, vol.phase_func_params, light_dir, dir);
 
             float3 power = color * phase_factor;
-            float alpha = exp(-extinction * step / 10);
-            float3 sample_color = (absorption * emission + albedo * power) *step;
+            float alpha = exp(-extinction * step / 5);
+            float3 sample_color = (absorption * emission + albedo * power) * step;
             result += sample_color * result_alpha / max(count, 1);
             result_alpha *= alpha;
 
             t += step / z_factor * nextRand(randSeed);
         }
-    //}
+    }
 
     return result;// * result_alpha;
 }
@@ -130,9 +130,9 @@ void main(
     float lightFactor = saturate(dot(normal, lightDir)) / M_PI; //evaluateBrdf(lightDir, viewDir, normal);
 
     bool shouldRaymarch = perFrameConstants.options.volumeSplattingMethod == SplatMethod::Voxels;
-    float3 volumeColor = shouldRaymarch /* gbufferVolumeMask.Load(int3(Pos.xy, 0)) */* raymarch(perFrameConstants.cameraParams.worldEyePos.xyz, viewDir, Tex, randSeed);
-    float3 surfaceColor = photonSplatColorXYZDirX.Sample(lightSampler, Tex).xyz;
+    float3 volumeColor = shouldRaymarch * gbufferVolumeMask.Load(int3(Pos.xy, 0)) * raymarch(perFrameConstants.cameraParams.worldEyePos.xyz, viewDir, Tex, randSeed);
+    float3 surfaceColor = photonSplatColorXYZDirX.Sample(lightSampler, Tex).xyz * 10;// * lerp(lightFactor, 1.0, perFrameConstants.options.showRawSplattingResult);
     float3 totalColor = volumeColor + surfaceColor;
 
-    Color = float4(totalColor, 1); //* lerp(lightFactor, 1.0, perFrameConstants.options.showRawSplattingResult);
+    Color = float4(totalColor, 1);
 }

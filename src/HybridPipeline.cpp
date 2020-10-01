@@ -886,9 +886,9 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
     CreateTextureRTV(device, mRtvDescriptorHeap.get(), mGBuffer[GBufferID::Normal]);
     CreateTextureSRV(mRtContext, mGBuffer[GBufferID::Normal]);
 
-    AllocateRTVTexture(device, mGBufferFormats.at(GBufferID::Albedo), width, height, mGBuffer[GBufferID::Albedo].Resource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, L"G buffer flux");
-    CreateTextureRTV(device, mRtvDescriptorHeap.get(), mGBuffer[GBufferID::Albedo]);
-    CreateTextureSRV(mRtContext, mGBuffer[GBufferID::Albedo]);
+    //AllocateRTVTexture(device, mGBufferFormats.at(GBufferID::Albedo), width, height, mGBuffer[GBufferID::Albedo].Resource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, L"G buffer flux");
+    //CreateTextureRTV(device, mRtvDescriptorHeap.get(), mGBuffer[GBufferID::Albedo]);
+    //CreateTextureSRV(mRtContext, mGBuffer[GBufferID::Albedo]);
 
     AllocateRTVTexture(device, mGBufferFormats.at(GBufferID::VolMask), width, height, mGBuffer[GBufferID::VolMask].Resource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, L"G buffer volume mask");
     CreateTextureRTV(device, mRtvDescriptorHeap.get(), mGBuffer[GBufferID::VolMask]);
@@ -1602,6 +1602,8 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
             break;
         }
         }
+
+        return;
     }
 
     if (pass == Pass::PhotonSplattingVolume)
@@ -1692,6 +1694,7 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
         mRtContext->insertUAVBarrier(mPhotonSplatVoxels[1].Resource.Get());
 
         pass = Pass::Combine;
+        return;
     }
 
     // final render pass

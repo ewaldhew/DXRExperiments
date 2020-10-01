@@ -173,6 +173,8 @@ void DXRExperimentsApp::InitRaytracing()
         RaytracingPipeline::Material &texTest = materials.back();
         texTest.params.type = MaterialType::ParticipatingMedia;
         texTest.params.reflectivity = 0.2f;
+        texTest.params.IoR = 0;
+        texTest.params.specular = XMFLOAT4(0.88, 0, 0, 0);
         RaytracingPipeline::MaterialTexture tex{ &MaterialParams::albedo };
         tex.data = { // starts bottom-left
         };
@@ -184,11 +186,11 @@ void DXRExperimentsApp::InitRaytracing()
         for (UINT i = 0; i < tex.depth; i++) {
             for (UINT j = 0; j < tex.height; j++) {
                 for (UINT k = 0; k < tex.width; k++) {
-                    float absorption = (noise.eval(i / (double)tex.depth, j/ (double)tex.height, k/ (double)tex.width)) * 0.5 + 0.5;
+                    float absorption = (noise.eval(i / (double)tex.depth / 50.0, j/ (double)tex.height / 50.0, k/ (double)tex.width / 50.0)) * 0.5 + 0.5;
                     //absorption = 0.02;
                     //absorption = (j + k) % 2 ? 0.1 : 0.025;
                     //absorption = min(max(absorption, 0.1), 0.8);
-                    tex.data[i*tex.height*tex.width + j*tex.width + k] = XMFLOAT4(absorption, min(absorption * 0.8, (1.0 - absorption) * 0.8), 0, 1);
+                    tex.data[i*tex.height*tex.width + j*tex.width + k] = XMFLOAT4(absorption, min(absorption * 0.3, (1.0 - absorption) * 0.3), 0, 1);
                 }
             }
         }
