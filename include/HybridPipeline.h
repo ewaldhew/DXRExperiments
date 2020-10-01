@@ -153,4 +153,7 @@ private:
 
     std::mt19937 mRng;
     std::uniform_real_distribution<float> mRngDist;
+
+    // instrumentation
+    ComPtr<IDXGraphicsAnalysis> ga;
 };
