@@ -13,6 +13,7 @@
 #include "WICTextureLoader.h"
 #include "DDSTextureLoader.h"
 #include "ResourceUploadBatch.h"
+#define _PIX_H_ // prevent name conflict in older version of PIX
 #include "DirectXHelpers.h"
 #include "ImGuiRendererDX.h"
 #include "Helpers/BottomLevelASGenerator.h"
@@ -488,6 +489,10 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context, DXGI_FORMAT outputF
     mPhotonSplatKernelShape = std::make_shared<DXTKExtend::GeometricModel>(device, [](auto& vertices, auto& indices) {
         GeometricPrimitive::CreateIcosahedron(vertices, indices);
     });
+
+    if (DXGIGetDebugInterface1(0, IID_PPV_ARGS(&ga))) {
+        ga = nullptr;
+    }
 }
 
 HybridPipeline::~HybridPipeline() = default;
@@ -1290,11 +1295,19 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
 
     if (pass == Pass::Begin)
     {
+        PIXEndEvent(commandList);
+        if (ga) {
+            ga->EndCapture();
+            if (mNeedPhotonMap) ga->BeginCapture();
+        }
+
         pass = Pass::GBuffer;
     }
 
     if (pass == Pass::GBuffer)
     {
+        PIXBeginEvent(commandList, 0, L"GBuffer");
+
         std::initializer_list<D3D12_RESOURCE_BARRIER> barriers =
         {
             CD3DX12_RESOURCE_BARRIER::Transition(mGBuffer[GBufferID::Normal].Resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET),
@@ -1368,6 +1381,9 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
     // generate photon seed
     if (pass == Pass::PhotonEmission)
     {
+        PIXEndEvent(commandList);
+        PIXBeginEvent(commandList, 0, L"PhotonEmission");
+
         UINT numLights, maxSamples;
         collectEmitters(numLights, maxSamples);
 
@@ -1423,6 +1439,9 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
     // generate photon map
     if (pass == Pass::PhotonTracing)
     {
+        PIXEndEvent(commandList);
+        PIXBeginEvent(commandList, 0, L"PhotonTracing");
+
         // Update shader table root arguments
         auto mRtBindings = mRtPhotonMappingPass.mRtBindings;
         auto mRtState = mRtPhotonMappingPass.mRtState;
@@ -1495,6 +1514,9 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
 
     if (pass == Pass::PhotonSplatting)
     {
+        PIXEndEvent(commandList);
+        PIXBeginEvent(commandList, 0, L"PhotonSplatting");
+
         if (mIsTracingFrame) {
             if (mNumPhotons == 0) {
                 UINT* pReadbackBufferData;
@@ -1519,6 +1541,9 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
 
     if (pass == Pass::PhotonSplattingRaster)
     {
+        PIXEndEvent(commandList);
+        PIXBeginEvent(commandList, 0, L"PhotonSplattingRaster");
+
         UINT splatUntil = PhotonMapID::Count - 1 - static_cast<UINT>(mShaderOptions.volumeSplattingMethod != SplatMethod::Raster);
         mNumPhotons = mPhotonMappingConstants->counts[splatUntil].x;
 
@@ -1581,6 +1606,9 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
 
     if (pass == Pass::PhotonSplattingVolume)
     {
+        PIXEndEvent(commandList);
+        PIXBeginEvent(commandList, 0, L"PhotonSplattingVolume");
+
         auto mRtBindings = mRtPhotonSplattingVolumePass.mRtBindings;
         auto mRtState = mRtPhotonSplattingVolumePass.mRtState;
         auto program = mRtBindings->getProgram();
@@ -1626,7 +1654,11 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
         return;
     }
 
-    if (pass == Pass::PhotonSplattingVoxels) {
+    if (pass == Pass::PhotonSplattingVoxels)
+    {
+        PIXEndEvent(commandList);
+        PIXBeginEvent(commandList, 0, L"PhotonSplattingVoxels");
+
         std::initializer_list<D3D12_RESOURCE_BARRIER> barriers =
         {
             CD3DX12_RESOURCE_BARRIER::Transition(mVolumePhotonMap.Resource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
@@ -1665,6 +1697,9 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
     // final render pass
     if (pass == Pass::Combine)
     {
+        PIXEndEvent(commandList);
+        PIXBeginEvent(commandList, 0, L"Combine");
+
         for (UINT instance = 0; instance < mRtScene->getNumInstances(); ++instance) {
             if (mMaterials[mRtScene->getModel(instance)->mMaterialIndex].params.type == MaterialType::ParticipatingMedia) {
                 mPhotonMappingConstants->worldToObjMatrix = XMMatrixInverse(nullptr, mRtScene->getTransform(instance));

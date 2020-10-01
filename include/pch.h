@@ -36,6 +36,8 @@
 #include <dxgi1_6.h>
 #ifdef _DEBUG
 #include <dxgidebug.h>
+#include <DXProgrammableCapture.h>
+#include <pix3.h>
 #endif
 
 #include "Helpers/DirectXHelper.h"

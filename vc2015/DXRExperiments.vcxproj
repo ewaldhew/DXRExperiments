@@ -572,6 +572,7 @@ PostbuildCopy.bat "$(SolutionDir)vc2015\build\bin\$(Configuration)\"
       <HeaderFileOutput>$(IntDir)\CompiledShaders\%(Filename).hlsl.h</HeaderFileOutput>
       <EntryPointName />
     </FxCompile>
+    <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\assets\shaders\BilateralFilter.hlsli" />
@@ -591,5 +592,12 @@ PostbuildCopy.bat "$(SolutionDir)vc2015\build\bin\$(Configuration)\"
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
+    <Import Project="..\packages\WinPixEventRuntime.1.0.200127001\build\WinPixEventRuntime.targets" Condition="Exists('..\packages\WinPixEventRuntime.1.0.200127001\build\WinPixEventRuntime.targets')" />
   </ImportGroup>
+  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
+    </PropertyGroup>
+    <Error Condition="!Exists('..\packages\WinPixEventRuntime.1.0.200127001\build\WinPixEventRuntime.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\WinPixEventRuntime.1.0.200127001\build\WinPixEventRuntime.targets'))" />
+  </Target>
 </Project>
