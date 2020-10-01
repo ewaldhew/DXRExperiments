@@ -171,9 +171,8 @@ float3 shade(float3 position, float3 normal, uint currentDepth)
             // Sample lights
 
             // Sample the phase function
-            { // isotropic
-                rayDir = getUniformSphereSample(randSeed);
-            }
+            float pdf;
+            rayDir = samplePhaseFunc(int(mat.IoR), mat.specular.xyz, rayDir, pdf, randSeed);
 
             prevPosition = position;
         }
