@@ -94,7 +94,7 @@ float3 raymarch(float3 origin, float3 dir, float2 screen_pos, inout uint randSee
             float scattering = vol.scattering;
             float extinction = absorption + scattering;
             float albedo = scattering / extinction;
-            float phase_factor = evalPhaseFuncPdf(vol.phase_func_type, light_dir, dir);
+            float phase_factor = evalPhaseFuncPdf(vol.phase_func_type, vol.phase_func_params, light_dir, dir);
 
             float3 power = color * phase_factor;
             float alpha = exp(-extinction * step / 10);

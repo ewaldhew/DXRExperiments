@@ -189,7 +189,7 @@ void RayGen()
                     float scattering = vol.scattering;
                     float extinction = absorption + scattering;
                     float albedo = scattering / extinction;
-                    float phase_factor = evalPhaseFuncPdf(vol.phase_func_type, photon.direction, ray.Direction);
+                    float phase_factor = evalPhaseFuncPdf(vol.phase_func_type, vol.phase_func_params, photon.direction, ray.Direction);
 
 #if METHOD == GPUGEMS
                     float diff_volume = (4.f/3.f)*M_PI * pow(length(sample_n), 3);

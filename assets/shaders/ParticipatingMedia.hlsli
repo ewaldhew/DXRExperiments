@@ -1,4 +1,5 @@
 #include "RaytracingCommon.hlsli"
+#include "ParticipatingMediaUtil.hlsli"
 
 #define MAX_VOLUME_INTERACTIONS 6
 

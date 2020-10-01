@@ -226,9 +226,8 @@ bool russian_roulette(float3 in_power, float3 in_direction, float3 normal, inout
             float3 rayDirPrev = rayDir;
 
             // Sample the phase function
-            { // isotropic
-                rayDir = getUniformSphereSample(randSeed);
-            }
+            float pdf;
+            rayDir = samplePhaseFunc(int(mat.IoR), mat.specular.xyz, rayDir, pdf, randSeed);
 
             dist += t;
             float3 stored_power = in_power * throughput;
