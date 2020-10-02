@@ -12,6 +12,8 @@ ConstantBuffer<PhotonMappingConstants> photonMapConsts : register(b1);
 RWTexture3D<float4> voxColorAndCount : register(u0);
 RWTexture3D<float4> voxDirectionAndMatId : register(u1);
 
+static const float INV_SQRT2PI = 1.f / sqrt(2 * M_PI);
+
 struct unpacked_photon
 {
     float3 position;
@@ -37,23 +39,33 @@ unpacked_photon get_photon(uint index)
     return result;
 }
 
-[numthreads(64, 1, 1)]
+[numthreads(4, 4, 4)]
 void main( uint3 tid : SV_DispatchThreadID )
 {
-    uint photon_idx = tid.x;
-    unpacked_photon photon = get_photon(photon_idx);
+    uint3 tex_idx = tid.xyz;
 
-    float3 color = photon.power;
-    float3 direction = photon.direction;
+    const int count = photonMapConsts.counts[PhotonMapID::Volume].x;
+    int photon_idx;
+    for (photon_idx = 0; photon_idx < count; photon_idx++) {
+        unpacked_photon photon = get_photon(photon_idx);
 
-    uint3 tex_size;
-    voxColorAndCount.GetDimensions(tex_size.x, tex_size.y, tex_size.z);
-    float3 vol_bbox_size = photonMapConsts.volumeBboxMax.xyz - photonMapConsts.volumeBboxMin.xyz;
-    float3 tex_coords = (photon.position - photonMapConsts.volumeBboxMin.xyz) / vol_bbox_size;
-    uint3 tex_idx = uint3(tex_coords * tex_size);
-//    float3 cell_size = vol_bbox_size / tex_size;
+        float3 color = photon.power;
+        float3 direction = photon.direction;
 
-    voxColorAndCount[tex_idx] += float4(color, 1);
-    voxDirectionAndMatId[tex_idx].xyz += direction;
-    voxDirectionAndMatId[tex_idx].w = photon.materialIndex;
+        uint3 tex_size;
+        voxColorAndCount.GetDimensions(tex_size.x, tex_size.y, tex_size.z);
+        float3 vol_bbox_size = photonMapConsts.volumeBboxMax.xyz - photonMapConsts.volumeBboxMin.xyz;
+
+        float3 cell_size = vol_bbox_size / tex_size;
+        float3 cell_center_idx = float3(tex_idx) + 0.5f;
+        float3 cell_pos = photonMapConsts.volumeBboxMin.xyz + cell_center_idx * cell_size;
+
+        float drbf = length(photon.position - cell_pos);
+        float rbf = saturate(INV_SQRT2PI * exp(-0.5f * drbf*drbf));
+
+        voxColorAndCount[tex_idx] += float4(color * rbf, 1);
+        voxDirectionAndMatId[tex_idx].xyz += direction * rbf;
+        voxDirectionAndMatId[tex_idx].w = photon.materialIndex;
+    }
+    voxColorAndCount[tex_idx] /= count;
 }
