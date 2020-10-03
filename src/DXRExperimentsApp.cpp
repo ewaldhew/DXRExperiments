@@ -174,6 +174,7 @@ void DXRExperimentsApp::InitRaytracing()
         texTest.params.type = MaterialType::ParticipatingMedia;
         texTest.params.reflectivity = 0.2f;
         texTest.params.IoR = 0;
+        texTest.params.emissive = XMFLOAT4(0, 0, 0, 0);
         texTest.params.specular = XMFLOAT4(0.88, 0, 0, 0);
         RaytracingPipeline::MaterialTexture tex{ &MaterialParams::albedo };
         tex.data = { // starts bottom-left

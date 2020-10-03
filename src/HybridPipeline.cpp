@@ -848,7 +848,7 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
         mPhotonSplatRtBuffer.Uav.gpuHandle = mRtContext->getDescriptorGPUHandle(mPhotonSplatRtBuffer.Uav.heapIndex);
     }
 
-    const UINT VOXEL_GRID_DIMS = 128;
+    const UINT VOXEL_GRID_DIMS = 16;
     AllocateUAVTexture3D(device, DXGI_FORMAT_R32G32B32A32_FLOAT, VOXEL_GRID_DIMS, VOXEL_GRID_DIMS, VOXEL_GRID_DIMS, mPhotonSplatVoxels[0].Resource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, L"Voxel map for volume photons 0");
     CreateTextureSRV(mRtContext, mPhotonSplatVoxels[0]);
     AllocateUAVTexture3D(device, DXGI_FORMAT_R32G32B32A32_FLOAT, VOXEL_GRID_DIMS, VOXEL_GRID_DIMS, VOXEL_GRID_DIMS, mPhotonSplatVoxels[1].Resource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, L"Voxel map for volume photons 1");

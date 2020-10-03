@@ -80,9 +80,9 @@ float3 raymarch(float3 origin, float3 dir, float2 screen_pos, inout uint randSee
 
             float4 color_count = voxColorAndCount.SampleLevel(linearSampler, tex_coords, 1.0);
             float3 color = color_count.rgb;
-            uint count = uint(round(color_count.w));
+            float count = color_count.w;
             float4 light_dir_mat_id = voxDirectionAndMatId.SampleLevel(linearSampler, tex_coords, 0.0);
-            float3 light_dir = light_dir_mat_id.xyz;
+            float3 light_dir = normalize(light_dir_mat_id.xyz);
             uint mat_id = uint(round(light_dir_mat_id.w));
 
             float3 curr_pos_obj = mul(photonMapConsts.worldToObjMatrix, float4(curr_pos, 1.0f)).xyz;
@@ -97,8 +97,8 @@ float3 raymarch(float3 origin, float3 dir, float2 screen_pos, inout uint randSee
             float phase_factor = evalPhaseFuncPdf(vol.phase_func_type, vol.phase_func_params, light_dir, dir);
 
             float3 power = color * phase_factor;
-            float alpha = exp(-extinction * step / 5);
-            float3 sample_color = (absorption * emission + albedo * power) * step;
+            float alpha = exp(-extinction * step);
+            float3 sample_color = (albedo * power) * step;
             result += sample_color * result_alpha / max(count, 1);
             result_alpha *= alpha;
 
