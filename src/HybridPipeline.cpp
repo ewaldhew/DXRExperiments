@@ -848,7 +848,7 @@ void HybridPipeline::createOutputResource(DXGI_FORMAT format, UINT width, UINT h
         mPhotonSplatRtBuffer.Uav.gpuHandle = mRtContext->getDescriptorGPUHandle(mPhotonSplatRtBuffer.Uav.heapIndex);
     }
 
-    const UINT VOXEL_GRID_DIMS = 128;
+    const UINT VOXEL_GRID_DIMS = 16;
     AllocateUAVTexture3D(device, DXGI_FORMAT_R32G32B32A32_FLOAT, VOXEL_GRID_DIMS, VOXEL_GRID_DIMS, VOXEL_GRID_DIMS, mPhotonSplatVoxels[0].Resource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, L"Voxel map for volume photons 0");
     CreateTextureSRV(mRtContext, mPhotonSplatVoxels[0]);
     AllocateUAVTexture3D(device, DXGI_FORMAT_R32G32B32A32_FLOAT, VOXEL_GRID_DIMS, VOXEL_GRID_DIMS, VOXEL_GRID_DIMS, mPhotonSplatVoxels[1].Resource.ReleaseAndGetAddressOf(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, L"Voxel map for volume photons 1");
@@ -1661,6 +1661,10 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
         PIXEndEvent(commandList);
         PIXBeginEvent(commandList, 0, L"PhotonSplattingVoxels");
 
+        UINT voxelGridSizeX = mPhotonSplatVoxels[0].Resource->GetDesc().Width;
+        UINT voxelGridSizeY = mPhotonSplatVoxels[0].Resource->GetDesc().Height;
+        UINT voxelGridSizeZ = mPhotonSplatVoxels[0].Resource->GetDesc().DepthOrArraySize;
+
         std::initializer_list<D3D12_RESOURCE_BARRIER> barriers =
         {
             CD3DX12_RESOURCE_BARRIER::Transition(mVolumePhotonMap.Resource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
@@ -1688,12 +1692,13 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
 
         commandList->SetComputeRootDescriptorTable(5, mPhotonSplatVoxels[0].Uav.gpuHandle);
 
-        commandList->Dispatch(mPhotonMappingConstants->counts[PhotonMapID::Volume].x, 1, 1);
+        commandList->Dispatch(voxelGridSizeX, voxelGridSizeY, voxelGridSizeZ);
 
         mRtContext->insertUAVBarrier(mPhotonSplatVoxels[0].Resource.Get());
         mRtContext->insertUAVBarrier(mPhotonSplatVoxels[1].Resource.Get());
 
         pass = Pass::Combine;
+        return;
     }
 
     // final render pass
