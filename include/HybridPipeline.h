@@ -129,7 +129,7 @@ private:
     {
         { GBufferID::Normal, DXGI_FORMAT_R32G32B32A32_FLOAT },
         { GBufferID::Albedo, DXGI_FORMAT_R32G32B32A32_FLOAT },
-        { GBufferID::VolMask, DXGI_FORMAT_R8_UNORM },
+        { GBufferID::VolMask, DXGI_FORMAT_R32_FLOAT },
         { GBufferID::LinDepth, DXGI_FORMAT_R32_FLOAT },
     };
     OutputResourceView mGBuffer[GBufferID::Count];

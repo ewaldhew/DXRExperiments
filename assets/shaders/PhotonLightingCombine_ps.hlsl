@@ -8,7 +8,7 @@ Texture2D<float2> photonSplatDirYZ : register(t2, space1);
 
 ConstantBuffer<PhotonMappingConstants> photonMapConsts : register(b1);
 Texture2D<float> gbufferDepth : register(t0, space2);
-Texture2D<float> gbufferVolumeMask : register(t1, space2);
+Texture2D<float> gbufferVolumeDepth : register(t1, space2);
 Texture3D<float4> voxColorAndCount : register(t2, space2);
 Texture3D<float4> voxDirectionAndMatId : register(t3, space2);
 
@@ -48,7 +48,7 @@ float evaluateBrdf(float3 InDir, float3 OutDir, float3 N)
     }
 }*/
 
-float3 raymarch(float3 origin, float3 dir, float2 screen_pos, inout uint randSeed)
+float3 raymarch(float3 origin, float3 dir, float2 screen_pos, float tstart, inout uint randSeed)
 {
     float z_factor = dot(dir, normalize(perFrameConstants.cameraParams.W.xyz));
     float gbuffer_linear_depth = gbufferDepth.Sample(linearSampler, screen_pos);
@@ -66,7 +66,7 @@ float3 raymarch(float3 origin, float3 dir, float2 screen_pos, inout uint randSee
     t1 = (bbox_min - origin) / dir;
     tmax = max(t0, t1);
     tmin = min(t0, t1);
-    float tenter = max(0.f, max(tmin.x, max(tmin.y, tmin.z))) - 0.1f;
+    float tenter = max(max(0.f, max(tmin.x, max(tmin.y, tmin.z))), tstart);
     float texit = min(min(tmax.x, min(tmax.y, tmax.z)), gbuffer_linear_depth / z_factor);
 
     float3 result = 0.f;
@@ -129,10 +129,11 @@ void main(
 
     float lightFactor = saturate(dot(normal, lightDir)) / M_PI; //evaluateBrdf(lightDir, viewDir, normal);
 
-    bool shouldRaymarch = perFrameConstants.options.volumeSplattingMethod == SplatMethod::Voxels;
-    float3 volumeColor = shouldRaymarch /* gbufferVolumeMask.Load(int3(Pos.xy, 0)) */* raymarch(perFrameConstants.cameraParams.worldEyePos.xyz, viewDir, Tex, randSeed);
-    float3 surfaceColor = photonSplatColorXYZDirX.Sample(lightSampler, Tex).xyz;
+    float volumeDepth = gbufferVolumeDepth.Load(int3(Pos.xy, 0));
+    bool shouldRaymarch = perFrameConstants.options.volumeSplattingMethod == SplatMethod::Voxels && volumeDepth > 0;
+    float3 volumeColor = shouldRaymarch * raymarch(perFrameConstants.cameraParams.worldEyePos.xyz, viewDir, Tex, volumeDepth, randSeed);
+    float3 surfaceColor = photonSplatColorXYZDirX.Sample(lightSampler, Tex).xyz * 10;// * lerp(lightFactor, 1.0, perFrameConstants.options.showRawSplattingResult);
     float3 totalColor = volumeColor + surfaceColor;
 
-    Color = float4(totalColor, 1); //* lerp(lightFactor, 1.0, perFrameConstants.options.showRawSplattingResult);
+    Color = float4(totalColor, 1);
 }

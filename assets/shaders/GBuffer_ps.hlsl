@@ -95,14 +95,14 @@ PixelShaderOutput main(PixelShaderInput IN)
         OUT.depth = position.z / position.w;
         OUT.gbLinDepth = -positionVS.z;
         OUT.gbNormal = float4(attr.normal.xyz, 0.0f);
-        OUT.gbVolMask = float(obj.isVolume);
+        OUT.gbVolMask = obj.isVolume * -positionVS.z;
     }
     else
     {
         OUT.depth = IN.position.z;
         OUT.gbLinDepth = -IN.positionVS.z;
         OUT.gbNormal = float4(normalize(IN.normal), 0.0f);
-        OUT.gbVolMask = float(obj.isVolume);
+        OUT.gbVolMask = obj.isVolume * -IN.positionVS.z;
     }
 
     //OUT.gbAlbedo = float4(albedo.xyz * albedo.a, 1.0f);
