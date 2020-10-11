@@ -40,7 +40,7 @@ unpacked_photon get_photon(uint index)
 }
 
 [numthreads(4, 4, 4)]
-void main( uint3 tid : SV_DispatchThreadID )
+void main( uint3 tid : SV_DispatchThreadID, uint offset : SV_GroupIndex )
 {
     const uint3 tex_idx = tid.xyz;
 
@@ -57,9 +57,10 @@ void main( uint3 tid : SV_DispatchThreadID )
     float3 vox_direction = 0.f;
     float mat_idx = 0;
 
-    const int count = photonMapConsts.counts[PhotonMapID::Volume].x;
+    const int start = photonMapConsts.counts[PhotonMapID::Volume - 1].x;
+    const int end = photonMapConsts.counts[PhotonMapID::Volume].x;
     int photon_idx;
-    for (photon_idx = 0; photon_idx < count; photon_idx++) {
+    for (photon_idx = start + offset; photon_idx < end; photon_idx += 64) {
         unpacked_photon photon = get_photon(photon_idx);
 
         float3 color = photon.power;
@@ -68,7 +69,7 @@ void main( uint3 tid : SV_DispatchThreadID )
         float drbf = length(photon.position - cell_pos);
         float rbf = saturate(INV_SQRT2PI * exp(-0.5f * drbf*drbf));
 
-        vox_color += color * rbf * 100;
+        vox_color += color * rbf * 100 * 64;
         //factor += rbf;
         vox_direction += direction * rbf;
         mat_idx = max(mat_idx, photon.materialIndex);

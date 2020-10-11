@@ -48,7 +48,7 @@ float evaluateBrdf(float3 InDir, float3 OutDir, float3 N)
     }
 }*/
 
-float3 raymarch(float3 origin, float3 dir, float2 screen_pos, float tstart, inout uint randSeed)
+float4 raymarch(float3 origin, float3 dir, float2 screen_pos, float vol_linear_depth, inout uint randSeed)
 {
     float z_factor = dot(dir, normalize(perFrameConstants.cameraParams.W.xyz));
     float gbuffer_linear_depth = gbufferDepth.Sample(linearSampler, screen_pos);
@@ -57,7 +57,7 @@ float3 raymarch(float3 origin, float3 dir, float2 screen_pos, float tstart, inou
     voxColorAndCount.GetDimensions(tex_size.x, tex_size.y, tex_size.z);
     float3 vol_bbox_size = photonMapConsts.volumeBboxMax.xyz - photonMapConsts.volumeBboxMin.xyz;
     float3 cell_size = vol_bbox_size / tex_size;
-    float step = min(cell_size.x, min(cell_size.y, cell_size.z));
+    float step = min(cell_size.x, min(cell_size.y, cell_size.z)) * 1.7f;
 
     float3 t0, t1, tmin, tmax;
     float3 bbox_min = photonMapConsts.volumeBboxMin;
@@ -66,11 +66,12 @@ float3 raymarch(float3 origin, float3 dir, float2 screen_pos, float tstart, inou
     t1 = (bbox_min - origin) / dir;
     tmax = max(t0, t1);
     tmin = min(t0, t1);
+    float tstart = vol_linear_depth / z_factor;
     float tenter = max(max(0.f, max(tmin.x, max(tmin.y, tmin.z))), tstart);
     float texit = min(min(tmax.x, min(tmax.y, tmax.z)), gbuffer_linear_depth / z_factor);
 
     float3 result = 0.f;
-    float result_alpha = 1.f;
+    float result_alpha = 0.1f;
 
     if (tenter < texit) {
         float t = tenter;
@@ -94,19 +95,19 @@ float3 raymarch(float3 origin, float3 dir, float2 screen_pos, float tstart, inou
             float scattering = vol.scattering;
             float extinction = absorption + scattering;
             float albedo = scattering / extinction;
-            float phase_factor = evalPhaseFuncPdf(vol.phase_func_type, vol.phase_func_params, light_dir, dir);
+            float phase_factor = evalPhaseFuncPdf(vol.phase_func_type, vol.phase_func_params, light_dir, -dir);
 
             float3 power = color * phase_factor;
             float alpha = exp(-extinction * step);
             float3 sample_color = (albedo * power) * step;
             result += sample_color * result_alpha / max(count, 1);
-            result_alpha *= alpha;
+            //result_alpha *= alpha;
 
             t += step / z_factor * nextRand(randSeed);
         }
     }
 
-    return result;// * result_alpha;
+    return float4(result, result_alpha);
 }
 
 void main(
@@ -131,9 +132,9 @@ void main(
 
     float volumeDepth = gbufferVolumeDepth.Load(int3(Pos.xy, 0));
     bool shouldRaymarch = perFrameConstants.options.volumeSplattingMethod == SplatMethod::Voxels && volumeDepth > 0;
-    float3 volumeColor = shouldRaymarch * raymarch(perFrameConstants.cameraParams.worldEyePos.xyz, viewDir, Tex, volumeDepth, randSeed);
+    float4 volumeColor = shouldRaymarch * raymarch(perFrameConstants.cameraParams.worldEyePos.xyz, viewDir, Tex, volumeDepth, randSeed);
     float3 surfaceColor = photonSplatColorXYZDirX.Sample(lightSampler, Tex).xyz * 10;// * lerp(lightFactor, 1.0, perFrameConstants.options.showRawSplattingResult);
-    float3 totalColor = volumeColor + surfaceColor;
+    float3 totalColor = volumeColor.rgb + (shouldRaymarch ? volumeColor.a : 1.f) * surfaceColor;
 
     Color = float4(totalColor, 1);
 }
