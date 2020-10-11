@@ -12,6 +12,7 @@
 // C RunTime Header Files
 #include <stdlib.h>
 #include <assert.h>
+#include <fstream>
 #include <sstream>
 #include <iomanip>
 #include <list>
