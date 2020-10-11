@@ -1771,8 +1771,10 @@ void HybridPipeline::userInterface()
         static int matIdx = 0;
         ui::SliderInt("Material Index", &matIdx, 0, mMaterials.size() - 1);
         frameDirty |= ui::SliderFloat3("Albedo", &mMaterials[matIdx].params.albedo.x, 0.0f, 1.0f);
+        frameDirty |= ui::SliderFloat3("Specular", &mMaterials[matIdx].params.specular.x, 0.0f, 1.0f);
         frameDirty |= ui::SliderFloat("Reflectivity", &mMaterials[matIdx].params.reflectivity, 0.0f, 1.0f);
         frameDirty |= ui::SliderFloat("Roughness", &mMaterials[matIdx].params.roughness, 0.0f, 1.0f);
+        frameDirty |= ui::SliderFloat("Parameter", &mMaterials[matIdx].params.IoR, 0.0f, 3.0f);
         frameDirty |= ui::SliderInt("Type", (int*)&mMaterials[matIdx].params.type, 0, MaterialType::Count - 1);
     }
     ui::End();
@@ -1783,7 +1785,7 @@ void HybridPipeline::userInterface()
 
         ui::Separator();
 
-        mNeedPhotonMap |= ui::Checkbox("Skip Tracing", (bool*)&mShaderOptions.skipPhotonTracing);
+        mNeedPhotonMap |= ui::Button("Retrace");
         frameDirty |= ui::Checkbox("Show Volume Photons Only", (bool*)&mShaderOptions.showVolumePhotonsOnly);
         frameDirty |= ui::Checkbox("Show Splatting Result Only", (bool*)&mShaderOptions.showRawSplattingResult);
         mNeedPhotonMap |= ui::SliderInt("Splatting Method", (int*)&mShaderOptions.volumeSplattingMethod, 0, SplatMethod::COUNT - 1);
