@@ -76,6 +76,11 @@ float3 samplePhaseFunc(int phaseFuncType, float3 pfParam, float3 inDir, out floa
         rayDir = x * tangent + y * inDir + z * bitangent;
         break;
     }
+    case 2: { // debug
+        pdf = 1.f;
+        rayDir = inDir;
+        break;
+    }
     }
 
     return rayDir;

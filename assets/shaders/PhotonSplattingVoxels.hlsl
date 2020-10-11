@@ -68,12 +68,12 @@ void main( uint3 tid : SV_DispatchThreadID )
         float drbf = length(photon.position - cell_pos);
         float rbf = saturate(INV_SQRT2PI * exp(-0.5f * drbf*drbf));
 
-        vox_color += color * rbf * 2000;
-        //factor += 1.f;
+        vox_color += color * rbf * 100;
+        //factor += rbf;
         vox_direction += direction * rbf;
         mat_idx = max(mat_idx, photon.materialIndex);
     }
 
-    voxColorAndCount[tex_idx] = float4(vox_color, 0);
+    voxColorAndCount[tex_idx] = float4(vox_color, factor);
     voxDirectionAndMatId[tex_idx] = float4(vox_direction, mat_idx);
 }
