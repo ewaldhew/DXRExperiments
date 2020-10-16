@@ -72,7 +72,7 @@ namespace MaterialSceneFlags
 
 #define MAX_PHOTON_SEED_SAMPLES 500000
 #define PHOTON_EMISSION_GROUP_SIZE 64
-#define MAX_PHOTONS (MAX_PHOTON_SEED_SAMPLES * 10)
+#define MAX_PHOTONS (MAX_PHOTON_SEED_SAMPLES * 3)
 
 struct PhotonEmitter
 {

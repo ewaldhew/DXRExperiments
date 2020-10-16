@@ -178,6 +178,7 @@ struct PhotonMappingConstants
     float maxLightShapingScale;
     float kernelCompressFactor;
     float volumeSplatPhotonSize;
+    XMFLOAT3 volumeSplatVoxelSize;
     UINT particlesPerSlab;
     UINT photonGeometryBuildStrategy;
 };
