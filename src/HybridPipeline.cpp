@@ -95,6 +95,7 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context, DXGI_FORMAT outputF
     mAnimationPaused(true),
     mNeedPhotonMap(true),
     mIsTracingFrame(true),
+    mNeedCapture(true),
     mActive(true)
 {
     auto device = context->getDevice();
@@ -1297,8 +1298,15 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
     {
         PIXEndEvent(commandList);
         if (ga) {
-            ga->EndCapture();
-            if (mNeedPhotonMap) ga->BeginCapture();
+            if (mCapturing) {
+                ga->EndCapture();
+                mCapturing = false;
+            }
+            if (mNeedCapture || mNeedPhotonMap) {
+                ga->BeginCapture();
+                mNeedCapture = false;
+                mCapturing = true;
+            }
         }
 
         pass = Pass::GBuffer;
@@ -1785,7 +1793,8 @@ void HybridPipeline::userInterface()
 
         ui::Separator();
 
-        mNeedPhotonMap |= ui::Button("Retrace");
+        mNeedPhotonMap |= ui::Button("Retrace"); ui::SameLine();
+        mNeedCapture |= ui::Button("Capture");
         frameDirty |= ui::Checkbox("Show Volume Photons Only", (bool*)&mShaderOptions.showVolumePhotonsOnly);
         frameDirty |= ui::Checkbox("Show Splatting Result Only", (bool*)&mShaderOptions.showRawSplattingResult);
         mNeedPhotonMap |= ui::SliderInt("Splatting Method", (int*)&mShaderOptions.volumeSplattingMethod, 0, SplatMethod::COUNT - 1);
