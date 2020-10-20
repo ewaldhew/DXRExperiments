@@ -156,4 +156,6 @@ private:
 
     // instrumentation
     ComPtr<IDXGraphicsAnalysis> ga;
+    bool mNeedCapture;
+    bool mCapturing;
 };
