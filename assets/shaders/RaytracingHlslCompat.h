@@ -70,7 +70,7 @@ namespace MaterialSceneFlags
     };
 }
 
-#define MAX_PHOTON_SEED_SAMPLES 500000
+#define MAX_PHOTON_SEED_SAMPLES 1000000
 #define PHOTON_EMISSION_GROUP_SIZE 64
 #define MAX_PHOTONS (MAX_PHOTON_SEED_SAMPLES * 3)
 
@@ -82,6 +82,32 @@ struct PhotonEmitter
     UINT samplesToTake;
     UINT sampleStartIndex;
     XMFLOAT3 pad;
+};
+
+struct PhotonEmitterPayload
+{
+    XMFLOAT3 power;
+    XMFLOAT3 position;
+    XMFLOAT3 direction;
+};
+
+#define MAX_PHOTON_DEPTH 8
+
+struct PhotonPayload
+{
+    // RNG state
+    UINT random;
+    // Packed photon power
+    //uint power;
+    XMFLOAT3 power; // last component is scaling factor
+    // Ray length
+    float distTravelled;
+    // Bounce count
+    UINT bounce;
+
+    // Outgoing payload
+    XMFLOAT3 position;
+    XMFLOAT3 direction;
 };
 
 #define PARTICLE_BUFFER_SIZE 32
