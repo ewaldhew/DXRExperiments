@@ -1,12 +1,5 @@
 #include "RaytracingCommon.hlsli"
 
-struct Payload
-{
-    float3 power;
-    float3 position;
-    float3 direction;
-};
-
 // Global root signature
 StructuredBuffer<PhotonEmitter> emitters : register(t3);
 RWStructuredBuffer<Photon> gOutput : register(u0);
@@ -21,7 +14,7 @@ void RayGen()
     uint lightIndex = DispatchRaysIndex().y;
 
     if (sampleIndex < emitters[lightIndex].samplesToTake) {
-        Payload payload;
+        PhotonEmitterPayload payload;
 
         do {
             float3 sphereDirection = emitters[lightIndex].direction;
@@ -32,7 +25,7 @@ void RayGen()
             ray.TMin = 0;
             ray.TMax = emitters[lightIndex].radius * 2.0;
 
-            TraceRay(SceneBVH, 0, MaterialSceneFlags::Emissive, 0, 0, 0, ray, payload);
+            TraceRay(SceneBVH, RAY_FLAG_FORCE_OPAQUE, MaterialSceneFlags::Emissive, 0, 0, 0, ray, payload);
         } while (!any(payload.power));
 
         {
@@ -47,7 +40,7 @@ void RayGen()
     }
 }
 
-void storePhoton(float3 position, float3 normal, inout Payload payload, inout uint randSeed)
+void storePhoton(float3 position, float3 normal, inout PhotonEmitterPayload payload, inout uint randSeed)
 {
     uint lightIndex = DispatchRaysIndex().y;
     float proportion = 1 / float(emitters[lightIndex].samplesToTake);
@@ -60,7 +53,7 @@ void storePhoton(float3 position, float3 normal, inout Payload payload, inout ui
 }
 
 [shader("closesthit")]
-void ClosestHit(inout Payload payload, in Attributes attrib)
+void ClosestHit(inout PhotonEmitterPayload payload, in Attributes attrib)
 {
     uint2 pixIdx = DispatchRaysIndex().xy;
     uint2 numPix = DispatchRaysDimensions().xy;
@@ -85,7 +78,7 @@ void ClosestHit(inout Payload payload, in Attributes attrib)
 }
 
 [shader("miss")]
-void Miss(inout Payload payload)
+void Miss(inout PhotonEmitterPayload payload)
 {
     payload.power = 0.0;
 }

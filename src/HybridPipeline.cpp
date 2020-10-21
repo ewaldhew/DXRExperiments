@@ -150,7 +150,7 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context, DXGI_FORMAT outputF
     mRtPhotonEmissionPass.mRtState->setProgram(mRtPhotonEmissionPass.mRtProgram);
     mRtPhotonEmissionPass.mRtState->setMaxTraceRecursionDepth(1);
     mRtPhotonEmissionPass.mRtState->setMaxAttributeSize(8);
-    mRtPhotonEmissionPass.mRtState->setMaxPayloadSize(36);
+    mRtPhotonEmissionPass.mRtState->setMaxPayloadSize(sizeof(PhotonEmitterPayload));
 
     /*******************************
      *  Photon Tracing Pass
@@ -236,9 +236,9 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context, DXGI_FORMAT outputF
     mRtPhotonMappingPass.mRtProgram = RtProgram::create(context, photonTrace);
     mRtPhotonMappingPass.mRtState = RtState::create(context);
     mRtPhotonMappingPass.mRtState->setProgram(mRtPhotonMappingPass.mRtProgram);
-    mRtPhotonMappingPass.mRtState->setMaxTraceRecursionDepth(4);
+    mRtPhotonMappingPass.mRtState->setMaxTraceRecursionDepth(2);
     mRtPhotonMappingPass.mRtState->setMaxAttributeSize(sizeof(ProceduralPrimitiveAttributes));
-    mRtPhotonMappingPass.mRtState->setMaxPayloadSize(64);
+    mRtPhotonMappingPass.mRtState->setMaxPayloadSize(sizeof(PhotonPayload));
 
     /*******************************
      *  Photon Splatting Pass

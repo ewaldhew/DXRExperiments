@@ -2,24 +2,6 @@
 #include "ProceduralPrimitives.hlsli"
 #include "ParticipatingMedia.hlsli"
 
-#define MAX_PHOTON_DEPTH 8
-
-struct PhotonPayload
-{
-    // RNG state
-    uint random;
-    // Packed photon power
-    //uint power;
-    float3 power; // last component is scaling factor
-    // Ray length
-    float distTravelled;
-    // Bounce count
-    uint bounce;
-
-    // Outgoing payload
-    float3 position;
-    float3 direction;
-};
 
 // Global root signature
 StructuredBuffer<Photon> photonSeed : register(t3);
@@ -109,16 +91,17 @@ void RayGen()
     // Before starting the trace, check if photon was
     // spawned inside a volume and trace it to the edge first
     {
-        TraceRay(SceneBVH, 0, MaterialSceneFlags::Volume, 2, 0, 2, ray, payload);
+        TraceRay(SceneBVH, RAY_FLAG_FORCE_OPAQUE, MaterialSceneFlags::Volume, 2, 0, 2, ray, payload);
 
         ray.Origin = payload.position;
         ray.Direction = payload.direction;
     }
 
+    [unroll(MAX_PHOTON_DEPTH)]
     while (payload.bounce < MAX_PHOTON_DEPTH - 1) {
         uint bounce = payload.bounce;
 
-        TraceRay(SceneBVH, RAY_FLAG_CULL_BACK_FACING_TRIANGLES, 0xFF, 0, 0, 0, ray, payload);
+        TraceRay(SceneBVH, RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_CULL_BACK_FACING_TRIANGLES, 0xFF, 0, 0, 0, ray, payload);
 
         if (payload.bounce == bounce) {
             // prevent infinite loop
