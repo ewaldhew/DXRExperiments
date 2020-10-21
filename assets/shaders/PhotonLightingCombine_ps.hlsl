@@ -71,7 +71,7 @@ float4 raymarch(float3 origin, float3 dir, float2 screen_pos, float vol_linear_d
     float texit = min(min(tmax.x, min(tmax.y, tmax.z)), gbuffer_linear_depth / z_factor);
 
     float3 result = 0.f;
-    float result_alpha = 0.1f;
+    float result_alpha = .05f;
 
     if (tenter < texit) {
         float t = tenter;
@@ -107,7 +107,7 @@ float4 raymarch(float3 origin, float3 dir, float2 screen_pos, float vol_linear_d
         }
     }
 
-    return float4(result, result_alpha);
+    return float4(result, saturate(1.f - length(result * 3)));
 }
 
 void main(
@@ -134,7 +134,7 @@ void main(
     bool shouldRaymarch = perFrameConstants.options.volumeSplattingMethod == SplatMethod::Voxels && volumeDepth > 0;
     float4 volumeColor = shouldRaymarch * raymarch(perFrameConstants.cameraParams.worldEyePos.xyz, viewDir, Tex, volumeDepth, randSeed);
     float3 surfaceColor = photonSplatColorXYZDirX.Sample(lightSampler, Tex).xyz * 10;// * lerp(lightFactor, 1.0, perFrameConstants.options.showRawSplattingResult);
-    float3 totalColor = volumeColor.rgb + (shouldRaymarch ? volumeColor.a : 1.f) * surfaceColor;
+    float3 totalColor = volumeColor.rgb + lerp(1.f, volumeColor.a, shouldRaymarch) * surfaceColor;
 
     Color = float4(totalColor, 1);
 }
