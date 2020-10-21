@@ -57,9 +57,10 @@ void main( uint3 tid : SV_DispatchThreadID, uint offset : SV_GroupIndex )
     float3 vox_direction = 0.f;
     float mat_idx = 0;
 
-    const int count = photonMapConsts.counts[PhotonMapID::Volume].x;
+    const int start = photonMapConsts.counts[PhotonMapID::Volume - 1].x;
+    const int end = photonMapConsts.counts[PhotonMapID::Volume].x;
     int photon_idx;
-    for (photon_idx = offset; photon_idx < count; photon_idx += 64) {
+    for (photon_idx = start + offset; photon_idx < end; photon_idx += 64) {
         unpacked_photon photon = get_photon(photon_idx);
 
         float3 color = photon.power;
