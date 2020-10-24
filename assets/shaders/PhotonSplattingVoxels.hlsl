@@ -66,8 +66,9 @@ void main( uint3 tid : SV_DispatchThreadID, uint offset : SV_GroupIndex )
         float3 color = photon.power;
         float3 direction = photon.direction;
 
-        float drbf = length(photon.position - cell_pos);
-        float rbf = saturate(INV_SQRT2PI * exp(-0.5f * drbf*drbf));
+        float3 d = photon.position - cell_pos;
+        float drbf2 = dot(d, d);
+        float rbf = saturate(INV_SQRT2PI * exp(-0.5f * drbf2));
 
         vox_color += color * rbf * 100 * 64;
         //factor += rbf;
