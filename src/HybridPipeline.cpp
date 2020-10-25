@@ -462,7 +462,7 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context, DXGI_FORMAT outputF
     mShaderOptions.showVolumePhotonsOnly = false;
     mShaderOptions.showRawSplattingResult = false;
     mShaderOptions.skipPhotonTracing = false;
-    mShaderOptions.volumeSplattingMethod = SplatMethod::Voxels;
+    mShaderOptions.volumeSplattingMethod = SplatMethod::Raytrace;
 
     auto now = std::chrono::high_resolution_clock::now();
     auto msTime = std::chrono::time_point_cast<std::chrono::milliseconds>(now);
@@ -1013,6 +1013,12 @@ void HybridPipeline::update(float elapsedTime, UINT elapsedFrames, UINT prevFram
     mPhotonMappingConstants->maxRayLength = 2.0f * float(mRtScene->getBoundingBox().toBoundingSphere().GetRadius());
     XMStoreFloat3(&mPhotonMappingConstants->volumeBboxMin, mRtScene->getBoundingBox().GetBoxMin());
     XMStoreFloat3(&mPhotonMappingConstants->volumeBboxMax, mRtScene->getBoundingBox().GetBoxMax());
+    auto volBboxSize = mRtScene->getBoundingBox().GetBoxMax() - mRtScene->getBoundingBox().GetBoxMin();
+    mPhotonMappingConstants->volumeSplatVoxelSize = XMFLOAT3(
+        volBboxSize.GetX() / float(mPhotonSplatVoxels[0].Resource->GetDesc().Width),
+        volBboxSize.GetY() / float(mPhotonSplatVoxels[0].Resource->GetDesc().Height),
+        volBboxSize.GetZ() / float(mPhotonSplatVoxels[0].Resource->GetDesc().DepthOrArraySize)
+    );
     mPhotonMappingConstants.CopyStagingToGpu();
 
     mRasterConstantsBuffer->cameraParams = cameraParams;

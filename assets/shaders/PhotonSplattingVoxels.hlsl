@@ -44,18 +44,12 @@ void main( uint3 tid : SV_DispatchThreadID, uint offset : SV_GroupIndex )
 {
     const uint3 tex_idx = tid.xyz;
 
-    uint3 tex_size;
-    voxColorAndCount.GetDimensions(tex_size.x, tex_size.y, tex_size.z);
-    const float3 vol_bbox_size = photonMapConsts.volumeBboxMax.xyz - photonMapConsts.volumeBboxMin.xyz;
-
-    const float3 cell_size = vol_bbox_size / tex_size;
     const float3 cell_center_idx = float3(tex_idx) + 0.5f;
-    const float3 cell_pos = photonMapConsts.volumeBboxMin.xyz + cell_center_idx * cell_size;
+    const float3 cell_pos = photonMapConsts.volumeBboxMin.xyz + cell_center_idx * photonMapConsts.volumeSplatVoxelSize;
 
     float3 vox_color = 0.f;
     float factor = 0.f;
     float3 vox_direction = 0.f;
-    float mat_idx = 0;
 
     const int start = photonMapConsts.counts[PhotonMapID::Volume - 1].x;
     const int end = photonMapConsts.counts[PhotonMapID::Volume].x;
@@ -73,8 +67,9 @@ void main( uint3 tid : SV_DispatchThreadID, uint offset : SV_GroupIndex )
         vox_color += color * rbf * 100 * 64;
         //factor += rbf;
         vox_direction += direction * rbf;
-        mat_idx = max(mat_idx, photon.materialIndex);
     }
+
+    float mat_idx = volPhotonBuffer[photon_idx].materialIndex;
 
     voxColorAndCount[tex_idx] = float4(vox_color, factor);
     voxDirectionAndMatId[tex_idx] = float4(vox_direction, mat_idx);
