@@ -110,7 +110,7 @@ void RayGen()
         //  sort,
         //  integrate.
 
-        while(tbuf < texit /*&& result_alpha > 0.03f*/)
+        while(tbuf < texit && result_alpha > 0.03f)
         {
             prd.tail = 0;
             ray.TMin = max(tenter, tbuf);
@@ -164,7 +164,7 @@ void RayGen()
 #endif
 
                 //integrate depth-sorted list of particles
-                float3 prev_trbf = payloadBuffer[BufIndex(0)].x;
+                float prev_trbf = payloadBuffer[BufIndex(0)].x;
                 for (i=0; i<prd.tail; i++) {
                     float trbf = payloadBuffer[BufIndex(i)].x;
                     uint photon_idx = uint(payloadBuffer[BufIndex(i)].y);
@@ -173,7 +173,7 @@ void RayGen()
                     photon.direction = spherical_to_unitvec(photon.direction);
                     photon.normal = spherical_to_unitvec(photon.normal);
 
-#if METHOD == GPUGEMS
+#if METHOD == GPUGEMS || METHOD == NTNU
                     float3 sample_pos = ray.Origin + ray.Direction * trbf;
                     float3 sample_n = photon.position - sample_pos;
                     float dist = max(trbf - prev_trbf, 0.01);
@@ -192,11 +192,12 @@ void RayGen()
                     float phase_factor = evalPhaseFuncPdf(vol.phase_func_type, vol.phase_func_params, photon.direction, ray.Direction);
 
 #if METHOD == GPUGEMS
-                    float diff_volume = (4.f/3.f)*M_PI * pow(length(sample_n), 3);
-                    //float kernel_scale = kernel_size(photon.normal, -photon.direction, photon.position.z, photon.distTravelled);
+                    float diff_volume = (4.f/3.f)*M_PI * pow(fixed_radius, 3);
                     float volume_factor = 1.f / diff_volume;
+                    float drbf2 = dot(sample_n, sample_n);
+                    float rbf_factor = saturate(exp(-drbf2 / fixed_radius / fixed_radius));
 
-                    float3 power = photon.power * volume_factor * phase_factor;
+                    float3 power = photon.power * volume_factor * phase_factor * rbf_factor;
                     float alpha = max(exp(-extinction * dist), 0.1f);
                     float3 sample_color = (absorption * emission + albedo * power) * dist;
                     result += sample_color.rgb * result_alpha;
@@ -215,10 +216,15 @@ void RayGen()
                     num_hits++;
 #elif METHOD == NTNU
                     const float volume_factor = fixed_radius * fixed_radius;
+                    float drbf2 = dot(sample_n, sample_n);
+                    float rbf_factor = exp(-drbf2 / volume_factor);
 
-                    float3 power = photon.power * phase_factor * exp(-extinction * (trbf - prev_trbf)) / volume_factor;
-                    float3 sample_color = absorption * emission + power;
-                    result += sample_color.rgb;
+                    float3 power = photon.power * phase_factor * rbf_factor / volume_factor;
+                    float alpha = exp(-extinction * (trbf - prev_trbf));
+                    float3 sample_color = absorption * emission + albedo * power;
+                    result += sample_color.rgb * alpha;
+                    result_alpha *= alpha;
+                    num_hits++;
 #endif
 
                     float3 direction = -photon.direction;
