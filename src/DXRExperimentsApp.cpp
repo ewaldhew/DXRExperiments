@@ -65,6 +65,9 @@ void DXRExperimentsApp::OnInit()
     mCameraStateSetters.push_back([](auto mCamera) {
         mCamera->SetEyeAtUp(Math::Vector3(0.0, 0.0, -35.5), Math::Vector3(0.0, 0.0, 1.0), Math::Vector3(Math::kYUnitVector));
     });
+    mCameraStateSetters.push_back([](auto mCamera) {
+        mCamera->SetEyeAtUp(Math::Vector3(-1.5, -5.5, 12.5), Math::Vector3(0.0, 5.0, 1.0), Math::Vector3(Math::kYUnitVector));
+    });
 
     mCamera.reset(new Math::Camera());
     mCamera->SetAspectRatio(1.0f / m_aspectRatio);
@@ -179,7 +182,7 @@ void DXRExperimentsApp::InitRaytracing()
         texTest.params.reflectivity = 0.5f;
         texTest.params.IoR = 0;
         texTest.params.emissive = XMFLOAT4(0, 0, 0, 0);
-        texTest.params.specular = XMFLOAT4(0.88, 0, 0, 0);
+        texTest.params.specular = XMFLOAT4(0.98, 0, 0, 0);
         RaytracingPipeline::MaterialTexture tex{ &MaterialParams::albedo };
         tex.data = { // starts bottom-left
         };
