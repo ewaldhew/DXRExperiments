@@ -1042,10 +1042,10 @@ void HybridPipeline::collectEmitters(UINT& numLights, UINT& maxSamples)
     std::vector<UINT> complexLights;
 
     for (UINT i = 0; i < NUM_DIR_LIGHTS; i++) {
-        totalRadiance += getLightMagnitude(mDirLights[i].color);
+        //totalRadiance += getLightMagnitude(mDirLights[i].color);
     }
     for (UINT i = 0; i < NUM_POINT_LIGHTS; i++) {
-        totalRadiance += getLightMagnitude(mPointLights[i].color);
+        //totalRadiance += getLightMagnitude(mPointLights[i].color);
     }
     for (UINT i = 0; i < mRtScene->getNumInstances(); i++) {
         auto model = mRtScene->getModel(i);
@@ -1091,7 +1091,7 @@ void HybridPipeline::collectEmitters(UINT& numLights, UINT& maxSamples)
             XMVECTOR photonDir = XMVectorSet(1.0, 0.0, 0.0, 0.0);
             XMMATRIX rotation = XMMatrixRotationRollPitchYaw(mRngDist(mRng) * XM_2PI, mRngDist(mRng) * XM_2PI, mRngDist(mRng) * XM_2PI);
             photonDir = XMVector4Transform(photonDir, rotation);
-            storePhoton(lightRadiance, lightPos, photonDir);
+            //storePhoton(lightRadiance, lightPos, photonDir);
         }
     }
     for (UINT i = 0; i < complexLights.size(); i++) {
@@ -1444,7 +1444,7 @@ void HybridPipeline::render(ID3D12GraphicsCommandList *commandList, UINT frameIn
 
         // copy photons emitted on CPU to the buffer
         mRtContext->transitionResource(mPhotonSeed.Resource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_DEST);
-        commandList->CopyBufferRegion(mPhotonSeed.Resource.Get(), mSamplesGpu * sizeof(Photon), mPhotonUploadBuffer.GetResource().Get(), 0, mSamplesCpu * sizeof(Photon));
+        //commandList->CopyBufferRegion(mPhotonSeed.Resource.Get(), mSamplesGpu * sizeof(Photon), mPhotonUploadBuffer.GetResource().Get(), 0, mSamplesCpu * sizeof(Photon));
 
         pass = Pass::PhotonTracing;
         return;
