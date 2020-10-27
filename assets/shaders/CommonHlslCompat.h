@@ -181,6 +181,8 @@ struct PhotonMappingConstants
     XMFLOAT3 volumeSplatVoxelSize;
     UINT particlesPerSlab;
     UINT photonGeometryBuildStrategy;
+    float surfacePowerScale;
+    float volumePowerScale;
 };
 
 struct Photon

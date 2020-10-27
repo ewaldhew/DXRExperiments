@@ -124,14 +124,18 @@ void DXRExperimentsApp::InitRaytracing()
         };
         mRtScene->addModel(RtMesh::create(mRtContext, squareVerts, { 0, 1, 3, 1, 2, 3 }, 3), lightMeshTransform, MaterialSceneFlags::Emissive);
 
-#if 0
+#if 1
         volScale = 1.f;
         auto volumeTransform = XMMatrixScaling(20, 20, 20) * XMMatrixTranslation(-10., -10., -10.);
-        mRtScene->addModel(RtProcedural::create(mRtContext, PrimitiveType::AnalyticPrimitive_Spheres, XMFLOAT3(), XMFLOAT3(1, 1, 1), 5), volumeTransform, MaterialSceneFlags::Volume);
-#else
+        mRtScene->addModel(RtProcedural::create(mRtContext, PrimitiveType::AnalyticPrimitive_Spheres, XMFLOAT3(), XMFLOAT3(1, 1, 1), 6), volumeTransform, MaterialSceneFlags::Volume);
+#elif 1
         volScale = 0.5f;
         auto volumeTransform = XMMatrixScaling(8, 9, 8) * XMMatrixTranslation(-8, -9., -8);
-        mRtScene->addModel(RtProcedural::create(mRtContext, PrimitiveType::AnalyticPrimitive_AABB, XMFLOAT3(), XMFLOAT3(2, 2, 2), 5), volumeTransform, MaterialSceneFlags::Volume);
+        mRtScene->addModel(RtProcedural::create(mRtContext, PrimitiveType::AnalyticPrimitive_AABB, XMFLOAT3(), XMFLOAT3(2, 2, 2), 6), volumeTransform, MaterialSceneFlags::Volume);
+#else
+        volScale = 0.5f;
+        auto volumeTransform = XMMatrixScaling(10, 10, 10) * XMMatrixTranslation(-10, -10., -10);
+        mRtScene->addModel(RtProcedural::create(mRtContext, PrimitiveType::AnalyticPrimitive_AABB, XMFLOAT3(), XMFLOAT3(2, 2, 2), 6), volumeTransform, MaterialSceneFlags::Volume);
 #endif
     }
 
@@ -179,10 +183,21 @@ void DXRExperimentsApp::InitRaytracing()
         material = {};
         RaytracingPipeline::Material &texTest = materials.back();
         texTest.params.type = MaterialType::ParticipatingMedia;
+        texTest.params.reflectivity = 0.21f;
+        texTest.params.IoR = 0;
+        texTest.params.emissive = XMFLOAT4(0, 0, 0, 0);
+        texTest.params.specular = XMFLOAT4(0.8, 0, 0, 0);
+        float absorption = 0.01f;
+        texTest.params.albedo = XMFLOAT4(absorption, texTest.params.reflectivity - absorption, 0, 1);
+    }
+    {
+        material = {};
+        RaytracingPipeline::Material &texTest = materials.back();
+        texTest.params.type = MaterialType::ParticipatingMedia;
         texTest.params.reflectivity = 0.5f;
         texTest.params.IoR = 0;
         texTest.params.emissive = XMFLOAT4(0, 0, 0, 0);
-        texTest.params.specular = XMFLOAT4(0.98, 0, 0, 0);
+        texTest.params.specular = XMFLOAT4(0.6, 0, 0, 0);
         RaytracingPipeline::MaterialTexture tex{ &MaterialParams::albedo };
         tex.data = { // starts bottom-left
         };
@@ -202,11 +217,12 @@ void DXRExperimentsApp::InitRaytracing()
             for (UINT j = 0; j < tex.height; j++) {
                 for (UINT k = 0; k < tex.width; k++) {
                     //float absorption = (noise.eval(i / (double)tex.depth / 50.0, j/ (double)tex.height / 50.0, k/ (double)tex.width / 50.0)) * 0.5 + 0.5;
-                    //absorption = 0.02;
+                    //float absorption = 0.02;
                     //absorption = (j + k) % 2 ? 0.1 : 0.025;
                     //absorption = min(max(absorption, 0.1), 0.8);
                     float absorption = texTest.params.reflectivity * data[i*tex.height*tex.width + j * tex.width + k];
-                    tex.data[i*tex.height*tex.width + j*tex.width + k] = XMFLOAT4(absorption, (texTest.params.reflectivity - absorption) * 0.8, 0, 1);
+                    float scattering = (texTest.params.reflectivity - absorption) * 0.8;
+                    tex.data[i*tex.height*tex.width + j*tex.width + k] = XMFLOAT4(absorption, scattering, 0, 1);
                 }
             }
         }

@@ -46,12 +46,14 @@ void validate_and_add_photon(float3 normal, float3 position, float3 power, float
 
         switch (map_idx) {
         case PhotonMapID::Surface:
+            stored_photon.power *= photonMapConsts.surfacePowerScale;
             gPhotonMapSurface[photon_index] = stored_photon;
             // Tile-based photon density estimation
             InterlockedAdd(gPhotonDensityMap[tile.xy], 1);
             break;
         case PhotonMapID::Volume:
         {
+            stored_photon.power *= photonMapConsts.volumePowerScale;
             float4 pos = float4(stored_photon.position, 1);
             gPhotonMapVolume[photon_index] = stored_photon;
             gVolumePhotonPos[photon_index] = pos;

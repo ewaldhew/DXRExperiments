@@ -462,7 +462,7 @@ HybridPipeline::HybridPipeline(RtContext::SharedPtr context, DXGI_FORMAT outputF
     mShaderOptions.showVolumePhotonsOnly = false;
     mShaderOptions.showRawSplattingResult = false;
     mShaderOptions.skipPhotonTracing = false;
-    mShaderOptions.volumeSplattingMethod = SplatMethod::Raytrace;
+    mShaderOptions.volumeSplattingMethod = SplatMethod::Raster;
 
     auto now = std::chrono::high_resolution_clock::now();
     auto msTime = std::chrono::time_point_cast<std::chrono::milliseconds>(now);
@@ -632,6 +632,8 @@ void HybridPipeline::loadResources(ID3D12CommandQueue *uploadCommandQueue, UINT 
     mPhotonMappingConstants->volumeSplatPhotonSize = .01f;
     mPhotonMappingConstants->particlesPerSlab = 16;
     mPhotonMappingConstants->photonGeometryBuildStrategy = 0;
+    mPhotonMappingConstants->surfacePowerScale = 1.f;
+    mPhotonMappingConstants->volumePowerScale = 1.f;
 }
 
 inline void CreateClearableUAV(ID3D12Device* device, DescriptorPile* heap, OutputResourceView& view, D3D12_UNORDERED_ACCESS_VIEW_DESC const& uavDesc)
@@ -1804,6 +1806,8 @@ void HybridPipeline::userInterface()
         frameDirty |= ui::Checkbox("Show Volume Photons Only", (bool*)&mShaderOptions.showVolumePhotonsOnly);
         frameDirty |= ui::Checkbox("Show Splatting Result Only", (bool*)&mShaderOptions.showRawSplattingResult);
         mNeedPhotonMap |= ui::SliderInt("Splatting Method", (int*)&mShaderOptions.volumeSplattingMethod, 0, SplatMethod::COUNT - 1);
+        mNeedPhotonMap |= ui::SliderFloat("S Power", &mPhotonMappingConstants->surfacePowerScale, 0.1f, 10.0f);
+        mNeedPhotonMap |= ui::SliderFloat("V Power", &mPhotonMappingConstants->volumePowerScale, 0.1f, 10.0f);
 
         ui::Separator();
         ui::Text("Splatting Parameters");

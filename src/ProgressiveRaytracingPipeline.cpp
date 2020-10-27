@@ -126,7 +126,7 @@ ProgressiveRaytracingPipeline::ProgressiveRaytracingPipeline(RtContext::SharedPt
     mRtState->setMaxAttributeSize(sizeof(ProceduralPrimitiveAttributes));
     mRtState->setMaxPayloadSize(20);
 
-    mShaderDebugOptions.maxIterations = 1024;
+    mShaderDebugOptions.maxIterations = 65536;
     mShaderDebugOptions.cosineHemisphereSampling = true;
     mShaderDebugOptions.showIndirectDiffuseOnly = false;
     mShaderDebugOptions.showIndirectSpecularOnly = false;
