@@ -65,7 +65,9 @@ private:
     };
 
     DXRFramework::RtContext::SharedPtr mRtContext;
+#ifdef EMIT_STANDALONE
     RtPass mRtPhotonEmissionPass;
+#endif
     RtPass mRtPhotonMappingPass;
     RtPass mRtPhotonSplattingVolumePass;
     RasterPass mPhotonSplattingVoxelPass; // compute shaders
@@ -98,8 +100,10 @@ private:
     std::vector<D3D12_GPU_DESCRIPTOR_HANDLE> mTextureSrvGpuHandles;
 
     StructuredBuffer<PhotonEmitter> mPhotonEmitters;
+#ifdef EMIT_STANDALONE
     StructuredBuffer<Photon> mPhotonUploadBuffer;
     OutputResourceView mPhotonSeed;
+#endif
 
     OutputResourceView mPhotonMapCounters;
     ComPtr<ID3D12Resource> mPhotonMapCounterReadback;

@@ -1,11 +1,10 @@
 #include "RaytracingCommon.hlsli"
 #include "ProceduralPrimitives.hlsli"
 #include "ParticipatingMedia.hlsli"
+#include "PhotonEmission.hlsl"
 
 
 // Global root signature
-StructuredBuffer<Photon> photonSeed : register(t3);
-
 RWBuffer<uint> gCounters : register(u0);
 RWStructuredBuffer<Photon> gPhotonMapSurface : register(u1);
 RWStructuredBuffer<Photon> gPhotonMapVolume : register(u2);
@@ -73,20 +72,40 @@ void validate_and_add_photon(float3 normal, float3 position, float3 power, float
 [shader("raygeneration")]
 void RayGen()
 {
-    // First, we read the initial sample from the RSM.
     uint sampleIndex = DispatchRaysIndex().x;
+    uint lightIndex = DispatchRaysIndex().y;
+
+    if (sampleIndex >= emitters[lightIndex].samplesToTake) {
+        return;
+    }
+
+    PhotonEmitterPayload emitpayload;
+
+    do {
+        float3 sphereDirection = emitters[lightIndex].direction;
+
+        RayDesc ray;
+        ray.Origin = emitters[lightIndex].center.xyz + emitters[lightIndex].radius * sphereDirection;
+        ray.Direction = -sphereDirection;
+        ray.TMin = 0;
+        ray.TMax = emitters[lightIndex].radius * 2.0;
+
+        TraceRay(SceneBVH, RAY_FLAG_FORCE_OPAQUE, MaterialSceneFlags::Emissive, 3, 0, 3, ray, emitpayload);
+    } while (!any(emitpayload.power));
+
+    uint photonIndex = emitters[lightIndex].sampleStartIndex + sampleIndex;
 
     PhotonPayload payload;
-    payload.random = initRand(photonSeed[sampleIndex].randSeed, photonSeed[sampleIndex].distTravelled, sampleIndex);
-    payload.power = photonSeed[sampleIndex].power;
-    payload.distTravelled = photonSeed[sampleIndex].distTravelled;
+    payload.random = initRand(initRand(photonIndex, perFrameConstants.cameraParams.frameCount), 0, sampleIndex);
+    payload.power = emitpayload.power;
+    payload.distTravelled = 0.0;
     payload.bounce = 0;
-    payload.position = photonSeed[sampleIndex].position;
-    payload.direction = photonSeed[sampleIndex].direction.xyz;
+    payload.position = emitpayload.position;
+    payload.direction = emitpayload.direction.xyz;
 
     RayDesc ray;
-    ray.Origin = photonSeed[sampleIndex].position;
-    ray.Direction = photonSeed[sampleIndex].direction.xyz;
+    ray.Origin = emitpayload.position;
+    ray.Direction = emitpayload.direction.xyz;
     ray.TMin = RAY_EPSILON;
     ray.TMax = RAY_MAX_T;
 

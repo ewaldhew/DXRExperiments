@@ -2,11 +2,14 @@
 
 // Global root signature
 StructuredBuffer<PhotonEmitter> emitters : register(t3);
+#ifdef EMIT_STANDALONE
 RWStructuredBuffer<Photon> gOutput : register(u0);
+#endif
 
 // Local root signature
 Buffer<float> triangleCdf : register(t2, space1);
 
+#ifdef EMIT_STANDALONE
 [shader("raygeneration")]
 void RayGen()
 {
@@ -39,6 +42,7 @@ void RayGen()
         }
     }
 }
+#endif
 
 void storePhoton(float3 position, float3 normal, inout PhotonEmitterPayload payload, inout uint randSeed)
 {
@@ -53,7 +57,7 @@ void storePhoton(float3 position, float3 normal, inout PhotonEmitterPayload payl
 }
 
 [shader("closesthit")]
-void ClosestHit(inout PhotonEmitterPayload payload, in Attributes attrib)
+void EmitClosestHit(inout PhotonEmitterPayload payload, in Attributes attrib)
 {
     uint2 pixIdx = DispatchRaysIndex().xy;
     uint2 numPix = DispatchRaysDimensions().xy;
@@ -78,7 +82,7 @@ void ClosestHit(inout PhotonEmitterPayload payload, in Attributes attrib)
 }
 
 [shader("miss")]
-void Miss(inout PhotonEmitterPayload payload)
+void EmitMiss(inout PhotonEmitterPayload payload)
 {
     payload.power = 0.0;
 }
