@@ -75,7 +75,7 @@ void RayGen()
     uint sampleIndex = DispatchRaysIndex().x;
 
     PhotonPayload payload;
-    payload.random = initRand(photonSeed[sampleIndex].randSeed, photonSeed[sampleIndex].distTravelled, sampleIndex);
+    payload.random = initRand(photonSeed[sampleIndex].randSeed, sampleIndex, perFrameConstants.cameraParams.frameCount);
     payload.power = photonSeed[sampleIndex].power;
     payload.distTravelled = photonSeed[sampleIndex].distTravelled;
     payload.bounce = 0;
